@@ -31,7 +31,7 @@ func (r *componentStatusChecker) Name() string { return "componentstatuses" }
 
 // Check validates the status of kubernetes components
 func (r *componentStatusChecker) Check(reporter health.Reporter) {
-	client, err := connectToKube(r.hostPort)
+	client, err := ConnectToKube(r.hostPort)
 	if err != nil {
 		reporter.Add(NewProbeFromErr(r.Name(), trace.Errorf("failed to connect to kube: %v", err)))
 		return

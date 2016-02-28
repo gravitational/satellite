@@ -38,9 +38,9 @@ type KubeChecker struct {
 	checker  KubeStatusChecker
 }
 
-// connectToKube establishes a connection to kubernetes on the specified address
+// ConnectToKube establishes a connection to kubernetes on the specified address
 // and returns an API client.
-func connectToKube(hostPort string) (*kube.Client, error) {
+func ConnectToKube(hostPort string) (*kube.Client, error) {
 	var baseURL *url.URL
 	var err error
 	if hostPort == "" {
@@ -82,5 +82,5 @@ func (r *KubeChecker) Check(reporter health.Reporter) {
 }
 
 func (r *KubeChecker) connect() (*kube.Client, error) {
-	return connectToKube(r.hostPort)
+	return ConnectToKube(r.hostPort)
 }
