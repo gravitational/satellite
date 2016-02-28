@@ -17,23 +17,13 @@ limitations under the License.
 package unversioned
 
 import (
-	"net/http"
 	"net/url"
-	"os"
-	"strconv"
 	"strings"
 	"time"
 
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/unversioned"
+	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/util"
-)
-
-const (
-	// Environment variables: Note that the duration should be long enough that the backoff
-	// persists for some reasonable time (i.e. 120 seconds).  The typical base might be "1".
-	envBackoffBase     = "KUBE_CLIENT_BACKOFF_BASE"
-	envBackoffDuration = "KUBE_CLIENT_BACKOFF_DURATION"
 )
 
 // RESTClient imposes common Kubernetes API conventions on a set of resource paths.
@@ -44,25 +34,28 @@ const (
 //
 // Most consumers should use client.New() to get a Kubernetes API client.
 type RESTClient struct {
-	// base is the root URL for all invocations of the client
-	base *url.URL
-	// versionedAPIPath is a path segment connecting the base URL to the resource root
-	versionedAPIPath string
+	baseURL *url.URL
+	// A string identifying the version of the API this client is expected to use.
+	apiVersion string
 
-	// contentConfig is the information used to communicate with the server.
-	contentConfig ContentConfig
+	// Codec is the encoding and decoding scheme that applies to a particular set of
+	// REST resources.
+	Codec runtime.Codec
+
+	// Set specific behavior of the client.  If not set http.DefaultClient will be
+	// used.
+	Client HTTPClient
+
+	Timeout time.Duration
 
 	// TODO extract this into a wrapper interface via the RESTClient interface in kubectl.
 	Throttle util.RateLimiter
-
-	// Set specific behavior of the client.  If not set http.DefaultClient will be used.
-	Client *http.Client
 }
 
 // NewRESTClient creates a new RESTClient. This client performs generic REST functions
 // such as Get, Put, Post, and Delete on specified paths.  Codec controls encoding and
 // decoding of responses from the server.
-func NewRESTClient(baseURL *url.URL, versionedAPIPath string, config ContentConfig, maxQPS float32, maxBurst int, client *http.Client) *RESTClient {
+func NewRESTClient(baseURL *url.URL, apiVersion string, c runtime.Codec, maxQPS float32, maxBurst int) *RESTClient {
 	base := *baseURL
 	if !strings.HasSuffix(base.Path, "/") {
 		base.Path += "/"
@@ -70,42 +63,16 @@ func NewRESTClient(baseURL *url.URL, versionedAPIPath string, config ContentConf
 	base.RawQuery = ""
 	base.Fragment = ""
 
-	if config.GroupVersion == nil {
-		config.GroupVersion = &unversioned.GroupVersion{}
-	}
-	if len(config.ContentType) == 0 {
-		config.ContentType = "application/json"
-	}
-
 	var throttle util.RateLimiter
 	if maxQPS > 0 {
 		throttle = util.NewTokenBucketRateLimiter(maxQPS, maxBurst)
 	}
 	return &RESTClient{
-		base:             &base,
-		versionedAPIPath: versionedAPIPath,
-		contentConfig:    config,
-		Throttle:         throttle,
-		Client:           client,
+		baseURL:    &base,
+		apiVersion: apiVersion,
+		Codec:      c,
+		Throttle:   throttle,
 	}
-}
-
-// readExpBackoffConfig handles the internal logic of determining what the
-// backoff policy is.  By default if no information is available, NoBackoff.
-// TODO Generalize this see #17727 .
-func readExpBackoffConfig() BackoffManager {
-	backoffBase := os.Getenv(envBackoffBase)
-	backoffDuration := os.Getenv(envBackoffDuration)
-
-	backoffBaseInt, errBase := strconv.ParseInt(backoffBase, 10, 64)
-	backoffDurationInt, errDuration := strconv.ParseInt(backoffDuration, 10, 64)
-	if errBase != nil || errDuration != nil {
-		return &NoBackoff{}
-	}
-	return &URLBackoff{
-		Backoff: util.NewBackOff(
-			time.Duration(backoffBaseInt)*time.Second,
-			time.Duration(backoffDurationInt)*time.Second)}
 }
 
 // Verb begins a request with a verb (GET, POST, PUT, DELETE).
@@ -121,12 +88,10 @@ func readExpBackoffConfig() BackoffManager {
 // list, ok := resp.(*api.PodList)
 //
 func (c *RESTClient) Verb(verb string) *Request {
-	backoff := readExpBackoffConfig()
-
-	if c.Client == nil {
-		return NewRequest(nil, verb, c.base, c.versionedAPIPath, c.contentConfig, backoff, c.Throttle)
+	if c.Throttle != nil {
+		c.Throttle.Accept()
 	}
-	return NewRequest(c.Client, verb, c.base, c.versionedAPIPath, c.contentConfig, backoff, c.Throttle)
+	return NewRequest(c.Client, verb, c.baseURL, c.apiVersion, c.Codec).Timeout(c.Timeout)
 }
 
 // Post begins a POST request. Short for c.Verb("POST").
@@ -155,6 +120,6 @@ func (c *RESTClient) Delete() *Request {
 }
 
 // APIVersion returns the APIVersion this RESTClient is expected to use.
-func (c *RESTClient) APIVersion() unversioned.GroupVersion {
-	return *c.contentConfig.GroupVersion
+func (c *RESTClient) APIVersion() string {
+	return c.apiVersion
 }

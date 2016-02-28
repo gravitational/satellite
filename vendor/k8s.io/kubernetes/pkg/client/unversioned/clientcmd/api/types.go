@@ -24,7 +24,6 @@ import (
 // Top level config objects and all values required for proper functioning are not "omitempty".  Any truly optional piece of config is allowed to be omitted.
 
 // Config holds the information needed to build connect to remote kubernetes clusters as a given user
-// IMPORTANT if you add fields to this struct, please update IsConfigEmpty()
 type Config struct {
 	// Legacy field from pkg/api/types.go TypeMeta.
 	// TODO(jlowdermilk): remove this after eliminating downstream dependencies.
@@ -42,14 +41,13 @@ type Config struct {
 	// CurrentContext is the name of the context that you would like to use by default
 	CurrentContext string `json:"current-context"`
 	// Extensions holds additional information. This is useful for extenders so that reads and writes don't clobber unknown fields
-	Extensions map[string]runtime.Object `json:"extensions,omitempty"`
+	Extensions map[string]*runtime.EmbeddedObject `json:"extensions,omitempty"`
 }
 
-// IMPORTANT if you add fields to this struct, please update IsConfigEmpty()
 type Preferences struct {
 	Colors bool `json:"colors,omitempty"`
 	// Extensions holds additional information. This is useful for extenders so that reads and writes don't clobber unknown fields
-	Extensions map[string]runtime.Object `json:"extensions,omitempty"`
+	Extensions map[string]*runtime.EmbeddedObject `json:"extensions,omitempty"`
 }
 
 // Cluster contains information about how to communicate with a kubernetes cluster
@@ -67,7 +65,7 @@ type Cluster struct {
 	// CertificateAuthorityData contains PEM-encoded certificate authority certificates. Overrides CertificateAuthority
 	CertificateAuthorityData []byte `json:"certificate-authority-data,omitempty"`
 	// Extensions holds additional information. This is useful for extenders so that reads and writes don't clobber unknown fields
-	Extensions map[string]runtime.Object `json:"extensions,omitempty"`
+	Extensions map[string]*runtime.EmbeddedObject `json:"extensions,omitempty"`
 }
 
 // AuthInfo contains information that describes identity information.  This is use to tell the kubernetes cluster who you are.
@@ -89,7 +87,7 @@ type AuthInfo struct {
 	// Password is the password for basic authentication to the kubernetes cluster.
 	Password string `json:"password,omitempty"`
 	// Extensions holds additional information. This is useful for extenders so that reads and writes don't clobber unknown fields
-	Extensions map[string]runtime.Object `json:"extensions,omitempty"`
+	Extensions map[string]*runtime.EmbeddedObject `json:"extensions,omitempty"`
 }
 
 // Context is a tuple of references to a cluster (how do I communicate with a kubernetes cluster), a user (how do I identify myself), and a namespace (what subset of resources do I want to work with)
@@ -103,7 +101,7 @@ type Context struct {
 	// Namespace is the default namespace to use on unspecified requests
 	Namespace string `json:"namespace,omitempty"`
 	// Extensions holds additional information. This is useful for extenders so that reads and writes don't clobber unknown fields
-	Extensions map[string]runtime.Object `json:"extensions,omitempty"`
+	Extensions map[string]*runtime.EmbeddedObject `json:"extensions,omitempty"`
 }
 
 // NewConfig is a convenience function that returns a new Config object with non-nil maps
@@ -113,26 +111,26 @@ func NewConfig() *Config {
 		Clusters:    make(map[string]*Cluster),
 		AuthInfos:   make(map[string]*AuthInfo),
 		Contexts:    make(map[string]*Context),
-		Extensions:  make(map[string]runtime.Object),
+		Extensions:  make(map[string]*runtime.EmbeddedObject),
 	}
 }
 
 // NewConfig is a convenience function that returns a new Config object with non-nil maps
 func NewContext() *Context {
-	return &Context{Extensions: make(map[string]runtime.Object)}
+	return &Context{Extensions: make(map[string]*runtime.EmbeddedObject)}
 }
 
 // NewConfig is a convenience function that returns a new Config object with non-nil maps
 func NewCluster() *Cluster {
-	return &Cluster{Extensions: make(map[string]runtime.Object)}
+	return &Cluster{Extensions: make(map[string]*runtime.EmbeddedObject)}
 }
 
 // NewConfig is a convenience function that returns a new Config object with non-nil maps
 func NewAuthInfo() *AuthInfo {
-	return &AuthInfo{Extensions: make(map[string]runtime.Object)}
+	return &AuthInfo{Extensions: make(map[string]*runtime.EmbeddedObject)}
 }
 
 // NewConfig is a convenience function that returns a new Config object with non-nil maps
 func NewPreferences() *Preferences {
-	return &Preferences{Extensions: make(map[string]runtime.Object)}
+	return &Preferences{Extensions: make(map[string]*runtime.EmbeddedObject)}
 }

@@ -28,21 +28,15 @@ import (
 	"k8s.io/kubernetes/pkg/runtime"
 )
 
-func CreateHTTPClient(roundTripper func(*http.Request) (*http.Response, error)) *http.Client {
-	return &http.Client{
-		Transport: roundTripperFunc(roundTripper),
-	}
-}
+type HTTPClientFunc func(*http.Request) (*http.Response, error)
 
-type roundTripperFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+func (f HTTPClientFunc) Do(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
 
 // RESTClient provides a fake RESTClient interface.
 type RESTClient struct {
-	Client *http.Client
+	Client unversioned.HTTPClient
 	Codec  runtime.Codec
 	Req    *http.Request
 	Resp   *http.Response
@@ -50,36 +44,29 @@ type RESTClient struct {
 }
 
 func (c *RESTClient) Get() *unversioned.Request {
-	return c.request("GET")
+	return unversioned.NewRequest(c, "GET", &url.URL{Host: "localhost"}, testapi.Default.Version(), c.Codec)
 }
 
 func (c *RESTClient) Put() *unversioned.Request {
-	return c.request("PUT")
+	return unversioned.NewRequest(c, "PUT", &url.URL{Host: "localhost"}, testapi.Default.Version(), c.Codec)
 }
 
 func (c *RESTClient) Patch(_ api.PatchType) *unversioned.Request {
-	return c.request("PATCH")
+	return unversioned.NewRequest(c, "PATCH", &url.URL{Host: "localhost"}, testapi.Default.Version(), c.Codec)
 }
 
 func (c *RESTClient) Post() *unversioned.Request {
-	return c.request("POST")
+	return unversioned.NewRequest(c, "POST", &url.URL{Host: "localhost"}, testapi.Default.Version(), c.Codec)
 }
 
 func (c *RESTClient) Delete() *unversioned.Request {
-	return c.request("DELETE")
-}
-
-func (c *RESTClient) request(verb string) *unversioned.Request {
-	return unversioned.NewRequest(c, verb, &url.URL{Host: "localhost"}, "", unversioned.ContentConfig{GroupVersion: testapi.Default.GroupVersion(), Codec: c.Codec}, nil, nil)
+	return unversioned.NewRequest(c, "DELETE", &url.URL{Host: "localhost"}, testapi.Default.Version(), c.Codec)
 }
 
 func (c *RESTClient) Do(req *http.Request) (*http.Response, error) {
-	if c.Err != nil {
-		return nil, c.Err
-	}
 	c.Req = req
-	if c.Client != nil {
+	if c.Client != unversioned.HTTPClient(nil) {
 		return c.Client.Do(req)
 	}
-	return c.Resp, nil
+	return c.Resp, c.Err
 }

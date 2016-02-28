@@ -22,6 +22,8 @@ import (
 
 	"k8s.io/kubernetes/pkg/api"
 	expapi "k8s.io/kubernetes/pkg/apis/extensions"
+	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/labels"
 	thirdpartyresourceetcd "k8s.io/kubernetes/pkg/registry/thirdpartyresource/etcd"
 	"k8s.io/kubernetes/pkg/registry/thirdpartyresourcedata"
 	"k8s.io/kubernetes/pkg/runtime"
@@ -35,10 +37,6 @@ func makeThirdPartyPath(group string) string {
 		return thirdpartyprefix
 	}
 	return thirdpartyprefix + "/" + group
-}
-
-func getThirdPartyGroupName(path string) string {
-	return strings.TrimPrefix(strings.TrimPrefix(path, thirdpartyprefix), "/")
 }
 
 // resourceInterface is the interface for the parts of the master that know how to add/remove
@@ -78,7 +76,7 @@ func (t *ThirdPartyController) SyncOneResource(rsrc *expapi.ThirdPartyResource) 
 
 // Synchronize all resources with RESTful resources on the master
 func (t *ThirdPartyController) SyncResources() error {
-	list, err := t.thirdPartyResourceRegistry.List(api.NewDefaultContext(), nil)
+	list, err := t.thirdPartyResourceRegistry.List(api.NewDefaultContext(), labels.Everything(), fields.Everything())
 	if err != nil {
 		return err
 	}

@@ -68,7 +68,7 @@ type connImpl struct {
 
 // Implements Object as a godbus.Object
 type objectImpl struct {
-	object godbus.BusObject
+	object *godbus.Object
 }
 
 // Implements Call as a godbus.Call

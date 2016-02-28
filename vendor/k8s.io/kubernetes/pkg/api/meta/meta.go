@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"reflect"
 
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/conversion"
 	"k8s.io/kubernetes/pkg/runtime"
 	"k8s.io/kubernetes/pkg/types"
@@ -30,18 +29,8 @@ import (
 // obj must be a pointer to an API type. An error is returned if the minimum
 // required fields are missing. Fields that are not required return the default
 // value and are a no-op if set.
-func Accessor(obj interface{}) (Object, error) {
-	if oi, ok := obj.(ObjectMetaAccessor); ok {
-		if om := oi.GetObjectMeta(); om != nil {
-			return om, nil
-		}
-	}
-	// we may get passed an object that is directly portable to Object
-	if oi, ok := obj.(Object); ok {
-		return oi, nil
-	}
-	// legacy path for objects that do not implement Object and ObjectMetaAccessor via
-	// reflection - very slow code path.
+// TODO: add a fast path for *TypeMeta and *ObjectMeta for internal objects
+func Accessor(obj interface{}) (Interface, error) {
 	v, err := conversion.EnforcePtr(obj)
 	if err != nil {
 		return nil, err
@@ -90,10 +79,7 @@ func Accessor(obj interface{}) (Object, error) {
 // TODO: this interface is used to test code that does not have ObjectMeta or ListMeta
 // in round tripping (objects which can use apiVersion/kind, but do not fit the Kube
 // api conventions).
-func TypeAccessor(obj interface{}) (Type, error) {
-	if typed, ok := obj.(runtime.Object); ok {
-		return objectAccessor{typed}, nil
-	}
+func TypeAccessor(obj interface{}) (TypeInterface, error) {
 	v, err := conversion.EnforcePtr(obj)
 	if err != nil {
 		return nil, err
@@ -114,46 +100,6 @@ func TypeAccessor(obj interface{}) (Type, error) {
 	return a, nil
 }
 
-type objectAccessor struct {
-	runtime.Object
-}
-
-func (obj objectAccessor) GetKind() string {
-	if gvk := obj.GetObjectKind().GroupVersionKind(); gvk != nil {
-		return gvk.Kind
-	}
-	return ""
-}
-
-func (obj objectAccessor) SetKind(kind string) {
-	gvk := obj.GetObjectKind().GroupVersionKind()
-	if gvk == nil {
-		gvk = &unversioned.GroupVersionKind{}
-	}
-	gvk.Kind = kind
-	obj.GetObjectKind().SetGroupVersionKind(gvk)
-}
-
-func (obj objectAccessor) GetAPIVersion() string {
-	if gvk := obj.GetObjectKind().GroupVersionKind(); gvk != nil {
-		return gvk.GroupVersion().String()
-	}
-	return ""
-}
-
-func (obj objectAccessor) SetAPIVersion(version string) {
-	gvk := obj.GetObjectKind().GroupVersionKind()
-	if gvk == nil {
-		gvk = &unversioned.GroupVersionKind{}
-	}
-	gv, err := unversioned.ParseGroupVersion(version)
-	if err != nil {
-		gv = unversioned.GroupVersion{Version: version}
-	}
-	gvk.Group, gvk.Version = gv.Group, gv.Version
-	obj.GetObjectKind().SetGroupVersionKind(gvk)
-}
-
 // NewAccessor returns a MetadataAccessor that can retrieve
 // or manipulate resource version on objects derived from core API
 // metadata concepts.
@@ -165,20 +111,36 @@ func NewAccessor() MetadataAccessor {
 type resourceAccessor struct{}
 
 func (resourceAccessor) Kind(obj runtime.Object) (string, error) {
-	return objectAccessor{obj}.GetKind(), nil
+	accessor, err := Accessor(obj)
+	if err != nil {
+		return "", err
+	}
+	return accessor.Kind(), nil
 }
 
 func (resourceAccessor) SetKind(obj runtime.Object, kind string) error {
-	objectAccessor{obj}.SetKind(kind)
+	accessor, err := Accessor(obj)
+	if err != nil {
+		return err
+	}
+	accessor.SetKind(kind)
 	return nil
 }
 
 func (resourceAccessor) APIVersion(obj runtime.Object) (string, error) {
-	return objectAccessor{obj}.GetAPIVersion(), nil
+	accessor, err := Accessor(obj)
+	if err != nil {
+		return "", err
+	}
+	return accessor.APIVersion(), nil
 }
 
 func (resourceAccessor) SetAPIVersion(obj runtime.Object, version string) error {
-	objectAccessor{obj}.SetAPIVersion(version)
+	accessor, err := Accessor(obj)
+	if err != nil {
+		return err
+	}
+	accessor.SetAPIVersion(version)
 	return nil
 }
 
@@ -187,7 +149,7 @@ func (resourceAccessor) Namespace(obj runtime.Object) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return accessor.GetNamespace(), nil
+	return accessor.Namespace(), nil
 }
 
 func (resourceAccessor) SetNamespace(obj runtime.Object, namespace string) error {
@@ -204,7 +166,7 @@ func (resourceAccessor) Name(obj runtime.Object) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return accessor.GetName(), nil
+	return accessor.Name(), nil
 }
 
 func (resourceAccessor) SetName(obj runtime.Object, name string) error {
@@ -221,7 +183,7 @@ func (resourceAccessor) GenerateName(obj runtime.Object) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return accessor.GetGenerateName(), nil
+	return accessor.GenerateName(), nil
 }
 
 func (resourceAccessor) SetGenerateName(obj runtime.Object, name string) error {
@@ -238,7 +200,7 @@ func (resourceAccessor) UID(obj runtime.Object) (types.UID, error) {
 	if err != nil {
 		return "", err
 	}
-	return accessor.GetUID(), nil
+	return accessor.UID(), nil
 }
 
 func (resourceAccessor) SetUID(obj runtime.Object, uid types.UID) error {
@@ -255,7 +217,7 @@ func (resourceAccessor) SelfLink(obj runtime.Object) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return accessor.GetSelfLink(), nil
+	return accessor.SelfLink(), nil
 }
 
 func (resourceAccessor) SetSelfLink(obj runtime.Object, selfLink string) error {
@@ -272,7 +234,7 @@ func (resourceAccessor) Labels(obj runtime.Object) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return accessor.GetLabels(), nil
+	return accessor.Labels(), nil
 }
 
 func (resourceAccessor) SetLabels(obj runtime.Object, labels map[string]string) error {
@@ -289,7 +251,7 @@ func (resourceAccessor) Annotations(obj runtime.Object) (map[string]string, erro
 	if err != nil {
 		return nil, err
 	}
-	return accessor.GetAnnotations(), nil
+	return accessor.Annotations(), nil
 }
 
 func (resourceAccessor) SetAnnotations(obj runtime.Object, annotations map[string]string) error {
@@ -306,7 +268,7 @@ func (resourceAccessor) ResourceVersion(obj runtime.Object) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return accessor.GetResourceVersion(), nil
+	return accessor.ResourceVersion(), nil
 }
 
 func (resourceAccessor) SetResourceVersion(obj runtime.Object, version string) error {
@@ -333,7 +295,7 @@ type genericAccessor struct {
 	annotations     *map[string]string
 }
 
-func (a genericAccessor) GetNamespace() string {
+func (a genericAccessor) Namespace() string {
 	if a.namespace == nil {
 		return ""
 	}
@@ -347,7 +309,7 @@ func (a genericAccessor) SetNamespace(namespace string) {
 	*a.namespace = namespace
 }
 
-func (a genericAccessor) GetName() string {
+func (a genericAccessor) Name() string {
 	if a.name == nil {
 		return ""
 	}
@@ -361,7 +323,7 @@ func (a genericAccessor) SetName(name string) {
 	*a.name = name
 }
 
-func (a genericAccessor) GetGenerateName() string {
+func (a genericAccessor) GenerateName() string {
 	if a.generateName == nil {
 		return ""
 	}
@@ -375,7 +337,7 @@ func (a genericAccessor) SetGenerateName(generateName string) {
 	*a.generateName = generateName
 }
 
-func (a genericAccessor) GetUID() types.UID {
+func (a genericAccessor) UID() types.UID {
 	if a.uid == nil {
 		return ""
 	}
@@ -389,7 +351,7 @@ func (a genericAccessor) SetUID(uid types.UID) {
 	*a.uid = uid
 }
 
-func (a genericAccessor) GetAPIVersion() string {
+func (a genericAccessor) APIVersion() string {
 	return *a.apiVersion
 }
 
@@ -397,7 +359,7 @@ func (a genericAccessor) SetAPIVersion(version string) {
 	*a.apiVersion = version
 }
 
-func (a genericAccessor) GetKind() string {
+func (a genericAccessor) Kind() string {
 	return *a.kind
 }
 
@@ -405,7 +367,7 @@ func (a genericAccessor) SetKind(kind string) {
 	*a.kind = kind
 }
 
-func (a genericAccessor) GetResourceVersion() string {
+func (a genericAccessor) ResourceVersion() string {
 	return *a.resourceVersion
 }
 
@@ -413,7 +375,7 @@ func (a genericAccessor) SetResourceVersion(version string) {
 	*a.resourceVersion = version
 }
 
-func (a genericAccessor) GetSelfLink() string {
+func (a genericAccessor) SelfLink() string {
 	return *a.selfLink
 }
 
@@ -421,7 +383,7 @@ func (a genericAccessor) SetSelfLink(selfLink string) {
 	*a.selfLink = selfLink
 }
 
-func (a genericAccessor) GetLabels() map[string]string {
+func (a genericAccessor) Labels() map[string]string {
 	if a.labels == nil {
 		return nil
 	}
@@ -432,7 +394,7 @@ func (a genericAccessor) SetLabels(labels map[string]string) {
 	*a.labels = labels
 }
 
-func (a genericAccessor) GetAnnotations() map[string]string {
+func (a genericAccessor) Annotations() map[string]string {
 	if a.annotations == nil {
 		return nil
 	}

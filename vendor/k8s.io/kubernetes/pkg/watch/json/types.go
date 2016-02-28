@@ -40,12 +40,12 @@ type WatchEvent struct {
 }
 
 // Object converts a watch.Event into an appropriately serializable JSON object
-func Object(encoder runtime.Encoder, event *watch.Event) (interface{}, error) {
+func Object(codec runtime.Codec, event *watch.Event) (interface{}, error) {
 	obj, ok := event.Object.(runtime.Object)
 	if !ok {
 		return nil, fmt.Errorf("the event object cannot be safely converted to JSON: %v", reflect.TypeOf(event.Object).Name())
 	}
-	data, err := runtime.Encode(encoder, obj)
+	data, err := codec.Encode(obj)
 	if err != nil {
 		return nil, err
 	}

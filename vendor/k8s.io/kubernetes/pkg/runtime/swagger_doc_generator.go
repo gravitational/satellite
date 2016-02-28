@@ -65,14 +65,11 @@ func fmtRawDoc(rawDoc string) string {
 
 	for _, line := range strings.Split(rawDoc, "\n") {
 		line = strings.TrimRight(line, " ")
-		leading := strings.TrimLeft(line, " ")
-		switch {
-		case len(line) == 0: // Keep paragraphs
+
+		if line == "" { // Keep paragraphs
 			delPrevChar()
 			buffer.WriteString("\n\n")
-		case strings.HasPrefix(leading, "TODO"): // Ignore one line TODOs
-		case strings.HasPrefix(leading, "+"): // Ignore instructions to go2idl
-		default:
+		} else if !strings.HasPrefix(strings.TrimLeft(line, " "), "TODO") { // Ignore one line TODOs
 			if strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
 				delPrevChar()
 				line = "\n" + line + "\n" // Replace it with newline. This is useful when we have a line with: "Example:\n\tJSON-someting..."

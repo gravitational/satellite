@@ -25,14 +25,14 @@ import (
 
 	"github.com/golang/glog"
 
-	utilnet "k8s.io/kubernetes/pkg/util/net"
+	"k8s.io/kubernetes/pkg/util"
 	"k8s.io/kubernetes/third_party/golang/netutil"
 )
 
 func DialURL(url *url.URL, transport http.RoundTripper) (net.Conn, error) {
 	dialAddr := netutil.CanonicalAddr(url)
 
-	dialer, _ := utilnet.Dialer(transport)
+	dialer, _ := util.Dialer(transport)
 
 	switch url.Scheme {
 	case "http":
@@ -45,7 +45,7 @@ func DialURL(url *url.URL, transport http.RoundTripper) (net.Conn, error) {
 		var tlsConfig *tls.Config
 		var tlsConn *tls.Conn
 		var err error
-		tlsConfig, _ = utilnet.TLSClientConfig(transport)
+		tlsConfig, _ = util.TLSClientConfig(transport)
 
 		if dialer != nil {
 			// We have a dialer; use it to open the connection, then

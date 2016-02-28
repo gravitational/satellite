@@ -26,7 +26,8 @@ import (
 	"github.com/emicklei/go-restful/swagger"
 	"github.com/golang/glog"
 	apiutil "k8s.io/kubernetes/pkg/api/util"
-	utilerrors "k8s.io/kubernetes/pkg/util/errors"
+	"k8s.io/kubernetes/pkg/util/errors"
+	errs "k8s.io/kubernetes/pkg/util/fielderrors"
 	"k8s.io/kubernetes/pkg/util/yaml"
 )
 
@@ -66,11 +67,11 @@ func NewSwaggerSchemaFromBytes(data []byte) (Schema, error) {
 	return schema, nil
 }
 
-// validateList unpacks a list and validate every item in the list.
+// validateList unpack a list and validate every item in the list.
 // It return nil if every item is ok.
 // Otherwise it return an error list contain errors of every item.
-func (s *SwaggerSchema) validateList(obj map[string]interface{}) []error {
-	allErrs := []error{}
+func (s *SwaggerSchema) validateList(obj map[string]interface{}) errs.ValidationErrorList {
+	allErrs := errs.ValidationErrorList{}
 	items, exists := obj["items"]
 	if !exists {
 		return append(allErrs, fmt.Errorf("no items field in %#v", obj))
@@ -149,19 +150,20 @@ func (s *SwaggerSchema) ValidateBytes(data []byte) error {
 		return fmt.Errorf("kind isn't string type")
 	}
 	if strings.HasSuffix(kind.(string), "List") {
-		return utilerrors.NewAggregate(s.validateList(fields))
+		return errors.NewAggregate(s.validateList(fields))
 	}
 	version := apiutil.GetVersion(groupVersion.(string))
 	allErrs := s.ValidateObject(obj, "", version+"."+kind.(string))
 	if len(allErrs) == 1 {
 		return allErrs[0]
 	}
-	return utilerrors.NewAggregate(allErrs)
+	return errors.NewAggregate(allErrs)
 }
 
-func (s *SwaggerSchema) ValidateObject(obj interface{}, fieldName, typeName string) []error {
-	allErrs := []error{}
+func (s *SwaggerSchema) ValidateObject(obj interface{}, fieldName, typeName string) errs.ValidationErrorList {
+	allErrs := errs.ValidationErrorList{}
 	models := s.api.Models
+	// TODO: handle required fields here too.
 	model, ok := models.At(typeName)
 	if !ok {
 		return append(allErrs, fmt.Errorf("couldn't find type: %s", typeName))
@@ -214,7 +216,7 @@ func (s *SwaggerSchema) ValidateObject(obj interface{}, fieldName, typeName stri
 // This matches type name in the swagger spec, such as "v1.Binding".
 var versionRegexp = regexp.MustCompile(`^v.+\..*`)
 
-func (s *SwaggerSchema) validateField(value interface{}, fieldName, fieldType string, fieldDetails *swagger.ModelProperty) []error {
+func (s *SwaggerSchema) validateField(value interface{}, fieldName, fieldType string, fieldDetails *swagger.ModelProperty) errs.ValidationErrorList {
 	// TODO: caesarxuchao: because we have multiple group/versions and objects
 	// may reference objects in other group, the commented out way of checking
 	// if a filedType is a type defined by us is outdated. We use a hacky way
@@ -228,7 +230,7 @@ func (s *SwaggerSchema) validateField(value interface{}, fieldName, fieldType st
 		// if strings.HasPrefix(fieldType, apiVersion) {
 		return s.ValidateObject(value, fieldName, fieldType)
 	}
-	allErrs := []error{}
+	allErrs := errs.ValidationErrorList{}
 	switch fieldType {
 	case "string":
 		// Be loose about what we accept for 'string' since we use IntOrString in a couple of places

@@ -19,16 +19,12 @@ package clientcmd
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
-	"strings"
 
-	"github.com/golang/glog"
 	"github.com/imdario/mergo"
 
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	client "k8s.io/kubernetes/pkg/client/unversioned"
 	clientauth "k8s.io/kubernetes/pkg/client/unversioned/auth"
 	clientcmdapi "k8s.io/kubernetes/pkg/client/unversioned/clientcmd/api"
@@ -67,25 +63,25 @@ type DirectClientConfig struct {
 
 // NewDefaultClientConfig creates a DirectClientConfig using the config.CurrentContext as the context name
 func NewDefaultClientConfig(config clientcmdapi.Config, overrides *ConfigOverrides) ClientConfig {
-	return &DirectClientConfig{config, config.CurrentContext, overrides, nil}
+	return DirectClientConfig{config, config.CurrentContext, overrides, nil}
 }
 
 // NewNonInteractiveClientConfig creates a DirectClientConfig using the passed context name and does not have a fallback reader for auth information
 func NewNonInteractiveClientConfig(config clientcmdapi.Config, contextName string, overrides *ConfigOverrides) ClientConfig {
-	return &DirectClientConfig{config, contextName, overrides, nil}
+	return DirectClientConfig{config, contextName, overrides, nil}
 }
 
 // NewInteractiveClientConfig creates a DirectClientConfig using the passed context name and a reader in case auth information is not provided via files or flags
 func NewInteractiveClientConfig(config clientcmdapi.Config, contextName string, overrides *ConfigOverrides, fallbackReader io.Reader) ClientConfig {
-	return &DirectClientConfig{config, contextName, overrides, fallbackReader}
+	return DirectClientConfig{config, contextName, overrides, fallbackReader}
 }
 
-func (config *DirectClientConfig) RawConfig() (clientcmdapi.Config, error) {
+func (config DirectClientConfig) RawConfig() (clientcmdapi.Config, error) {
 	return config.config, nil
 }
 
 // ClientConfig implements ClientConfig
-func (config *DirectClientConfig) ClientConfig() (*client.Config, error) {
+func (config DirectClientConfig) ClientConfig() (*client.Config, error) {
 	if err := config.ConfirmUsable(); err != nil {
 		return nil, err
 	}
@@ -96,17 +92,13 @@ func (config *DirectClientConfig) ClientConfig() (*client.Config, error) {
 	clientConfig := &client.Config{}
 	clientConfig.Host = configClusterInfo.Server
 	if u, err := url.ParseRequestURI(clientConfig.Host); err == nil && u.Opaque == "" && len(u.Path) > 1 {
+		clientConfig.Prefix = u.Path
+		u.Path = ""
 		u.RawQuery = ""
 		u.Fragment = ""
 		clientConfig.Host = u.String()
 	}
-	if len(configClusterInfo.APIVersion) != 0 {
-		gv, err := unversioned.ParseGroupVersion(configClusterInfo.APIVersion)
-		if err != nil {
-			return nil, err
-		}
-		clientConfig.GroupVersion = &gv
-	}
+	clientConfig.Version = configClusterInfo.APIVersion
 
 	// only try to read the auth information if we are secure
 	if client.IsConfigTransportTLS(*clientConfig) {
@@ -217,7 +209,7 @@ func canIdentifyUser(config client.Config) bool {
 }
 
 // Namespace implements KubeConfig
-func (config *DirectClientConfig) Namespace() (string, bool, error) {
+func (config DirectClientConfig) Namespace() (string, bool, error) {
 	if err := config.ConfirmUsable(); err != nil {
 		return "", false, err
 	}
@@ -237,19 +229,15 @@ func (config *DirectClientConfig) Namespace() (string, bool, error) {
 
 // ConfirmUsable looks a particular context and determines if that particular part of the config is useable.  There might still be errors in the config,
 // but no errors in the sections requested or referenced.  It does not return early so that it can find as many errors as possible.
-func (config *DirectClientConfig) ConfirmUsable() error {
+func (config DirectClientConfig) ConfirmUsable() error {
 	validationErrors := make([]error, 0)
 	validationErrors = append(validationErrors, validateAuthInfo(config.getAuthInfoName(), config.getAuthInfo())...)
 	validationErrors = append(validationErrors, validateClusterInfo(config.getClusterName(), config.getCluster())...)
-	// when direct client config is specified, and our only error is that no server is defined, we should
-	// return a standard "no config" error
-	if len(validationErrors) == 1 && validationErrors[0] == ErrEmptyCluster {
-		return newErrConfigurationInvalid([]error{ErrEmptyConfig})
-	}
+
 	return newErrConfigurationInvalid(validationErrors)
 }
 
-func (config *DirectClientConfig) getContextName() string {
+func (config DirectClientConfig) getContextName() string {
 	if len(config.overrides.CurrentContext) != 0 {
 		return config.overrides.CurrentContext
 	}
@@ -260,21 +248,21 @@ func (config *DirectClientConfig) getContextName() string {
 	return config.config.CurrentContext
 }
 
-func (config *DirectClientConfig) getAuthInfoName() string {
+func (config DirectClientConfig) getAuthInfoName() string {
 	if len(config.overrides.Context.AuthInfo) != 0 {
 		return config.overrides.Context.AuthInfo
 	}
 	return config.getContext().AuthInfo
 }
 
-func (config *DirectClientConfig) getClusterName() string {
+func (config DirectClientConfig) getClusterName() string {
 	if len(config.overrides.Context.Cluster) != 0 {
 		return config.overrides.Context.Cluster
 	}
 	return config.getContext().Cluster
 }
 
-func (config *DirectClientConfig) getContext() clientcmdapi.Context {
+func (config DirectClientConfig) getContext() clientcmdapi.Context {
 	contexts := config.config.Contexts
 	contextName := config.getContextName()
 
@@ -287,7 +275,7 @@ func (config *DirectClientConfig) getContext() clientcmdapi.Context {
 	return mergedContext
 }
 
-func (config *DirectClientConfig) getAuthInfo() clientcmdapi.AuthInfo {
+func (config DirectClientConfig) getAuthInfo() clientcmdapi.AuthInfo {
 	authInfos := config.config.AuthInfos
 	authInfoName := config.getAuthInfoName()
 
@@ -300,7 +288,7 @@ func (config *DirectClientConfig) getAuthInfo() clientcmdapi.AuthInfo {
 	return mergedAuthInfo
 }
 
-func (config *DirectClientConfig) getCluster() clientcmdapi.Cluster {
+func (config DirectClientConfig) getCluster() clientcmdapi.Cluster {
 	clusterInfos := config.config.Clusters
 	clusterInfoName := config.getClusterName()
 
@@ -327,19 +315,12 @@ func (inClusterClientConfig) ClientConfig() (*client.Config, error) {
 }
 
 func (inClusterClientConfig) Namespace() (string, error) {
-	// This way assumes you've set the POD_NAMESPACE environment variable using the downward API.
-	// This check has to be done first for backwards compatibility with the way InClusterConfig was originally set up
+	// TODO: generic way to figure out what namespace you are running in?
+	// This way assumes you've set the POD_NAMESPACE environment variable
+	// using the downward API.
 	if ns := os.Getenv("POD_NAMESPACE"); ns != "" {
 		return ns, nil
 	}
-
-	// Fall back to the namespace associated with the service account token, if available
-	if data, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace"); err == nil {
-		if ns := strings.TrimSpace(string(data)); len(ns) > 0 {
-			return ns, nil
-		}
-	}
-
 	return "default", nil
 }
 
@@ -349,24 +330,4 @@ func (inClusterClientConfig) Possible() bool {
 	return os.Getenv("KUBERNETES_SERVICE_HOST") != "" &&
 		os.Getenv("KUBERNETES_SERVICE_PORT") != "" &&
 		err == nil && !fi.IsDir()
-}
-
-// BuildConfigFromFlags is a helper function that builds configs from a master
-// url or a kubeconfig filepath. These are passed in as command line flags for cluster
-// components. Warnings should reflect this usage. If neither masterUrl or kubeconfigPath
-// are passed in we fallback to inClusterConfig. If inClusterConfig fails, we fallback
-// to the default config.
-func BuildConfigFromFlags(masterUrl, kubeconfigPath string) (*client.Config, error) {
-	if kubeconfigPath == "" && masterUrl == "" {
-		glog.Warningf("Neither --kubeconfig nor --master was specified.  Using the inClusterConfig.  This might not work.")
-		kubeconfig, err := client.InClusterConfig()
-		if err == nil {
-			return kubeconfig, nil
-		}
-		glog.Warning("error creating inClusterConfig, falling back to default config: ", err)
-	}
-
-	return NewNonInteractiveDeferredLoadingClientConfig(
-		&ClientConfigLoadingRules{ExplicitPath: kubeconfigPath},
-		&ConfigOverrides{ClusterInfo: clientcmdapi.Cluster{Server: masterUrl}}).ClientConfig()
 }

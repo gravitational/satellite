@@ -17,7 +17,6 @@ limitations under the License.
 package io
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -50,7 +49,6 @@ func (writer *StdWriter) WriteFile(filename string, data []byte, perm os.FileMod
 type NsenterWriter struct {
 }
 
-// TODO: should take a writer, not []byte
 func (writer *NsenterWriter) WriteFile(filename string, data []byte, perm os.FileMode) error {
 	cmd := "nsenter"
 	base_args := []string{
@@ -58,11 +56,10 @@ func (writer *NsenterWriter) WriteFile(filename string, data []byte, perm os.Fil
 		"--",
 	}
 
-	echo_args := append(base_args, "sh", "-c", fmt.Sprintf("cat > %s", filename))
+	echo_args := append(base_args, "sh", "-c",
+		fmt.Sprintf("echo %q | cat > %s", data, filename))
 	glog.V(5).Infof("Command to write data to file: %v %v", cmd, echo_args)
-	command := exec.Command(cmd, echo_args...)
-	command.Stdin = bytes.NewBuffer(data)
-	outputBytes, err := command.CombinedOutput()
+	outputBytes, err := exec.Command(cmd, echo_args...).CombinedOutput()
 	if err != nil {
 		glog.Errorf("Output from writing to %q: %v", filename, string(outputBytes))
 		return err

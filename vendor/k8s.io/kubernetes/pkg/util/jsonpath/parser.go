@@ -63,12 +63,8 @@ func NewParser(name string) *Parser {
 // parseAction parsed the expression inside delimiter
 func parseAction(name, text string) (*Parser, error) {
 	p, err := Parse(name, fmt.Sprintf("%s%s%s", leftDelim, text, rightDelim))
-	// when error happens, p will be nil, so we need to return here
-	if err != nil {
-		return p, err
-	}
 	p.Root = p.Root.Nodes[0].(*ListNode)
-	return p, nil
+	return p, err
 }
 
 func (p *Parser) Parse(text string) error {
@@ -359,7 +355,7 @@ Loop:
 	return p.parseInsideAction(cur)
 }
 
-// parseQuote unquotes string inside double quote
+// parseQuote scans array index selection
 func (p *Parser) parseQuote(cur *ListNode) error {
 Loop:
 	for {
@@ -371,11 +367,7 @@ Loop:
 		}
 	}
 	value := p.consumeText()
-	s, err := strconv.Unquote(value)
-	if err != nil {
-		return fmt.Errorf("unquote string %s error %v", value, err)
-	}
-	cur.append(newText(s))
+	cur.append(newText(value[1 : len(value)-1]))
 	return p.parseInsideAction(cur)
 }
 

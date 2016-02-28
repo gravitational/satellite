@@ -32,23 +32,34 @@ import (
 	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/runtime"
-	"k8s.io/kubernetes/pkg/util/wait"
+	"k8s.io/kubernetes/pkg/tools"
+	"k8s.io/kubernetes/pkg/util"
 )
 
 type Tester struct {
 	*testing.T
 	storage             rest.Storage
+	storageError        injectErrorFunc
 	clusterScope        bool
 	createOnUpdate      bool
 	generatesName       bool
 	returnDeletedObject bool
 }
 
-func New(t *testing.T, storage rest.Storage) *Tester {
+type injectErrorFunc func(err error)
+
+func New(t *testing.T, storage rest.Storage, storageError injectErrorFunc) *Tester {
 	return &Tester{
-		T:       t,
-		storage: storage,
+		T:            t,
+		storage:      storage,
+		storageError: storageError,
 	}
+}
+
+func (t *Tester) withStorageError(err error, fn func()) {
+	t.storageError(err)
+	defer t.storageError(nil)
+	fn()
 }
 
 func (t *Tester) ClusterScope() *Tester {
@@ -131,6 +142,7 @@ func (t *Tester) TestCreate(valid runtime.Object, setFn SetFunc, getFn GetFunc, 
 	t.testCreateHasMetadata(copyOrDie(valid))
 	if !t.generatesName {
 		t.testCreateGeneratesName(copyOrDie(valid))
+		t.testCreateGeneratesNameReturnsServerTimeout(copyOrDie(valid))
 	}
 	t.testCreateEquals(copyOrDie(valid), getFn)
 	t.testCreateAlreadyExisting(copyOrDie(valid), setFn)
@@ -146,9 +158,9 @@ func (t *Tester) TestCreate(valid runtime.Object, setFn SetFunc, getFn GetFunc, 
 }
 
 // Test updating an object.
-func (t *Tester) TestUpdate(valid runtime.Object, setFn SetFunc, getFn GetFunc, updateFn UpdateFunc, invalidUpdateFn ...UpdateFunc) {
+func (t *Tester) TestUpdate(valid runtime.Object, setFn SetFunc, setRVFn SetRVFunc, getFn GetFunc, updateFn UpdateFunc, invalidUpdateFn ...UpdateFunc) {
 	t.testUpdateEquals(copyOrDie(valid), setFn, getFn, updateFn)
-	t.testUpdateFailsOnVersionTooOld(copyOrDie(valid), setFn, getFn)
+	t.testUpdateFailsOnVersionTooOld(copyOrDie(valid), setFn, setRVFn)
 	t.testUpdateOnNotFound(copyOrDie(valid))
 	if !t.clusterScope {
 		t.testUpdateRejectsMismatchedNamespace(copyOrDie(valid), setFn)
@@ -182,18 +194,20 @@ func (t *Tester) TestGet(valid runtime.Object) {
 }
 
 // Test listing objects.
-func (t *Tester) TestList(valid runtime.Object, assignFn AssignFunc) {
-	t.testListNotFound(assignFn)
+func (t *Tester) TestList(valid runtime.Object, assignFn AssignFunc, setRVFn SetRVFunc) {
+	t.testListError()
 	t.testListFound(copyOrDie(valid), assignFn)
+	t.testListNotFound(assignFn, setRVFn)
 	t.testListMatchLabels(copyOrDie(valid), assignFn)
 }
 
 // Test watching objects.
 func (t *Tester) TestWatch(
-	valid runtime.Object, emitFn EmitFunc,
+	valid runtime.Object, initWatchFn InitWatchFunc, injectErrFn InjectErrFunc, emitFn EmitFunc,
 	labelsPass, labelsFail []labels.Set, fieldsPass, fieldsFail []fields.Set, actions []string) {
-	t.testWatchLabels(copyOrDie(valid), emitFn, labelsPass, labelsFail, actions)
-	t.testWatchFields(copyOrDie(valid), emitFn, fieldsPass, fieldsFail, actions)
+	t.testWatch(initWatchFn, injectErrFn)
+	t.testWatchLabels(copyOrDie(valid), initWatchFn, emitFn, labelsPass, labelsFail, actions)
+	t.testWatchFields(copyOrDie(valid), initWatchFn, emitFn, fieldsPass, fieldsFail, actions)
 }
 
 // =============================================================================
@@ -269,6 +283,18 @@ func (t *Tester) testCreateGeneratesName(valid runtime.Object) {
 	if objectMeta.Name == "test-" || !strings.HasPrefix(objectMeta.Name, "test-") {
 		t.Errorf("unexpected name: %#v", valid)
 	}
+}
+
+func (t *Tester) testCreateGeneratesNameReturnsServerTimeout(valid runtime.Object) {
+	objectMeta := t.getObjectMetaOrFail(valid)
+	objectMeta.Name = ""
+	objectMeta.GenerateName = "test-"
+	t.withStorageError(errors.NewAlreadyExists("kind", "thing"), func() {
+		_, err := t.storage.(rest.Creater).Create(t.TestContext(), valid)
+		if err == nil || !errors.IsServerTimeout(err) {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+	})
 }
 
 func (t *Tester) testCreateHasMetadata(valid runtime.Object) {
@@ -426,26 +452,22 @@ func (t *Tester) testUpdateEquals(obj runtime.Object, setFn SetFunc, getFn GetFu
 	}
 }
 
-func (t *Tester) testUpdateFailsOnVersionTooOld(obj runtime.Object, setFn SetFunc, getFn GetFunc) {
+func (t *Tester) testUpdateFailsOnVersionTooOld(obj runtime.Object, setFn SetFunc, setRVFn SetRVFunc) {
 	ctx := t.TestContext()
 
 	foo := copyOrDie(obj)
 	t.setObjectMeta(foo, "foo3")
 
+	setRVFn(10)
 	if err := setFn(ctx, foo); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	storedFoo, err := getFn(ctx, foo)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-
-	older := copyOrDie(storedFoo)
+	older := copyOrDie(foo)
 	olderMeta := t.getObjectMetaOrFail(older)
-	olderMeta.ResourceVersion = "1"
+	olderMeta.ResourceVersion = "8"
 
-	_, _, err = t.storage.(rest.Updater).Update(t.TestContext(), older)
+	_, _, err := t.storage.(rest.Updater).Update(t.TestContext(), older)
 	if err == nil {
 		t.Errorf("Expected an error, but we didn't get one")
 	} else if !errors.IsConflict(err) {
@@ -550,11 +572,12 @@ func (t *Tester) testDeleteNoGraceful(obj runtime.Object, setFn SetFunc, getFn G
 func (t *Tester) testDeleteNonExist(obj runtime.Object) {
 	objectMeta := t.getObjectMetaOrFail(obj)
 
-	_, err := t.storage.(rest.GracefulDeleter).Delete(t.TestContext(), objectMeta.Name, nil)
-	if err == nil || !errors.IsNotFound(err) {
-		t.Errorf("unexpected error: %v", err)
-	}
-
+	t.withStorageError(tools.EtcdErrorNotFound, func() {
+		_, err := t.storage.(rest.GracefulDeleter).Delete(t.TestContext(), objectMeta.Name, nil)
+		if err == nil || !errors.IsNotFound(err) {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
 }
 
 // =============================================================================
@@ -673,8 +696,7 @@ func (t *Tester) testDeleteGracefulImmediate(obj runtime.Object, setFn SetFunc, 
 		t.Errorf("unexpected error, object should be deleted immediately: %v", err)
 	}
 	objectMeta = t.getObjectMetaOrFail(out)
-	// the second delete shouldn't update the object, so the objectMeta.DeletionGracePeriodSeconds should eqaul to the value set in the first delete.
-	if objectMeta.DeletionTimestamp == nil || objectMeta.DeletionGracePeriodSeconds == nil || *objectMeta.DeletionGracePeriodSeconds != expectedGrace {
+	if objectMeta.DeletionTimestamp == nil || objectMeta.DeletionGracePeriodSeconds == nil || *objectMeta.DeletionGracePeriodSeconds != 0 {
 		t.Errorf("unexpected deleted meta: %#v", objectMeta)
 	}
 }
@@ -826,6 +848,18 @@ func listToItems(listObj runtime.Object) ([]runtime.Object, error) {
 	return result, nil
 }
 
+func (t *Tester) testListError() {
+	ctx := t.TestContext()
+
+	storageError := fmt.Errorf("test error")
+	t.withStorageError(storageError, func() {
+		_, err := t.storage.(rest.Lister).List(ctx, labels.Everything(), fields.Everything())
+		if err != storageError {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+}
+
 func (t *Tester) testListFound(obj runtime.Object, assignFn AssignFunc) {
 	ctx := t.TestContext()
 
@@ -836,7 +870,7 @@ func (t *Tester) testListFound(obj runtime.Object, assignFn AssignFunc) {
 
 	existing := assignFn([]runtime.Object{foo1, foo2})
 
-	listObj, err := t.storage.(rest.Lister).List(ctx, nil)
+	listObj, err := t.storage.(rest.Lister).List(ctx, labels.Everything(), fields.Everything())
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -856,22 +890,19 @@ func (t *Tester) testListMatchLabels(obj runtime.Object, assignFn AssignFunc) {
 	ctx := t.TestContext()
 	testLabels := map[string]string{"key": "value"}
 
-	foo3 := copyOrDie(obj)
-	t.setObjectMeta(foo3, "foo3")
-	foo4 := copyOrDie(obj)
-	foo4Meta := t.getObjectMetaOrFail(foo4)
-	foo4Meta.Name = "foo4"
-	foo4Meta.Namespace = api.NamespaceValue(ctx)
-	foo4Meta.Labels = testLabels
+	foo1 := copyOrDie(obj)
+	t.setObjectMeta(foo1, "foo1")
+	foo2 := copyOrDie(obj)
+	foo2Meta := t.getObjectMetaOrFail(foo2)
+	foo2Meta.Name = "foo2"
+	foo2Meta.Namespace = api.NamespaceValue(ctx)
+	foo2Meta.Labels = testLabels
 
-	objs := ([]runtime.Object{foo3, foo4})
-
-	assignFn(objs)
-	filtered := []runtime.Object{objs[1]}
+	existing := assignFn([]runtime.Object{foo1, foo2})
+	filtered := []runtime.Object{existing[1]}
 
 	selector := labels.SelectorFromSet(labels.Set(testLabels))
-	options := &api.ListOptions{LabelSelector: selector}
-	listObj, err := t.storage.(rest.Lister).List(ctx, options)
+	listObj, err := t.storage.(rest.Lister).List(ctx, selector, fields.Everything())
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -887,11 +918,13 @@ func (t *Tester) testListMatchLabels(obj runtime.Object, assignFn AssignFunc) {
 	}
 }
 
-func (t *Tester) testListNotFound(assignFn AssignFunc) {
+func (t *Tester) testListNotFound(assignFn AssignFunc, setRVFn SetRVFunc) {
 	ctx := t.TestContext()
+
+	setRVFn(uint64(123))
 	_ = assignFn([]runtime.Object{})
 
-	listObj, err := t.storage.(rest.Lister).List(ctx, nil)
+	listObj, err := t.storage.(rest.Lister).List(ctx, labels.Everything(), fields.Everything())
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -900,24 +933,54 @@ func (t *Tester) testListNotFound(assignFn AssignFunc) {
 		t.Errorf("unexpected error: %v", err)
 	}
 	if len(items) != 0 {
-		t.Errorf("unexpected items: %#v", items)
+		t.Errorf("unexpected items: %v", items)
+	}
+
+	meta, err := api.ListMetaFor(listObj)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if meta.ResourceVersion != "123" {
+		t.Errorf("unexpected resource version: %d", meta.ResourceVersion)
 	}
 }
 
 // =============================================================================
 // Watching tests.
 
-func (t *Tester) testWatchFields(obj runtime.Object, emitFn EmitFunc, fieldsPass, fieldsFail []fields.Set, actions []string) {
+func (t *Tester) testWatch(initWatchFn InitWatchFunc, injectErrFn InjectErrFunc) {
+	ctx := t.TestContext()
+	watcher, err := t.storage.(rest.Watcher).Watch(ctx, labels.Everything(), fields.Everything(), "1")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	initWatchFn()
+
+	select {
+	case _, ok := <-watcher.ResultChan():
+		if !ok {
+			t.Errorf("watch channel should be open")
+		}
+	default:
+	}
+
+	injectErrFn(nil)
+	if _, ok := <-watcher.ResultChan(); ok {
+		t.Errorf("watch channel should be closed")
+	}
+	watcher.Stop()
+}
+
+func (t *Tester) testWatchFields(obj runtime.Object, initWatchFn InitWatchFunc, emitFn EmitFunc, fieldsPass, fieldsFail []fields.Set, actions []string) {
 	ctx := t.TestContext()
 
 	for _, field := range fieldsPass {
 		for _, action := range actions {
-			options := &api.ListOptions{FieldSelector: field.AsSelector(), ResourceVersion: "1"}
-			watcher, err := t.storage.(rest.Watcher).Watch(ctx, options)
+			watcher, err := t.storage.(rest.Watcher).Watch(ctx, labels.Everything(), field.AsSelector(), "1")
 			if err != nil {
-				t.Errorf("unexpected error: %v, %v", err, action)
+				t.Errorf("unexpected error: %v", err)
 			}
-
+			initWatchFn()
 			if err := emitFn(obj, action); err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -927,7 +990,7 @@ func (t *Tester) testWatchFields(obj runtime.Object, emitFn EmitFunc, fieldsPass
 				if !ok {
 					t.Errorf("watch channel should be open")
 				}
-			case <-time.After(wait.ForeverTestTimeout):
+			case <-time.After(util.ForeverTestTimeout):
 				t.Errorf("unexpected timeout from result channel")
 			}
 			watcher.Stop()
@@ -936,11 +999,11 @@ func (t *Tester) testWatchFields(obj runtime.Object, emitFn EmitFunc, fieldsPass
 
 	for _, field := range fieldsFail {
 		for _, action := range actions {
-			options := &api.ListOptions{FieldSelector: field.AsSelector(), ResourceVersion: "1"}
-			watcher, err := t.storage.(rest.Watcher).Watch(ctx, options)
+			watcher, err := t.storage.(rest.Watcher).Watch(ctx, labels.Everything(), field.AsSelector(), "1")
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
+			initWatchFn()
 			if err := emitFn(obj, action); err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -956,16 +1019,16 @@ func (t *Tester) testWatchFields(obj runtime.Object, emitFn EmitFunc, fieldsPass
 	}
 }
 
-func (t *Tester) testWatchLabels(obj runtime.Object, emitFn EmitFunc, labelsPass, labelsFail []labels.Set, actions []string) {
+func (t *Tester) testWatchLabels(obj runtime.Object, initWatchFn InitWatchFunc, emitFn EmitFunc, labelsPass, labelsFail []labels.Set, actions []string) {
 	ctx := t.TestContext()
 
 	for _, label := range labelsPass {
 		for _, action := range actions {
-			options := &api.ListOptions{LabelSelector: label.AsSelector(), ResourceVersion: "1"}
-			watcher, err := t.storage.(rest.Watcher).Watch(ctx, options)
+			watcher, err := t.storage.(rest.Watcher).Watch(ctx, label.AsSelector(), fields.Everything(), "1")
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
+			initWatchFn()
 			if err := emitFn(obj, action); err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -975,7 +1038,7 @@ func (t *Tester) testWatchLabels(obj runtime.Object, emitFn EmitFunc, labelsPass
 				if !ok {
 					t.Errorf("watch channel should be open")
 				}
-			case <-time.After(wait.ForeverTestTimeout):
+			case <-time.After(util.ForeverTestTimeout):
 				t.Errorf("unexpected timeout from result channel")
 			}
 			watcher.Stop()
@@ -984,11 +1047,11 @@ func (t *Tester) testWatchLabels(obj runtime.Object, emitFn EmitFunc, labelsPass
 
 	for _, label := range labelsFail {
 		for _, action := range actions {
-			options := &api.ListOptions{LabelSelector: label.AsSelector(), ResourceVersion: "1"}
-			watcher, err := t.storage.(rest.Watcher).Watch(ctx, options)
+			watcher, err := t.storage.(rest.Watcher).Watch(ctx, label.AsSelector(), fields.Everything(), "1")
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
+			initWatchFn()
 			if err := emitFn(obj, action); err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}

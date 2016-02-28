@@ -17,22 +17,14 @@ limitations under the License.
 package v1
 
 import (
-	"k8s.io/kubernetes/pkg/runtime"
+	"strings"
+
+	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/util"
-	"k8s.io/kubernetes/pkg/util/intstr"
-	"k8s.io/kubernetes/pkg/util/parsers"
 )
 
-func addDefaultingFuncs(scheme *runtime.Scheme) {
-	scheme.AddDefaultingFuncs(
-		func(obj *PodExecOptions) {
-			obj.Stdout = true
-			obj.Stderr = true
-		},
-		func(obj *PodAttachOptions) {
-			obj.Stdout = true
-			obj.Stderr = true
-		},
+func addDefaultingFuncs() {
+	api.Scheme.AddDefaultingFuncs(
 		func(obj *ReplicationController) {
 			var labels map[string]string
 			if obj.Spec.Template != nil {
@@ -48,7 +40,7 @@ func addDefaultingFuncs(scheme *runtime.Scheme) {
 				}
 			}
 			if obj.Spec.Replicas == nil {
-				obj.Spec.Replicas = new(int32)
+				obj.Spec.Replicas = new(int)
 				*obj.Spec.Replicas = 1
 			}
 		},
@@ -66,10 +58,10 @@ func addDefaultingFuncs(scheme *runtime.Scheme) {
 		},
 		func(obj *Container) {
 			if obj.ImagePullPolicy == "" {
-				_, tag := parsers.ParseImageName(obj.Image)
+				// TODO(dchen1107): Move ParseImageName code to pkg/util
+				parts := strings.Split(obj.Image, ":")
 				// Check image tag
-
-				if tag == "latest" {
+				if parts[len(parts)-1] == "latest" {
 					obj.ImagePullPolicy = PullAlways
 				} else {
 					obj.ImagePullPolicy = PullIfNotPresent
@@ -91,8 +83,8 @@ func addDefaultingFuncs(scheme *runtime.Scheme) {
 				if sp.Protocol == "" {
 					sp.Protocol = ProtocolTCP
 				}
-				if sp.TargetPort == intstr.FromInt(0) || sp.TargetPort == intstr.FromString("") {
-					sp.TargetPort = intstr.FromInt(int(sp.Port))
+				if sp.TargetPort == util.NewIntOrStringFromInt(0) || sp.TargetPort == util.NewIntOrStringFromString("") {
+					sp.TargetPort = util.NewIntOrStringFromInt(sp.Port)
 				}
 			}
 		},
@@ -124,9 +116,6 @@ func addDefaultingFuncs(scheme *runtime.Scheme) {
 			if obj.HostNetwork {
 				defaultHostNetworkPorts(&obj.Containers)
 			}
-			if obj.SecurityContext == nil {
-				obj.SecurityContext = &PodSecurityContext{}
-			}
 			if obj.TerminationGracePeriodSeconds == nil {
 				period := int64(DefaultTerminationGracePeriodSeconds)
 				obj.TerminationGracePeriodSeconds = &period
@@ -135,15 +124,6 @@ func addDefaultingFuncs(scheme *runtime.Scheme) {
 		func(obj *Probe) {
 			if obj.TimeoutSeconds == 0 {
 				obj.TimeoutSeconds = 1
-			}
-			if obj.PeriodSeconds == 0 {
-				obj.PeriodSeconds = 10
-			}
-			if obj.SuccessThreshold == 0 {
-				obj.SuccessThreshold = 1
-			}
-			if obj.FailureThreshold == 0 {
-				obj.FailureThreshold = 3
 			}
 		},
 		func(obj *Secret) {
@@ -162,11 +142,6 @@ func addDefaultingFuncs(scheme *runtime.Scheme) {
 		func(obj *PersistentVolumeClaim) {
 			if obj.Status.Phase == "" {
 				obj.Status.Phase = ClaimPending
-			}
-		},
-		func(obj *ISCSIVolumeSource) {
-			if obj.ISCSIInterface == "" {
-				obj.ISCSIInterface = "default"
 			}
 		},
 		func(obj *Endpoints) {
@@ -196,15 +171,6 @@ func addDefaultingFuncs(scheme *runtime.Scheme) {
 		func(obj *Node) {
 			if obj.Spec.ExternalID == "" {
 				obj.Spec.ExternalID = obj.Name
-			}
-		},
-		func(obj *NodeStatus) {
-			if obj.Allocatable == nil && obj.Capacity != nil {
-				obj.Allocatable = make(ResourceList, len(obj.Capacity))
-				for key, value := range obj.Capacity {
-					obj.Allocatable[key] = *(value.Copy())
-				}
-				obj.Allocatable = obj.Capacity
 			}
 		},
 		func(obj *ObjectFieldSelector) {
@@ -241,11 +207,6 @@ func addDefaultingFuncs(scheme *runtime.Scheme) {
 						obj.DefaultRequest[key] = *(value.Copy())
 					}
 				}
-			}
-		},
-		func(obj *ConfigMap) {
-			if obj.Data == nil {
-				obj.Data = make(map[string]string)
 			}
 		},
 	)

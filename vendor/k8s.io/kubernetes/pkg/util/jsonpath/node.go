@@ -84,11 +84,11 @@ func (l *ListNode) String() string {
 // TextNode holds plain text.
 type TextNode struct {
 	NodeType
-	Text string // The text; may span newlines.
+	Text []byte // The text; may span newlines.
 }
 
 func newText(text string) *TextNode {
-	return &TextNode{NodeType: NodeText, Text: text}
+	return &TextNode{NodeType: NodeText, Text: []byte(text)}
 }
 
 func (t *TextNode) String() string {

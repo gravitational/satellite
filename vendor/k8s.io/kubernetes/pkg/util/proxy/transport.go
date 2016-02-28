@@ -31,7 +31,7 @@ import (
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 
-	"k8s.io/kubernetes/pkg/util/net"
+	"k8s.io/kubernetes/pkg/util"
 	"k8s.io/kubernetes/pkg/util/sets"
 )
 
@@ -86,12 +86,8 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		forwardedURI = forwardedURI + "/"
 	}
 	req.Header.Set("X-Forwarded-Uri", forwardedURI)
-	if len(t.Host) > 0 {
-		req.Header.Set("X-Forwarded-Host", t.Host)
-	}
-	if len(t.Scheme) > 0 {
-		req.Header.Set("X-Forwarded-Proto", t.Scheme)
-	}
+	req.Header.Set("X-Forwarded-Host", t.Host)
+	req.Header.Set("X-Forwarded-Proto", t.Scheme)
 
 	rt := t.RoundTripper
 	if rt == nil {
@@ -123,7 +119,7 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return t.rewriteResponse(req, resp)
 }
 
-var _ = net.RoundTripperWrapper(&Transport{})
+var _ = util.RoundTripperWrapper(&Transport{})
 
 func (rt *Transport) WrappedRoundTripper() http.RoundTripper {
 	return rt.RoundTripper

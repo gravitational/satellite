@@ -120,8 +120,7 @@ func (c *connection) CloseChan() <-chan bool {
 // the stream. If newStreamHandler returns an error, the stream is rejected. If not, the
 // stream is accepted and registered with the connection.
 func (c *connection) newSpdyStream(stream *spdystream.Stream) {
-	replySent := make(chan struct{})
-	err := c.newStreamHandler(stream, replySent)
+	err := c.newStreamHandler(stream)
 	rejectStream := (err != nil)
 	if rejectStream {
 		glog.Warningf("Stream rejected: %v", err)
@@ -131,7 +130,6 @@ func (c *connection) newSpdyStream(stream *spdystream.Stream) {
 
 	c.registerStream(stream)
 	stream.SendReply(http.Header{}, rejectStream)
-	close(replySent)
 }
 
 // SetIdleTimeout sets the amount of time the connection may remain idle before

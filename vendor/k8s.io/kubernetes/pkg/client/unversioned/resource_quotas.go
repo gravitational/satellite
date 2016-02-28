@@ -18,6 +18,8 @@ package unversioned
 
 import (
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/watch"
 )
 
@@ -28,13 +30,13 @@ type ResourceQuotasNamespacer interface {
 
 // ResourceQuotaInterface has methods to work with ResourceQuota resources.
 type ResourceQuotaInterface interface {
-	List(opts api.ListOptions) (*api.ResourceQuotaList, error)
+	List(selector labels.Selector) (*api.ResourceQuotaList, error)
 	Get(name string) (*api.ResourceQuota, error)
 	Delete(name string) error
 	Create(resourceQuota *api.ResourceQuota) (*api.ResourceQuota, error)
 	Update(resourceQuota *api.ResourceQuota) (*api.ResourceQuota, error)
 	UpdateStatus(resourceQuota *api.ResourceQuota) (*api.ResourceQuota, error)
-	Watch(opts api.ListOptions) (watch.Interface, error)
+	Watch(label labels.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error)
 }
 
 // resourceQuotas implements ResourceQuotasNamespacer interface
@@ -52,9 +54,9 @@ func newResourceQuotas(c *Client, namespace string) *resourceQuotas {
 }
 
 // List takes a selector, and returns the list of resourceQuotas that match that selector.
-func (c *resourceQuotas) List(opts api.ListOptions) (result *api.ResourceQuotaList, err error) {
+func (c *resourceQuotas) List(selector labels.Selector) (result *api.ResourceQuotaList, err error) {
 	result = &api.ResourceQuotaList{}
-	err = c.r.Get().Namespace(c.ns).Resource("resourceQuotas").VersionedParams(&opts, api.ParameterCodec).Do().Into(result)
+	err = c.r.Get().Namespace(c.ns).Resource("resourceQuotas").LabelsSelectorParam(selector).Do().Into(result)
 	return
 }
 
@@ -92,11 +94,13 @@ func (c *resourceQuotas) UpdateStatus(resourceQuota *api.ResourceQuota) (result 
 }
 
 // Watch returns a watch.Interface that watches the requested resource
-func (c *resourceQuotas) Watch(opts api.ListOptions) (watch.Interface, error) {
+func (c *resourceQuotas) Watch(label labels.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error) {
 	return c.r.Get().
 		Prefix("watch").
 		Namespace(c.ns).
 		Resource("resourceQuotas").
-		VersionedParams(&opts, api.ParameterCodec).
+		Param("resourceVersion", resourceVersion).
+		LabelsSelectorParam(label).
+		FieldsSelectorParam(field).
 		Watch()
 }

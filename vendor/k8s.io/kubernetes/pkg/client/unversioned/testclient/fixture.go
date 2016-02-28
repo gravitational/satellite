@@ -38,16 +38,9 @@ import (
 type ObjectRetriever interface {
 	// Kind should return a resource or a list of resources (depending on the provided kind and
 	// name). It should return an error if the caller should communicate an error to the server.
-	Kind(gvk unversioned.GroupVersionKind, name string) (runtime.Object, error)
+	Kind(kind, name string) (runtime.Object, error)
 	// Add adds a runtime object for test purposes into this object.
 	Add(runtime.Object) error
-}
-
-// ObjectScheme abstracts the implementation of common operations on objects.
-type ObjectScheme interface {
-	runtime.ObjectCreater
-	runtime.ObjectCopier
-	runtime.ObjectTyper
 }
 
 // ObjectReaction returns a ReactionFunc that takes a generic action string of the form
@@ -59,7 +52,7 @@ type ObjectScheme interface {
 func ObjectReaction(o ObjectRetriever, mapper meta.RESTMapper) ReactionFunc {
 
 	return func(action Action) (bool, runtime.Object, error) {
-		kind, err := mapper.KindFor(unversioned.GroupVersionResource{Resource: action.GetResource()})
+		_, kind, err := mapper.VersionAndKindForResource(action.GetResource())
 		if err != nil {
 			return false, nil, fmt.Errorf("unrecognized action %s: %v", action.GetResource(), err)
 		}
@@ -67,8 +60,7 @@ func ObjectReaction(o ObjectRetriever, mapper meta.RESTMapper) ReactionFunc {
 		// TODO: have mapper return a Kind for a subresource?
 		switch castAction := action.(type) {
 		case ListAction:
-			kind.Kind += "List"
-			resource, err := o.Kind(kind, "")
+			resource, err := o.Kind(kind+"List", "")
 			return true, resource, err
 
 		case GetAction:
@@ -114,7 +106,7 @@ func AddObjectsFromPath(path string, o ObjectRetriever, decoder runtime.Decoder)
 	if err != nil {
 		return err
 	}
-	obj, err := runtime.Decode(decoder, data)
+	obj, err := decoder.Decode(data)
 	if err != nil {
 		return err
 	}
@@ -127,8 +119,8 @@ func AddObjectsFromPath(path string, o ObjectRetriever, decoder runtime.Decoder)
 type objects struct {
 	types   map[string][]runtime.Object
 	last    map[string]int
-	scheme  ObjectScheme
-	decoder runtime.Decoder
+	scheme  runtime.ObjectScheme
+	decoder runtime.ObjectDecoder
 }
 
 var _ ObjectRetriever = &objects{}
@@ -143,7 +135,7 @@ var _ ObjectRetriever = &objects{}
 // as a runtime.Object if Status == Success).  If multiple PodLists are provided, they
 // will be returned in order by the Kind call, and the last PodList will be reused for
 // subsequent calls.
-func NewObjects(scheme ObjectScheme, decoder runtime.Decoder) ObjectRetriever {
+func NewObjects(scheme runtime.ObjectScheme, decoder runtime.ObjectDecoder) ObjectRetriever {
 	return objects{
 		types:   make(map[string][]runtime.Object),
 		last:    make(map[string]int),
@@ -152,25 +144,23 @@ func NewObjects(scheme ObjectScheme, decoder runtime.Decoder) ObjectRetriever {
 	}
 }
 
-func (o objects) Kind(kind unversioned.GroupVersionKind, name string) (runtime.Object, error) {
-	kind.Version = runtime.APIVersionInternal
-
-	empty, _ := o.scheme.New(kind)
+func (o objects) Kind(kind, name string) (runtime.Object, error) {
+	empty, _ := o.scheme.New("", kind)
 	nilValue := reflect.Zero(reflect.TypeOf(empty)).Interface().(runtime.Object)
 
-	arr, ok := o.types[kind.Kind]
+	arr, ok := o.types[kind]
 	if !ok {
-		if strings.HasSuffix(kind.Kind, "List") {
-			itemKind := kind.Kind[:len(kind.Kind)-4]
+		if strings.HasSuffix(kind, "List") {
+			itemKind := kind[:len(kind)-4]
 			arr, ok := o.types[itemKind]
 			if !ok {
 				return empty, nil
 			}
-			out, err := o.scheme.New(kind)
+			out, err := o.scheme.New("", kind)
 			if err != nil {
 				return nilValue, err
 			}
-			if err := meta.SetList(out, arr); err != nil {
+			if err := runtime.SetList(out, arr); err != nil {
 				return nilValue, err
 			}
 			if out, err = o.scheme.Copy(out); err != nil {
@@ -178,25 +168,25 @@ func (o objects) Kind(kind unversioned.GroupVersionKind, name string) (runtime.O
 			}
 			return out, nil
 		}
-		return nilValue, errors.NewNotFound(unversioned.GroupResource{Group: kind.Group, Resource: kind.Kind}, name)
+		return nilValue, errors.NewNotFound(kind, name)
 	}
 
-	index := o.last[kind.Kind]
+	index := o.last[kind]
 	if index >= len(arr) {
 		index = len(arr) - 1
 	}
 	if index < 0 {
-		return nilValue, errors.NewNotFound(unversioned.GroupResource{Group: kind.Group, Resource: kind.Kind}, name)
+		return nilValue, errors.NewNotFound(kind, name)
 	}
 	out, err := o.scheme.Copy(arr[index])
 	if err != nil {
 		return nilValue, err
 	}
-	o.last[kind.Kind] = index + 1
+	o.last[kind] = index + 1
 
 	if status, ok := out.(*unversioned.Status); ok {
 		if status.Details != nil {
-			status.Details.Kind = kind.Kind
+			status.Details.Kind = kind
 		}
 		if status.Status != unversioned.StatusSuccess {
 			return nilValue, &errors.StatusError{ErrStatus: *status}
@@ -207,19 +197,18 @@ func (o objects) Kind(kind unversioned.GroupVersionKind, name string) (runtime.O
 }
 
 func (o objects) Add(obj runtime.Object) error {
-	gvk, err := o.scheme.ObjectKind(obj)
+	_, kind, err := o.scheme.ObjectVersionAndKind(obj)
 	if err != nil {
 		return err
 	}
-	kind := gvk.Kind
 
 	switch {
-	case meta.IsListType(obj):
+	case runtime.IsListType(obj):
 		if kind != "List" {
 			o.types[kind] = append(o.types[kind], obj)
 		}
 
-		list, err := meta.ExtractList(obj)
+		list, err := runtime.ExtractList(obj)
 		if err != nil {
 			return err
 		}

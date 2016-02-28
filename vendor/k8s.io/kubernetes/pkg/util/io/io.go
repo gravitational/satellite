@@ -22,8 +22,7 @@ import (
 	"os"
 
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/apimachinery/registered"
-	"k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/kubernetes/pkg/api/latest"
 )
 
 // LoadPodFromFile will read, decode, and return a Pod from a file.
@@ -40,8 +39,7 @@ func LoadPodFromFile(filePath string) (*api.Pod, error) {
 	}
 	pod := &api.Pod{}
 
-	codec := api.Codecs.LegacyCodec(registered.GroupOrDie(api.GroupName).GroupVersion)
-	if err := runtime.DecodeInto(codec, podDef, pod); err != nil {
+	if err := latest.GroupOrDie("").Codec.DecodeInto(podDef, pod); err != nil {
 		return nil, fmt.Errorf("failed decoding file: %v", err)
 	}
 	return pod, nil
@@ -52,8 +50,7 @@ func SavePodToFile(pod *api.Pod, filePath string, perm os.FileMode) error {
 	if filePath == "" {
 		return fmt.Errorf("file path not specified")
 	}
-	codec := api.Codecs.LegacyCodec(registered.GroupOrDie(api.GroupName).GroupVersion)
-	data, err := runtime.Encode(codec, pod)
+	data, err := latest.GroupOrDie("").Codec.Encode(pod)
 	if err != nil {
 		return fmt.Errorf("failed encoding pod: %v", err)
 	}

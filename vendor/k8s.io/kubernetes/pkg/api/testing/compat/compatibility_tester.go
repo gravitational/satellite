@@ -27,10 +27,10 @@ import (
 	"testing"
 
 	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/api/unversioned"
-	"k8s.io/kubernetes/pkg/kubectl"
 	"k8s.io/kubernetes/pkg/runtime"
-	"k8s.io/kubernetes/pkg/util/validation/field"
+	"k8s.io/kubernetes/pkg/util/fielderrors"
+
+	"k8s.io/kubernetes/pkg/kubectl"
 )
 
 // Based on: https://github.com/openshift/origin/blob/master/pkg/api/compatibility_test.go
@@ -40,16 +40,16 @@ import (
 // keys in the resulting JSON.
 func TestCompatibility(
 	t *testing.T,
-	version unversioned.GroupVersion,
+	version string,
 	input []byte,
-	validator func(obj runtime.Object) field.ErrorList,
+	validator func(obj runtime.Object) fielderrors.ValidationErrorList,
 	expectedKeys map[string]string,
 	absentKeys []string,
 ) {
 
 	// Decode
-	codec := api.Codecs.LegacyCodec(version)
-	obj, err := runtime.Decode(codec, input)
+	codec := runtime.CodecFor(api.Scheme, version)
+	obj, err := codec.Decode(input)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestCompatibility(
 	}
 
 	// Encode
-	output, err := runtime.Encode(codec, obj)
+	output, err := codec.Encode(obj)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}

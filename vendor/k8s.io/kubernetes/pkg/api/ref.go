@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"k8s.io/kubernetes/pkg/api/meta"
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/runtime"
 )
 
@@ -32,6 +31,10 @@ var (
 	ErrNilObject  = errors.New("can't reference a nil object")
 	ErrNoSelfLink = errors.New("selfLink was empty, can't make reference")
 )
+
+// ForTesting_ReferencesAllowBlankSelfLinks can be set to true in tests to avoid
+// "ErrNoSelfLink" errors.
+var ForTesting_ReferencesAllowBlankSelfLinks = false
 
 // GetReference returns an ObjectReference which refers to the given
 // object, or an error if the object doesn't follow the conventions
@@ -50,52 +53,47 @@ func GetReference(obj runtime.Object) (*ObjectReference, error) {
 		return nil, err
 	}
 
-	gvk := obj.GetObjectKind().GroupVersionKind()
-
 	// if the object referenced is actually persisted, we can just get kind from meta
 	// if we are building an object reference to something not yet persisted, we should fallback to scheme
-	var kind string
-	if gvk != nil {
-		kind = gvk.Kind
-	}
-	if len(kind) == 0 {
-		// TODO: this is wrong
-		gvk, err := Scheme.ObjectKind(obj)
+	kind := meta.Kind()
+	if kind == "" {
+		_, kind, err = Scheme.ObjectVersionAndKind(obj)
 		if err != nil {
 			return nil, err
 		}
-		kind = gvk.Kind
 	}
 
 	// if the object referenced is actually persisted, we can also get version from meta
-	var version string
-	if gvk != nil {
-		version = gvk.GroupVersion().String()
-	}
-	if len(version) == 0 {
-		selfLink := meta.GetSelfLink()
-		if len(selfLink) == 0 {
-			return nil, ErrNoSelfLink
+	version := meta.APIVersion()
+	if version == "" {
+		selfLink := meta.SelfLink()
+		if selfLink == "" {
+			if ForTesting_ReferencesAllowBlankSelfLinks {
+				version = "testing"
+			} else {
+				return nil, ErrNoSelfLink
+			}
+		} else {
+			selfLinkUrl, err := url.Parse(selfLink)
+			if err != nil {
+				return nil, err
+			}
+			// example paths: /<prefix>/<version>/*
+			parts := strings.Split(selfLinkUrl.Path, "/")
+			if len(parts) < 3 {
+				return nil, fmt.Errorf("unexpected self link format: '%v'; got version '%v'", selfLink, version)
+			}
+			version = parts[2]
 		}
-		selfLinkUrl, err := url.Parse(selfLink)
-		if err != nil {
-			return nil, err
-		}
-		// example paths: /<prefix>/<version>/*
-		parts := strings.Split(selfLinkUrl.Path, "/")
-		if len(parts) < 3 {
-			return nil, fmt.Errorf("unexpected self link format: '%v'; got version '%v'", selfLink, version)
-		}
-		version = parts[2]
 	}
 
 	return &ObjectReference{
 		Kind:            kind,
 		APIVersion:      version,
-		Name:            meta.GetName(),
-		Namespace:       meta.GetNamespace(),
-		UID:             meta.GetUID(),
-		ResourceVersion: meta.GetResourceVersion(),
+		Name:            meta.Name(),
+		Namespace:       meta.Namespace(),
+		UID:             meta.UID(),
+		ResourceVersion: meta.ResourceVersion(),
 	}, nil
 }
 
@@ -111,9 +109,4 @@ func GetPartialReference(obj runtime.Object, fieldPath string) (*ObjectReference
 
 // IsAnAPIObject allows clients to preemptively get a reference to an API object and pass it to places that
 // intend only to get a reference to that object. This simplifies the event recording interface.
-func (obj *ObjectReference) SetGroupVersionKind(gvk *unversioned.GroupVersionKind) {
-	obj.APIVersion, obj.Kind = gvk.ToAPIVersionAndKind()
-}
-func (obj *ObjectReference) GroupVersionKind() *unversioned.GroupVersionKind {
-	return unversioned.FromAPIVersionAndKind(obj.APIVersion, obj.Kind)
-}
+func (*ObjectReference) IsAnAPIObject() {}

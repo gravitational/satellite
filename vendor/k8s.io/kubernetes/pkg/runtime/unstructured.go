@@ -18,99 +18,42 @@ package runtime
 
 import (
 	"encoding/json"
-	"io"
+	"fmt"
+	"reflect"
 
-	"k8s.io/kubernetes/pkg/api/unversioned"
+	"k8s.io/kubernetes/pkg/conversion"
 )
 
 // UnstructuredJSONScheme is capable of converting JSON data into the Unstructured
 // type, which can be used for generic access to objects without a predefined scheme.
-// TODO: move into serializer/json.
-var UnstructuredJSONScheme Codec = unstructuredJSONScheme{}
+var UnstructuredJSONScheme ObjectDecoder = unstructuredJSONScheme{}
 
 type unstructuredJSONScheme struct{}
 
-func (s unstructuredJSONScheme) Decode(data []byte, _ *unversioned.GroupVersionKind, obj Object) (Object, *unversioned.GroupVersionKind, error) {
-	var err error
-	if obj != nil {
-		err = s.decodeInto(data, obj)
-	} else {
-		obj, err = s.decode(data)
-	}
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	gvk := obj.GetObjectKind().GroupVersionKind()
-	if len(gvk.Kind) == 0 {
-		return nil, gvk, NewMissingKindErr(string(data))
-	}
-
-	return obj, gvk, nil
+// Recognizes returns true for any version or kind that is specified (internal
+// versions are specifically excluded).
+func (unstructuredJSONScheme) Recognizes(version, kind string) bool {
+	return len(version) > 0 && len(kind) > 0
 }
 
-func (unstructuredJSONScheme) EncodeToStream(obj Object, w io.Writer, overrides ...unversioned.GroupVersion) error {
-	switch t := obj.(type) {
-	case *Unstructured:
-		return json.NewEncoder(w).Encode(t.Object)
-	case *UnstructuredList:
-		type encodeList struct {
-			TypeMeta `json:",inline"`
-			Items    []map[string]interface{} `json:"items"`
-		}
-		eList := encodeList{
-			TypeMeta: t.TypeMeta,
-		}
-		for _, i := range t.Items {
-			eList.Items = append(eList.Items, i.Object)
-		}
-		return json.NewEncoder(w).Encode(eList)
-	case *Unknown:
-		_, err := w.Write(t.RawJSON)
-		return err
-	default:
-		return json.NewEncoder(w).Encode(t)
-	}
-}
-
-func (s unstructuredJSONScheme) decode(data []byte) (Object, error) {
-	type detector struct {
-		Items json.RawMessage
-	}
-	var det detector
-	if err := json.Unmarshal(data, &det); err != nil {
+func (s unstructuredJSONScheme) Decode(data []byte) (Object, error) {
+	unstruct := &Unstructured{}
+	if err := s.DecodeInto(data, unstruct); err != nil {
 		return nil, err
 	}
-
-	if det.Items != nil {
-		list := &UnstructuredList{}
-		err := s.decodeToList(data, list)
-		return list, err
-	}
-
-	// No Items field, so it wasn't a list.
-	unstruct := &Unstructured{}
-	err := s.decodeToUnstructured(data, unstruct)
-	return unstruct, err
-}
-func (s unstructuredJSONScheme) decodeInto(data []byte, obj Object) error {
-	switch x := obj.(type) {
-	case *Unstructured:
-		return s.decodeToUnstructured(data, x)
-	case *UnstructuredList:
-		return s.decodeToList(data, x)
-	default:
-		return json.Unmarshal(data, x)
-	}
+	return unstruct, nil
 }
 
-func (unstructuredJSONScheme) decodeToUnstructured(data []byte, unstruct *Unstructured) error {
+func (unstructuredJSONScheme) DecodeInto(data []byte, obj Object) error {
+	unstruct, ok := obj.(*Unstructured)
+	if !ok {
+		return fmt.Errorf("the unstructured JSON scheme does not recognize %v", reflect.TypeOf(obj))
+	}
+
 	m := make(map[string]interface{})
 	if err := json.Unmarshal(data, &m); err != nil {
 		return err
 	}
-
 	if v, ok := m["kind"]; ok {
 		if s, ok := v.(string); ok {
 			unstruct.Kind = s
@@ -121,39 +64,34 @@ func (unstructuredJSONScheme) decodeToUnstructured(data []byte, unstruct *Unstru
 			unstruct.APIVersion = s
 		}
 	}
-	if metadata, ok := m["metadata"]; ok {
-		if metadata, ok := metadata.(map[string]interface{}); ok {
-			if name, ok := metadata["name"]; ok {
-				if name, ok := name.(string); ok {
-					unstruct.Name = name
-				}
-			}
-		}
+	if len(unstruct.APIVersion) == 0 {
+		return conversion.NewMissingVersionErr(string(data))
+	}
+	if len(unstruct.Kind) == 0 {
+		return conversion.NewMissingKindErr(string(data))
 	}
 	unstruct.Object = m
-
 	return nil
 }
 
-func (s unstructuredJSONScheme) decodeToList(data []byte, list *UnstructuredList) error {
-	type decodeList struct {
-		TypeMeta `json:",inline"`
-		Items    []json.RawMessage
-	}
-
-	var dList decodeList
-	if err := json.Unmarshal(data, &dList); err != nil {
-		return err
-	}
-
-	list.TypeMeta = dList.TypeMeta
-	list.Items = nil
-	for _, i := range dList.Items {
-		unstruct := &Unstructured{}
-		if err := s.decodeToUnstructured([]byte(i), unstruct); err != nil {
-			return err
-		}
-		list.Items = append(list.Items, unstruct)
-	}
+func (unstructuredJSONScheme) DecodeIntoWithSpecifiedVersionKind(data []byte, obj Object, kind, version string) error {
 	return nil
+}
+
+func (unstructuredJSONScheme) DecodeToVersion(data []byte, version string) (Object, error) {
+	return nil, nil
+}
+
+func (unstructuredJSONScheme) DataVersionAndKind(data []byte) (version, kind string, err error) {
+	obj := TypeMeta{}
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return "", "", err
+	}
+	if len(obj.APIVersion) == 0 {
+		return "", "", conversion.NewMissingVersionErr(string(data))
+	}
+	if len(obj.Kind) == 0 {
+		return "", "", conversion.NewMissingKindErr(string(data))
+	}
+	return obj.APIVersion, obj.Kind, nil
 }

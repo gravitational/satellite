@@ -20,10 +20,9 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 
-	"github.com/golang/glog"
+	"k8s.io/kubernetes/pkg/util/fielderrors"
 	"k8s.io/kubernetes/pkg/util/sets"
 	"k8s.io/kubernetes/pkg/util/validation"
 )
@@ -39,21 +38,21 @@ type Selector interface {
 	// String returns a human readable string that represents this selector.
 	String() string
 
-	// Add adds requirements to the Selector
-	Add(r ...Requirement) Selector
+	// Add add a specific requirement for the selector
+	Add(key string, operator Operator, values []string) Selector
 }
 
 // Everything returns a selector that matches all labels.
 func Everything() Selector {
-	return internalSelector{}
+	return LabelSelector{}
 }
 
 type nothingSelector struct{}
 
-func (n nothingSelector) Matches(_ Labels) bool         { return false }
-func (n nothingSelector) Empty() bool                   { return false }
-func (n nothingSelector) String() string                { return "<null>" }
-func (n nothingSelector) Add(_ ...Requirement) Selector { return n }
+func (n nothingSelector) Matches(_ Labels) bool                         { return false }
+func (n nothingSelector) Empty() bool                                   { return false }
+func (n nothingSelector) String() string                                { return "<null>" }
+func (n nothingSelector) Add(_ string, _ Operator, _ []string) Selector { return n }
 
 // Nothing returns a selector that matches no labels
 func Nothing() Selector {
@@ -72,17 +71,12 @@ const (
 	NotEqualsOperator    Operator = "!="
 	NotInOperator        Operator = "notin"
 	ExistsOperator       Operator = "exists"
-	GreaterThanOperator  Operator = "Gt"
-	LessThanOperator     Operator = "Lt"
 )
 
-func NewSelector() Selector {
-	return internalSelector(nil)
-}
+//LabelSelector is a list of Requirements.
+type LabelSelector []Requirement
 
-type internalSelector []Requirement
-
-// Sort by key to obtain determisitic parser
+// Sort by  obtain determisitic parser
 type ByKey []Requirement
 
 func (a ByKey) Len() int { return len(a) }
@@ -108,8 +102,7 @@ type Requirement struct {
 // (2) If the operator is In or NotIn, the values set must be non-empty.
 // (3) If the operator is Equals, DoubleEquals, or NotEquals, the values set must contain one value.
 // (4) If the operator is Exists or DoesNotExist, the value set must be empty.
-// (5) If the operator is Gt or Lt, the values set must contain only one value.
-// (6) The key is invalid due to its length, or sequence
+// (5) The key is invalid due to its length, or sequence
 //     of characters. See validateLabelKey for more details.
 //
 // The empty string is a valid value in the input values set.
@@ -129,15 +122,6 @@ func NewRequirement(key string, op Operator, vals sets.String) (*Requirement, er
 	case ExistsOperator, DoesNotExistOperator:
 		if len(vals) != 0 {
 			return nil, fmt.Errorf("values set must be empty for exists and does not exist")
-		}
-	case GreaterThanOperator, LessThanOperator:
-		if len(vals) != 1 {
-			return nil, fmt.Errorf("for 'Gt', 'Lt' operators, exactly one value is required")
-		}
-		for val := range vals {
-			if _, err := strconv.ParseFloat(val, 64); err != nil {
-				return nil, fmt.Errorf("for 'Gt', 'Lt' operators, the value must be a number")
-			}
 		}
 	default:
 		return nil, fmt.Errorf("operator '%v' is not recognized", op)
@@ -176,52 +160,13 @@ func (r *Requirement) Matches(ls Labels) bool {
 		return ls.Has(r.key)
 	case DoesNotExistOperator:
 		return !ls.Has(r.key)
-	case GreaterThanOperator, LessThanOperator:
-		if !ls.Has(r.key) {
-			return false
-		}
-		lsValue, err := strconv.ParseFloat(ls.Get(r.key), 64)
-		if err != nil {
-			glog.V(10).Infof("Parse float failed for value %+v in label %+v, %+v", ls.Get(r.key), ls, err)
-			return false
-		}
-
-		// There should be only one strValue in r.strValues, and can be converted to a float number.
-		if len(r.strValues) != 1 {
-			glog.V(10).Infof("Invalid values count %+v of requirement %+v, for 'Gt', 'Lt' operators, exactly one value is required", len(r.strValues), r)
-			return false
-		}
-
-		var rValue float64
-		for strValue := range r.strValues {
-			rValue, err = strconv.ParseFloat(strValue, 64)
-			if err != nil {
-				glog.V(10).Infof("Parse float failed for value %+v in requirement %+v, for 'Gt', 'Lt' operators, the value must be a number", strValue, r)
-				return false
-			}
-		}
-		return (r.operator == GreaterThanOperator && lsValue > rValue) || (r.operator == LessThanOperator && lsValue < rValue)
 	default:
 		return false
 	}
 }
 
-func (r *Requirement) Key() string {
-	return r.key
-}
-func (r *Requirement) Operator() Operator {
-	return r.operator
-}
-func (r *Requirement) Values() sets.String {
-	ret := sets.String{}
-	for k := range r.strValues {
-		ret.Insert(k)
-	}
-	return ret
-}
-
-// Return true if the internalSelector doesn't restrict selection space
-func (lsel internalSelector) Empty() bool {
+// Return true if the LabelSelector doesn't restrict selection space
+func (lsel LabelSelector) Empty() bool {
 	if lsel == nil {
 		return true
 	}
@@ -249,10 +194,6 @@ func (r *Requirement) String() string {
 		buffer.WriteString(" in ")
 	case NotInOperator:
 		buffer.WriteString(" notin ")
-	case GreaterThanOperator:
-		buffer.WriteString(">")
-	case LessThanOperator:
-		buffer.WriteString("<")
 	case ExistsOperator, DoesNotExistOperator:
 		return buffer.String()
 	}
@@ -274,25 +215,24 @@ func (r *Requirement) String() string {
 	return buffer.String()
 }
 
-// Add adds requirements to the selector. It copies the current selector returning a new one
-func (lsel internalSelector) Add(reqs ...Requirement) Selector {
-	var sel internalSelector
-	for ix := range lsel {
-		sel = append(sel, lsel[ix])
+// Add adds a requirement to the selector. It copies the current selector returning a new one
+func (lsel LabelSelector) Add(key string, operator Operator, values []string) Selector {
+	var reqs []Requirement
+	for _, item := range lsel {
+		reqs = append(reqs, item)
 	}
-	for _, r := range reqs {
-		sel = append(sel, r)
+	if r, err := NewRequirement(key, operator, sets.NewString(values...)); err == nil {
+		reqs = append(reqs, *r)
 	}
-	sort.Sort(ByKey(sel))
-	return sel
+	return LabelSelector(reqs)
 }
 
-// Matches for a internalSelector returns true if all
+// Matches for a LabelSelector returns true if all
 // its Requirements match the input Labels. If any
 // Requirement does not match, false is returned.
-func (lsel internalSelector) Matches(l Labels) bool {
-	for ix := range lsel {
-		if matches := lsel[ix].Matches(l); !matches {
+func (lsel LabelSelector) Matches(l Labels) bool {
+	for _, req := range lsel {
+		if matches := req.Matches(l); !matches {
 			return false
 		}
 	}
@@ -300,11 +240,11 @@ func (lsel internalSelector) Matches(l Labels) bool {
 }
 
 // String returns a comma-separated string of all
-// the internalSelector Requirements' human-readable strings.
-func (lsel internalSelector) String() string {
+// the LabelSelector Requirements' human-readable strings.
+func (lsel LabelSelector) String() string {
 	var reqs []string
-	for ix := range lsel {
-		reqs = append(reqs, lsel[ix].String())
+	for _, req := range lsel {
+		reqs = append(reqs, req.String())
 	}
 	return strings.Join(reqs, ",")
 }
@@ -320,10 +260,8 @@ const (
 	DoesNotExistToken
 	DoubleEqualsToken
 	EqualsToken
-	GreaterThanToken
 	IdentifierToken // to represent keys and values
 	InToken
-	LessThanToken
 	NotEqualsToken
 	NotInToken
 	OpenParToken
@@ -337,9 +275,7 @@ var string2token = map[string]Token{
 	"!":     DoesNotExistToken,
 	"==":    DoubleEqualsToken,
 	"=":     EqualsToken,
-	">":     GreaterThanToken,
 	"in":    InToken,
-	"<":     LessThanToken,
 	"!=":    NotEqualsToken,
 	"notin": NotInToken,
 	"(":     OpenParToken,
@@ -359,7 +295,7 @@ func isWhitespace(ch byte) bool {
 // isSpecialSymbol detect if the character ch can be an operator
 func isSpecialSymbol(ch byte) bool {
 	switch ch {
-	case '=', '!', '(', ')', ',', '>', '<':
+	case '=', '!', '(', ')', ',':
 		return true
 	}
 	return false
@@ -524,10 +460,10 @@ func (p *Parser) scan() {
 
 // parse runs the left recursive descending algorithm
 // on input string. It returns a list of Requirement objects.
-func (p *Parser) parse() (internalSelector, error) {
+func (p *Parser) parse() ([]Requirement, error) {
 	p.scan() // init scannedItems
 
-	var requirements internalSelector
+	var requirements []Requirement
 	for {
 		tok, lit := p.lookahead(Values)
 		switch tok {
@@ -573,7 +509,7 @@ func (p *Parser) parseRequirement() (*Requirement, error) {
 	switch operator {
 	case InOperator, NotInOperator:
 		values, err = p.parseValues()
-	case EqualsOperator, DoubleEqualsOperator, NotEqualsOperator, GreaterThanOperator, LessThanOperator:
+	case EqualsOperator, DoubleEqualsOperator, NotEqualsOperator:
 		values, err = p.parseExactValue()
 	}
 	if err != nil {
@@ -620,10 +556,6 @@ func (p *Parser) parseOperator() (op Operator, err error) {
 		op = EqualsOperator
 	case DoubleEqualsToken:
 		op = DoubleEqualsOperator
-	case GreaterThanToken:
-		op = GreaterThanOperator
-	case LessThanToken:
-		op = LessThanOperator
 	case NotInToken:
 		op = NotInOperator
 	case NotEqualsToken:
@@ -726,8 +658,8 @@ func (p *Parser) parseExactValue() (sets.String, error) {
 //           <value-set> ::= "(" <values> ")"
 //              <values> ::= VALUE | VALUE "," <values>
 // <exact-match-restriction> ::= ["="|"=="|"!="] VALUE
-// KEY is a sequence of one or more characters following [ DNS_SUBDOMAIN "/" ] DNS_LABEL. Max length is 63 characters.
-// VALUE is a sequence of zero or more characters "([A-Za-z0-9_-\.])". Max length is 63 characters.
+// KEY is a sequence of one or more characters following [ DNS_SUBDOMAIN "/" ] DNS_LABEL
+// VALUE is a sequence of zero or more characters "([A-Za-z0-9_-\.])". Max length is 64 character.
 // Delimiter is white space: (' ', '\t')
 // Example of valid syntax:
 //  "x in (foo,,baz),y,z notin ()"
@@ -747,24 +679,23 @@ func Parse(selector string) (Selector, error) {
 	items, error := p.parse()
 	if error == nil {
 		sort.Sort(ByKey(items)) // sort to grant determistic parsing
-		return internalSelector(items), error
+		return LabelSelector(items), error
 	}
 	return nil, error
 }
 
-var qualifiedNameErrorMsg string = fmt.Sprintf(`must be a qualified name (at most %d characters, matching regex %s), with an optional DNS subdomain prefix (at most %d characters, matching regex %s) and slash (/): e.g. "MyName" or "example.com/MyName"`, validation.QualifiedNameMaxLength, validation.QualifiedNameFmt, validation.DNS1123SubdomainMaxLength, validation.DNS1123SubdomainFmt)
-var labelValueErrorMsg string = fmt.Sprintf(`must have at most %d characters, matching regex %s: e.g. "MyValue" or ""`, validation.LabelValueMaxLength, validation.LabelValueFmt)
+const qualifiedNameErrorMsg string = "must match regex [" + validation.DNS1123SubdomainFmt + " / ] " + validation.DNS1123LabelFmt
 
 func validateLabelKey(k string) error {
 	if !validation.IsQualifiedName(k) {
-		return fmt.Errorf("invalid label key: %s", qualifiedNameErrorMsg)
+		return fielderrors.NewFieldInvalid("label key", k, qualifiedNameErrorMsg)
 	}
 	return nil
 }
 
 func validateLabelValue(v string) error {
 	if !validation.IsValidLabelValue(v) {
-		return fmt.Errorf("invalid label value: %s", labelValueErrorMsg)
+		return fielderrors.NewFieldInvalid("label value", v, qualifiedNameErrorMsg)
 	}
 	return nil
 }
@@ -773,18 +704,16 @@ func validateLabelValue(v string) error {
 // nil and empty Sets are considered equivalent to Everything().
 func SelectorFromSet(ls Set) Selector {
 	if ls == nil {
-		return internalSelector{}
+		return LabelSelector{}
 	}
-	var requirements internalSelector
+	var requirements []Requirement
 	for label, value := range ls {
 		if r, err := NewRequirement(label, EqualsOperator, sets.NewString(value)); err != nil {
 			//TODO: double check errors when input comes from serialization?
-			return internalSelector{}
+			return LabelSelector{}
 		} else {
 			requirements = append(requirements, *r)
 		}
 	}
-	// sort to have deterministic string representation
-	sort.Sort(ByKey(requirements))
-	return internalSelector(requirements)
+	return LabelSelector(requirements)
 }

@@ -18,6 +18,8 @@ package testclient
 
 import (
 	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/watch"
 )
 
@@ -34,8 +36,8 @@ func (c *FakePersistentVolumes) Get(name string) (*api.PersistentVolume, error) 
 	return obj.(*api.PersistentVolume), err
 }
 
-func (c *FakePersistentVolumes) List(opts api.ListOptions) (*api.PersistentVolumeList, error) {
-	obj, err := c.Fake.Invokes(NewRootListAction("persistentvolumes", opts), &api.PersistentVolumeList{})
+func (c *FakePersistentVolumes) List(label labels.Selector, field fields.Selector) (*api.PersistentVolumeList, error) {
+	obj, err := c.Fake.Invokes(NewRootListAction("persistentvolumes", label, field), &api.PersistentVolumeList{})
 	if obj == nil {
 		return nil, err
 	}
@@ -66,8 +68,8 @@ func (c *FakePersistentVolumes) Delete(name string) error {
 	return err
 }
 
-func (c *FakePersistentVolumes) Watch(opts api.ListOptions) (watch.Interface, error) {
-	return c.Fake.InvokesWatch(NewRootWatchAction("persistentvolumes", opts))
+func (c *FakePersistentVolumes) Watch(label labels.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error) {
+	return c.Fake.InvokesWatch(NewRootWatchAction("persistentvolumes", label, field, resourceVersion))
 }
 
 func (c *FakePersistentVolumes) UpdateStatus(pv *api.PersistentVolume) (*api.PersistentVolume, error) {

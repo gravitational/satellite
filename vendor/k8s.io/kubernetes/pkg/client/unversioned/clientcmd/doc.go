@@ -19,19 +19,13 @@ Package clientcmd provides one stop shopping for building a working client from 
 from a .kubeconfig file, from command line flags, or from any merged combination.
 
 Sample usage from merged .kubeconfig files (local directory, home directory)
-
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	loadingRules := clientcmd.NewKubeConfigLoadingRules()
 	// if you want to change the loading rules (which files in which order), you can do so here
 
 	configOverrides := &clientcmd.ConfigOverrides{}
 	// if you want to change override values or bind them to flags, there are methods to help you
 
-	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
-	config, err := kubeConfig.ClientConfig()
-	if err != nil {
-		// Do something
-	}
-	client, err := unversioned.New(config)
-	// ...
+	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingKubeConfig(loadingRules, configOverrides)
+	kubeConfig.Client()
 */
 package clientcmd

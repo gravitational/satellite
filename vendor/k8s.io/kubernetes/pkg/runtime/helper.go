@@ -20,30 +20,109 @@ import (
 	"fmt"
 	"reflect"
 
-	"k8s.io/kubernetes/pkg/api/unversioned"
 	"k8s.io/kubernetes/pkg/conversion"
-	"k8s.io/kubernetes/pkg/util/errors"
 )
 
-type objectTyperToTyper struct {
-	typer ObjectTyper
+// IsListType returns true if the provided Object has a slice called Items
+func IsListType(obj Object) bool {
+	_, err := GetItemsPtr(obj)
+	return err == nil
 }
 
-func (t objectTyperToTyper) ObjectKind(obj Object) (*unversioned.GroupVersionKind, bool, error) {
-	gvk, err := t.typer.ObjectKind(obj)
+// GetItemsPtr returns a pointer to the list object's Items member.
+// If 'list' doesn't have an Items member, it's not really a list type
+// and an error will be returned.
+// This function will either return a pointer to a slice, or an error, but not both.
+func GetItemsPtr(list Object) (interface{}, error) {
+	v, err := conversion.EnforcePtr(list)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	unversionedType, ok := t.typer.IsUnversioned(obj)
-	if !ok {
-		// ObjectTyper violates its contract
-		return nil, false, fmt.Errorf("typer returned a kind for %v, but then reported it was not in the scheme with IsUnversioned", reflect.TypeOf(obj))
+	items := v.FieldByName("Items")
+	if !items.IsValid() {
+		return nil, fmt.Errorf("no Items field in %#v", list)
 	}
-	return &gvk, unversionedType, nil
+	switch items.Kind() {
+	case reflect.Interface, reflect.Ptr:
+		target := reflect.TypeOf(items.Interface()).Elem()
+		if target.Kind() != reflect.Slice {
+			return nil, fmt.Errorf("items: Expected slice, got %s", target.Kind())
+		}
+		return items.Interface(), nil
+	case reflect.Slice:
+		return items.Addr().Interface(), nil
+	default:
+		return nil, fmt.Errorf("items: Expected slice, got %s", items.Kind())
+	}
 }
 
-func ObjectTyperToTyper(typer ObjectTyper) Typer {
-	return objectTyperToTyper{typer: typer}
+// ExtractList returns obj's Items element as an array of runtime.Objects.
+// Returns an error if obj is not a List type (does not have an Items member).
+// TODO: move me to pkg/api/meta
+func ExtractList(obj Object) ([]Object, error) {
+	itemsPtr, err := GetItemsPtr(obj)
+	if err != nil {
+		return nil, err
+	}
+	items, err := conversion.EnforcePtr(itemsPtr)
+	if err != nil {
+		return nil, err
+	}
+	list := make([]Object, items.Len())
+	for i := range list {
+		raw := items.Index(i)
+		var found bool
+		switch raw.Kind() {
+		case reflect.Interface, reflect.Ptr:
+			list[i], found = raw.Interface().(Object)
+		default:
+			list[i], found = raw.Addr().Interface().(Object)
+		}
+		if !found {
+			return nil, fmt.Errorf("item[%v]: Expected object, got %#v(%s)", i, raw.Interface(), raw.Kind())
+		}
+	}
+	return list, nil
+}
+
+// objectSliceType is the type of a slice of Objects
+var objectSliceType = reflect.TypeOf([]Object{})
+
+// SetList sets the given list object's Items member have the elements given in
+// objects.
+// Returns an error if list is not a List type (does not have an Items member),
+// or if any of the objects are not of the right type.
+// TODO: move me to pkg/api/meta
+func SetList(list Object, objects []Object) error {
+	itemsPtr, err := GetItemsPtr(list)
+	if err != nil {
+		return err
+	}
+	items, err := conversion.EnforcePtr(itemsPtr)
+	if err != nil {
+		return err
+	}
+	if items.Type() == objectSliceType {
+		items.Set(reflect.ValueOf(objects))
+		return nil
+	}
+	slice := reflect.MakeSlice(items.Type(), len(objects), len(objects))
+	for i := range objects {
+		dest := slice.Index(i)
+		src, err := conversion.EnforcePtr(objects[i])
+		if err != nil {
+			return err
+		}
+		if src.Type().AssignableTo(dest.Type()) {
+			dest.Set(src)
+		} else if src.Type().ConvertibleTo(dest.Type()) {
+			dest.Set(src.Convert(dest.Type()))
+		} else {
+			return fmt.Errorf("item[%d]: Type mismatch: Expected %v, got %v", i, dest.Type(), src.Type())
+		}
+	}
+	items.Set(slice)
+	return nil
 }
 
 // fieldPtr puts the address of fieldName, which must be a member of v,
@@ -70,56 +149,26 @@ func FieldPtr(v reflect.Value, fieldName string, dest interface{}) error {
 	return fmt.Errorf("couldn't assign/convert %v to %v", field.Type(), v.Type())
 }
 
-// EncodeList ensures that each object in an array is converted to a Unknown{} in serialized form.
-// TODO: accept a content type.
-func EncodeList(e Encoder, objects []Object, overrides ...unversioned.GroupVersion) error {
-	var errs []error
-	for i := range objects {
-		data, err := Encode(e, objects[i], overrides...)
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		objects[i] = &Unknown{RawJSON: data}
-	}
-	return errors.NewAggregate(errs)
-}
-
-func decodeListItem(obj *Unknown, decoders []Decoder) (Object, error) {
-	for _, decoder := range decoders {
-		obj, err := Decode(decoder, obj.RawJSON)
-		if err != nil {
-			if IsNotRegisteredError(err) {
-				continue
-			}
-			return nil, err
-		}
-		return obj, nil
-	}
-	// could not decode, so leave the object as Unknown, but give the decoders the
-	// chance to set Unknown.TypeMeta if it is available.
-	for _, decoder := range decoders {
-		if err := DecodeInto(decoder, obj.RawJSON, obj); err == nil {
-			return obj, nil
-		}
-	}
-	return obj, nil
-}
-
 // DecodeList alters the list in place, attempting to decode any objects found in
-// the list that have the Unknown type. Any errors that occur are returned
+// the list that have the runtime.Unknown type. Any errors that occur are returned
 // after the entire list is processed. Decoders are tried in order.
-func DecodeList(objects []Object, decoders ...Decoder) []error {
+func DecodeList(objects []Object, decoders ...ObjectDecoder) []error {
 	errs := []error(nil)
 	for i, obj := range objects {
 		switch t := obj.(type) {
 		case *Unknown:
-			decoded, err := decodeListItem(t, decoders)
-			if err != nil {
-				errs = append(errs, err)
+			for _, decoder := range decoders {
+				if !decoder.Recognizes(t.APIVersion, t.Kind) {
+					continue
+				}
+				obj, err := decoder.Decode(t.RawJSON)
+				if err != nil {
+					errs = append(errs, err)
+					break
+				}
+				objects[i] = obj
 				break
 			}
-			objects[i] = decoded
 		}
 	}
 	return errs
@@ -130,9 +179,9 @@ type MultiObjectTyper []ObjectTyper
 
 var _ ObjectTyper = MultiObjectTyper{}
 
-func (m MultiObjectTyper) ObjectKind(obj Object) (gvk unversioned.GroupVersionKind, err error) {
+func (m MultiObjectTyper) DataVersionAndKind(data []byte) (version, kind string, err error) {
 	for _, t := range m {
-		gvk, err = t.ObjectKind(obj)
+		version, kind, err = t.DataVersionAndKind(data)
 		if err == nil {
 			return
 		}
@@ -140,9 +189,9 @@ func (m MultiObjectTyper) ObjectKind(obj Object) (gvk unversioned.GroupVersionKi
 	return
 }
 
-func (m MultiObjectTyper) ObjectKinds(obj Object) (gvks []unversioned.GroupVersionKind, err error) {
+func (m MultiObjectTyper) ObjectVersionAndKind(obj Object) (version, kind string, err error) {
 	for _, t := range m {
-		gvks, err = t.ObjectKinds(obj)
+		version, kind, err = t.ObjectVersionAndKind(obj)
 		if err == nil {
 			return
 		}
@@ -150,20 +199,11 @@ func (m MultiObjectTyper) ObjectKinds(obj Object) (gvks []unversioned.GroupVersi
 	return
 }
 
-func (m MultiObjectTyper) Recognizes(gvk unversioned.GroupVersionKind) bool {
+func (m MultiObjectTyper) Recognizes(version, kind string) bool {
 	for _, t := range m {
-		if t.Recognizes(gvk) {
+		if t.Recognizes(version, kind) {
 			return true
 		}
 	}
 	return false
-}
-
-func (m MultiObjectTyper) IsUnversioned(obj Object) (bool, bool) {
-	for _, t := range m {
-		if unversioned, ok := t.IsUnversioned(obj); ok {
-			return unversioned, true
-		}
-	}
-	return false, false
 }
