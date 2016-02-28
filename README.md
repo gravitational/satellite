@@ -64,17 +64,22 @@ usage: satellite agent [<flags>]
 Start monitoring agent
 
 Flags:
-  --help                     Show context-sensitive help (also try --help-long and --help-man).
-  --debug                    Enable verbose mode
-  --role=ROLE                Agent role
-  --rpc-addr=127.0.0.1:7575  Address to bind the RPC listener to. Can be specified multiple times
-  --name=NAME                Agent name. Must be the same as the name of the local serf node
+  --help                         Show context-sensitive help (also try --help-long and --help-man).
+  --debug                        Enable verbose mode
+  --rpc-addr=127.0.0.1:7575      Address to bind the RPC listener to. Can be specified multiple times
+  --name=NAME                    Agent name. Must be the same as the name of the local serf node
   --serf-rpc-addr="127.0.0.1:7373"  
-                             RPC address of the local serf node
+                                 RPC address of the local serf node
   --initial-cluster=INITIAL-CLUSTER  
-                             Initial cluster configuration as a comma-separated list of peers
-  --state-dir=STATE-DIR      Directory to store agent-specific state
-  --tags=TAGS                Set initial tags as comma-separated list of key:value pairs
+                                 Initial cluster configuration as a comma-separated list of peers
+  --state-dir=STATE-DIR          Directory to store agent-specific state
+  --tags=TAGS                    Define a tags as comma-separated list of key:value pairs
+  --influxdb-database=INFLUXDB-DATABASE  
+                                 Database to connect to
+  --influxdb-user=INFLUXDB-USER  Username to use for connection
+  --influxdb-password=INFLUXDB-PASSWORD  
+                                 Password to use for connection
+  --influxdb-url=INFLUXDB-URL    URL of the InfluxDB endpoint
 
 $ satellite agent --name=hostname --tags=label:value,another-label:another-value
 ```
