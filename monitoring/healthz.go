@@ -6,56 +6,65 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/trace"
 )
 
 const healthzCheckTimeout = 1 * time.Second
 
-// checkerFunc is a function that can read service health status and report if it has failed.
-type checkerFunc func(response io.Reader) error
+// HttpResponseChecker is a function that can validate service status from response
+type HttpResponseChecker func(response io.Reader) error
 
-// httpHealthzChecker is a health checker that probes service status using
-// an HTTP healthz end-point.
-type httpHealthzChecker struct {
-	URL         string
-	client      *http.Client
-	checkerFunc checkerFunc
+// HttpHealthzChecker is a health checker that can check servhice status over HTTP
+type HttpHealthzChecker struct {
+	name    string
+	URL     string
+	client  *http.Client
+	checker HttpResponseChecker
 }
 
-func (r *httpHealthzChecker) check(reporter reporter) {
+// Name returns the name of this checker
+func (r *HttpHealthzChecker) Name() string { return r.name }
+
+// Check runs an HTTP check and reports errors to the specified Reporter
+func (r *HttpHealthzChecker) Check(reporter health.Reporter) {
 	resp, err := r.client.Get(r.URL)
 	if err != nil {
-		reporter.add(trace.Errorf("healthz check failed: %v", err))
+		reporter.Add(NewProbeFromErr(r.name, trace.Errorf("healthz check failed: %v", err)))
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		reporter.add(trace.Errorf("unexpected HTTP status: %s", http.StatusText(resp.StatusCode)))
+		reporter.Add(NewProbeFromErr(r.name, trace.Errorf("unexpected HTTP status: %s", http.StatusText(resp.StatusCode))))
 		return
 	}
-	err = r.checkerFunc(resp.Body)
-	if err != nil {
-		reporter.add(err)
-	} else {
-		reporter.addProbe(&pb.Probe{
-			Status: pb.Probe_Running,
-		})
+	if err = r.checker(resp.Body); err != nil {
+		reporter.Add(NewProbeFromErr(r.name, err))
+		return
 	}
+	reporter.Add(&pb.Probe{
+		Checker: r.name,
+		Status:  pb.Probe_Running,
+	})
 }
 
-func newHTTPHealthzChecker(URL string, checkerFunc checkerFunc) checker {
+// NewHTTPHealthzChecker is a Checker that tests the specified HTTP endpoint
+func NewHTTPHealthzChecker(name, URL string, checker HttpResponseChecker) health.Checker {
 	client := &http.Client{
 		Timeout: healthzCheckTimeout,
 	}
-	return &httpHealthzChecker{
-		URL:         URL,
-		client:      client,
-		checkerFunc: checkerFunc,
+	return &HttpHealthzChecker{
+		name:    name,
+		URL:     URL,
+		client:  client,
+		checker: checker,
 	}
 }
 
-func newUnixSocketHealthzChecker(URL, socketPath string, checkerFunc checkerFunc) checker {
+// NewUnixSocketHealthzChecker returns a new Checker that tests
+// the specified unix domain socket path and URL
+func NewUnixSocketHealthzChecker(name, URL, socketPath string, checker HttpResponseChecker) health.Checker {
 	client := &http.Client{
 		Timeout: healthzCheckTimeout,
 		Transport: &http.Transport{
@@ -64,9 +73,10 @@ func newUnixSocketHealthzChecker(URL, socketPath string, checkerFunc checkerFunc
 			},
 		},
 	}
-	return &httpHealthzChecker{
-		URL:         URL,
-		client:      client,
-		checkerFunc: checkerFunc,
+	return &HttpHealthzChecker{
+		name:    name,
+		URL:     URL,
+		client:  client,
+		checker: checker,
 	}
 }

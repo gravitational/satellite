@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gravitational/satellite/agent/health"
 	"github.com/gravitational/trace"
 
 	log "github.com/Sirupsen/logrus"
@@ -26,24 +27,25 @@ const testNamespace = "planet-test"
 // serviceNamePrefix is the prefix used to name test pods.
 const serviceNamePrefix = "nettest-"
 
-// intraPodChecker is a checker that runs a networking test in the cluster
+// intraPodChecker is a Checker that runs a networking test in the cluster
 // by scheduling pods and verifying communication.
 type intraPodChecker struct {
-	*kubeChecker
-	registryAddr string
+	*KubeChecker
+	nettestContainerImage string
 }
 
-// newIntraPodChecker returns an instance of intraPodChecker.
-func newIntraPodChecker(kubeAddr, registryAddr string) checker {
+// NewIntraPodChecker returns an instance of intraPodChecker.
+func NewIntraPodChecker(kubeAddr, nettestContainerImage string) health.Checker {
 	checker := &intraPodChecker{
-		registryAddr: registryAddr,
+		nettestContainerImage: nettestContainerImage,
 	}
-	kubeChecker := &kubeChecker{
-		hostPort:    kubeAddr,
-		checkerFunc: checker.testIntraPodCommunication,
+	kubeChecker := &KubeChecker{
+		name:     "networking",
+		hostPort: kubeAddr,
+		checker:  checker.testIntraPodCommunication,
 	}
-	checker.kubeChecker = kubeChecker
-	return checker
+	checker.KubeChecker = kubeChecker
+	return kubeChecker
 }
 
 // testIntraPodCommunication implements the intra-pod communication test.
@@ -98,8 +100,7 @@ func (r *intraPodChecker) testIntraPodCommunication(client *kube.Client) error {
 		return trace.Errorf("expected at least 2 ready nodes - got %d (%v)", len(nodes.Items), nodes.Items)
 	}
 
-	testContainer := fmt.Sprintf("%s/nettest:1.6", r.registryAddr)
-	podNames, err := launchNetTestPodPerNode(client, nodes, serviceName, testContainer, testNamespace)
+	podNames, err := launchNetTestPodPerNode(client, nodes, serviceName, r.nettestContainerImage, testNamespace)
 	if err != nil {
 		return trace.Wrap(err, "failed to start `nettest` pod")
 	}

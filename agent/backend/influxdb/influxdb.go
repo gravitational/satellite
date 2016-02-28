@@ -66,11 +66,9 @@ func (r *backend) UpdateStatus(status *pb.SystemStatus) error {
 		return trace.Wrap(err)
 	}
 	for _, nodeStatus := range status.Nodes {
-		pt, err := nodeToPoint(nodeStatus, status.Timestamp.ToTime())
-		if err != nil {
+		if err := addNode(batch, nodeStatus, status.Timestamp.ToTime()); err != nil {
 			return trace.Wrap(err)
 		}
-		batch.AddPoint(pt)
 	}
 	return r.client.Write(batch)
 }
@@ -86,12 +84,6 @@ type backend struct {
 }
 
 func connect(config *Config) (client influx.Client, err error) {
-	if int64(config.Timeout) == 0 {
-		config.Timeout = defaultTimeout
-	}
-	if config.Precision == "" {
-		config.Precision = "s"
-	}
 	client, err = influx.NewHTTPClient(influx.HTTPConfig{
 		Addr:     config.URL,
 		Username: config.Username,
@@ -111,10 +103,55 @@ func connect(config *Config) (client influx.Client, err error) {
 	return client, nil
 }
 
-// nodeToPoint creates a new time-series from the specified node and a timestamp
-func nodeToPoint(status *pb.NodeStatus, timestamp time.Time) (*influx.Point, error) {
-	return influx.NewPoint("node", nil, nil, timestamp)
-}
+// addNode adds specified node status to the given batch
+//
+// Following schema is used for encoding:
+//
+// Nodes:
+//  tags: {"name": "worker", serf_tags}
+//  fields: {"addr": "192.168.172.1", "status": "running"}
+//
+// Probes:
+//  tags: {"checker": "systemd", "node": "worker", "state": "failed"}
+//  fields: {"error": "storage unavailable", "detail": "service"}
+func addNode(batch influx.BatchPoints, status *pb.NodeStatus, timestamp time.Time) error {
+	tags := map[string]string{
+		"name": status.MemberStatus.Name,
+	}
+	for key, value := range status.MemberStatus.Tags {
+		tags[key] = value
+	}
+	fields := map[string]interface{}{
+		"addr":          status.MemberStatus.Addr,
+		"member_status": status.MemberStatus.Status,
+		"status":        status.Status,
+	}
+	pt, err := influx.NewPoint("node", tags, fields, timestamp)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	batch.AddPoint(pt)
 
-// defaultTimeout is the default timeout for InfluxDB writes
-const defaultTimeout = 5 * time.Second
+	for _, probe := range status.Probes {
+		probeStatus, _ := probe.Status.MarshalText()
+		tags = map[string]string{
+			"checker": probe.Checker,
+			"node":    status.Name,
+			"status":  string(probeStatus),
+		}
+		fields = map[string]interface{}{
+			"error": probe.Error,
+		}
+		// TODO: add `Code` detail
+		if probe.Detail != "" {
+			fields["detail"] = probe.Detail
+		}
+		pt, err = influx.NewPoint("probe", tags, fields, timestamp)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+		batch.AddPoint(pt)
+	}
+
+	return nil
+}

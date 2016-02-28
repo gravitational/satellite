@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os/exec"
 
+	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/trace"
 
@@ -30,9 +31,11 @@ const (
 	activeStateDeactivating             = "deactivating"
 )
 
-var systemStatusCmd = []string{"/bin/systemctl", "is-system-running"}
+func NewSystemdChecker() systemdChecker {
+	return systemdChecker{}
+}
 
-// systemChecker is a health checker for services managed by systemd/monit.
+// SystemChecker is a health checker for services managed by systemd/monit.
 type systemdChecker struct{}
 
 type serviceStatus struct {
@@ -40,6 +43,8 @@ type serviceStatus struct {
 	status pb.Probe_Type
 	err    error
 }
+
+var systemStatusCmd = []string{"/bin/systemctl", "is-system-running"}
 
 type SystemStatusType string
 
@@ -51,15 +56,17 @@ const (
 	SystemStatusUnknown                   = ""
 )
 
-func (r systemdChecker) check(reporter reporter) {
+func (r systemdChecker) Name() string { return "systemd" }
+
+func (r systemdChecker) Check(reporter health.Reporter) {
 	systemStatus, err := isSystemRunning()
 	if err != nil {
-		reporter.add(trace.Errorf("failed to check system health: %v", err))
+		reporter.Add(NewProbeFromErr(r.Name(), trace.Errorf("failed to check system health: %v", err)))
 	}
 
 	conditions, err := systemdStatus()
 	if err != nil {
-		reporter.add(trace.Errorf("failed to check systemd status: %v", err))
+		reporter.Add(NewProbeFromErr(r.Name(), trace.Errorf("failed to check systemd status: %v", err)))
 	}
 
 	if len(conditions) > 0 && SystemStatusType(systemStatus) == SystemStatusRunning {
@@ -67,10 +74,11 @@ func (r systemdChecker) check(reporter reporter) {
 	}
 
 	for _, condition := range conditions {
-		reporter.addProbe(&pb.Probe{
-			Detail: condition.name,
-			Status: condition.status,
-			Error:  condition.err.Error(),
+		reporter.Add(&pb.Probe{
+			Checker: r.Name(),
+			Detail:  condition.name,
+			Status:  condition.status,
+			Error:   condition.err.Error(),
 		})
 	}
 }

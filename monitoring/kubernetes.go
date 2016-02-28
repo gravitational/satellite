@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/url"
 
+	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/trace"
 
@@ -14,7 +15,7 @@ import (
 
 const systemNamespace = "kube-system"
 
-// kubeHealthz is checkerFunc that interprets health status of common kubernetes services.
+// kubeHealthz is httpResponseChecker that interprets health status of common kubernetes services.
 func kubeHealthz(response io.Reader) error {
 	payload, err := ioutil.ReadAll(response)
 	if err != nil {
@@ -26,19 +27,20 @@ func kubeHealthz(response io.Reader) error {
 	return nil
 }
 
-// KubeChecker is a Checker that communicates with the kube API server.
-type KubeChecker func(client *kube.Client) error
+// KubeStatusChecker is a function that can check status of kubernetes services.
+type KubeStatusChecker func(client *kube.Client) error
 
-// kubeChecker implements health checker that tests and reports problems
+// KubeChecker implements Checker that can check and report problems
 // with kubernetes services.
-type kubeChecker struct {
-	hostPort    string
-	checkerFunc KubeChecker
+type KubeChecker struct {
+	name     string
+	hostPort string
+	checker  KubeStatusChecker
 }
 
-// ConnectToKube establishes a connection to kubernetes on the specified address
+// connectToKube establishes a connection to kubernetes on the specified address
 // and returns an API client.
-func ConnectToKube(hostPort string) (*kube.Client, error) {
+func connectToKube(hostPort string) (*kube.Client, error) {
 	var baseURL *url.URL
 	var err error
 	if hostPort == "" {
@@ -58,22 +60,27 @@ func ConnectToKube(hostPort string) (*kube.Client, error) {
 	return client, nil
 }
 
-func (r *kubeChecker) check(reporter reporter) {
+// Name returns the name of this checker
+func (r *KubeChecker) Name() string { return r.name }
+
+// Check runs the wrapped kubernetes service checker function and reports
+// status to the specified reporter
+func (r *KubeChecker) Check(reporter health.Reporter) {
 	client, err := r.connect()
 	if err != nil {
-		reporter.add(err)
+		reporter.Add(NewProbeFromErr(r.name, err))
 		return
 	}
-	err = r.checkerFunc(client)
+	err = r.checker(client)
 	if err != nil {
-		reporter.add(err)
+		reporter.Add(NewProbeFromErr(r.name, err))
 		return
 	}
-	reporter.addProbe(&pb.Probe{
+	reporter.Add(&pb.Probe{
 		Status: pb.Probe_Running,
 	})
 }
 
-func (r *kubeChecker) connect() (*kube.Client, error) {
-	return ConnectToKube(r.hostPort)
+func (r *KubeChecker) connect() (*kube.Client, error) {
+	return connectToKube(r.hostPort)
 }

@@ -55,11 +55,6 @@ type Config struct {
 	// can match itself to a serf member.
 	Name string
 
-	// Role defines a role for the agent.
-	//
-	// Role is an additional semantic detail that defines how the agent is used.
-	Role Role
-
 	// RPCAddrs is a list of addresses agent binds to for RPC traffic.
 	//
 	// Usually, at least two address are used for operation.

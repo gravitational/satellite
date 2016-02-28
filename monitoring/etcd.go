@@ -12,7 +12,7 @@ import (
 // defaultDialTimeout is the maximum amount of time a dial will wait for a connection to setup.
 const defaultDialTimeout = 30 * time.Second
 
-// etcdChecker is a checkerFunc that interprets results from
+// etcdChecker is an HttpResponseChecker that interprets results from
 // an etcd HTTP-based healthz end-point.
 func etcdChecker(response io.Reader) error {
 	payload, err := ioutil.ReadAll(response)

@@ -21,6 +21,8 @@ func (r *multiplexer) UpdateStatus(status *pb.SystemStatus) (err error) {
 		return trace.Wrap(err)
 	}
 
+	// TODO: run the actual updates in background to avoid blocking
+	// the agent loop
 	for _, backend := range r.backends {
 		if err = backend.UpdateStatus(status); err != nil {
 			return trace.Wrap(err)

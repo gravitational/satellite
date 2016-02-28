@@ -44,9 +44,13 @@ func run() error {
 		debug = app.Flag("debug", "Enable verbose mode").Bool()
 
 		// `agent` command
-		cagent         = app.Command("agent", "Start monitoring agent")
-		cagentRPCAddrs = ListFlag(cagent.Flag("rpc-addr", "Address to bind the RPC listener to.  Can be specified multiple times").Default("127.0.0.1:7575"))
-		// cagentKubeAddr       = cagent.Flag("kube-addr", "Address of the kubernetes API server").Default("127.0.0.1:8080").String()
+		cagent               = app.Command("agent", "Start monitoring agent")
+		cagentRPCAddrs       = ListFlag(cagent.Flag("rpc-addr", "Address to bind the RPC listener to.  Can be specified multiple times").Default("127.0.0.1:7575"))
+		cagentKubeAddr       = cagent.Flag("kube-addr", "Address of the kubernetes API server").Default("http://127.0.0.1:8080").String()
+		cagentKubeletAddr    = cagent.Flag("kubelet-addr", "Address of the kubelet").Default("http://127.0.0.1:10248").String()
+		cagentDockerAddr     = cagent.Flag("docker-addr", "Address of the docker daemon endpoint").Default("/var/run/docker.sock").String()
+		cagentEtcdAddr       = cagent.Flag("etcd-addr", "Address of the etcd endpoint").Default("http://127.0.0.1:2379").String()
+		cagentNettestImage   = cagent.Flag("nettest-image", "Name of the image to use for networking test").Default("gcr.io/google_containers/nettest:1.6").String()
 		cagentName           = cagent.Flag("name", "Agent name.  Must be the same as the name of the local serf node").OverrideDefaultFromEnvar(EnvAgentName).String()
 		cagentSerfRPCAddr    = cagent.Flag("serf-rpc-addr", "RPC address of the local serf node").Default("127.0.0.1:7373").String()
 		cagentInitialCluster = KeyValueListFlag(cagent.Flag("initial-cluster", "Initial cluster configuration as a comma-separated list of peers").OverrideDefaultFromEnvar(EnvInitialCluster))
@@ -82,6 +86,10 @@ func run() error {
 		if *cagentName == "" {
 			return trace.Errorf("agent name not set")
 		}
+		agentRole, ok := (*cagentTags)["role"]
+		if !ok {
+			return trace.Errorf("agent role not set")
+		}
 		path := filepath.Join(*cagentStateDir, monitoringDbFile)
 		log.Infof("saving health history to %v", path)
 		var cache cache.Cache
@@ -103,14 +111,22 @@ func run() error {
 			}
 			backends = append(backends, influxdb)
 		}
-		config := &agent.Config{
+		agentConfig := &agent.Config{
 			Name:        *cagentName,
 			RPCAddrs:    *cagentRPCAddrs,
 			SerfRPCAddr: *cagentSerfRPCAddr,
 			Tags:        *cagentTags,
 			Cache:       multiplex.New(cache, backends...),
 		}
-		err = runAgent(config, toAddrList(*cagentInitialCluster))
+		monitoringConfig := &config{
+			Role:         agent.Role(agentRole),
+			KubeAddr:     *cagentKubeAddr,
+			KubeletAddr:  *cagentKubeletAddr,
+			DockerAddr:   *cagentDockerAddr,
+			EtcdAddr:     *cagentEtcdAddr,
+			NettestImage: *cagentNettestImage,
+		}
+		err = runAgent(agentConfig, monitoringConfig, toAddrList(*cagentInitialCluster))
 	case cversion.FullCommand():
 		version.Print()
 	}

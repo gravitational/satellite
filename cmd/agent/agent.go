@@ -27,7 +27,7 @@ import (
 )
 
 // runAgent starts the monitoring process and blocks waiting for a signal.
-func runAgent(config *agent.Config, peers []string) error {
+func runAgent(config *agent.Config, monitoringConfig *config, peers []string) error {
 	if len(peers) > 0 {
 		log.Infof("initial cluster=%v", peers)
 	}
@@ -38,6 +38,7 @@ func runAgent(config *agent.Config, peers []string) error {
 	}
 	defer monitoringAgent.Close()
 
+	addCheckers(monitoringAgent, monitoringConfig)
 	if err = monitoringAgent.Start(); err != nil {
 		return trace.Wrap(err)
 	}
