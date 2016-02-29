@@ -67,6 +67,16 @@ Flags:
   --help                         Show context-sensitive help (also try --help-long and --help-man).
   --debug                        Enable verbose mode
   --rpc-addr=127.0.0.1:7575      Address to bind the RPC listener to. Can be specified multiple times
+  --kube-addr="http://127.0.0.1:8080"  
+                                 Address of the kubernetes API server
+  --kubelet-addr="http://127.0.0.1:10248"  
+                                 Address of the kubelet
+  --docker-addr="/var/run/docker.sock"  
+                                 Path to the docker daemon socket
+  --etcd-addr="http://127.0.0.1:2379"  
+                                 Address of the etcd endpoint
+  --nettest-image="gcr.io/google_containers/nettest:1.6"  
+                                 Name of the image to use for networking test
   --name=NAME                    Agent name. Must be the same as the name of the local serf node
   --serf-rpc-addr="127.0.0.1:7373"  
                                  RPC address of the local serf node
@@ -81,11 +91,19 @@ Flags:
                                  Password to use for connection
   --influxdb-url=INFLUXDB-URL    URL of the InfluxDB endpoint
 
-$ satellite agent --name=hostname --tags=label:value,another-label:another-value
+$ satellite agent --name=my-host --tags=role:master
 ```
 
-Out of the box, the agent requires at least a single master node (agent with `role=master`). If no master is found during
-the test, the cluster state will be marked as `degraded`.
+Out of the box, the agent requires at least a single master node (agent with `role:master`). The test will mark the cluster as `degraded` if no master is available.
+
+Connect the agent to InfluxDB database `monitoring`:
+
+```console
+$ satellite agent --tags=role:master \
+	--state-dir=/var/run/satellite \
+	--influxdb-database=monitoring \
+	--influxdb-url=http://localhost:8086
+```
 
 
 [//]: # (Footnots and references)

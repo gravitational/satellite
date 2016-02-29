@@ -17,8 +17,8 @@ type config struct {
 	DockerAddr string
 	// EtcdAddr is the address of the etcd endpoint
 	EtcdAddr string
-	// NettestImage is the image name to use for networking test
-	NettestImage string
+	// NettestContainerImage is the image name to use for networking test
+	NettestContainerImage string
 }
 
 // addCheckers adds checkers to the agent.
@@ -37,7 +37,7 @@ func addToMaster(node agent.Agent, config *config) {
 	node.AddChecker(monitoring.DockerHealth(config.DockerAddr))
 	node.AddChecker(monitoring.EtcdHealth(config.EtcdAddr))
 	node.AddChecker(monitoring.SystemdHealth())
-	node.AddChecker(monitoring.IntraPodCommunication(config.KubeAddr, config.NettestImage))
+	node.AddChecker(monitoring.IntraPodCommunication(config.KubeAddr, config.NettestContainerImage))
 }
 
 func addToNode(node agent.Agent, config *config) {

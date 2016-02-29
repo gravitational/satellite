@@ -48,18 +48,18 @@ func run() error {
 		debug = app.Flag("debug", "Enable verbose mode").Bool()
 
 		// `agent` command
-		cagent               = app.Command("agent", "Start monitoring agent")
-		cagentRPCAddrs       = ListFlag(cagent.Flag("rpc-addr", "Address to bind the RPC listener to.  Can be specified multiple times").Default("127.0.0.1:7575"))
-		cagentKubeAddr       = cagent.Flag("kube-addr", "Address of the kubernetes API server").Default("http://127.0.0.1:8080").String()
-		cagentKubeletAddr    = cagent.Flag("kubelet-addr", "Address of the kubelet").Default("http://127.0.0.1:10248").String()
-		cagentDockerAddr     = cagent.Flag("docker-addr", "Address of the docker daemon endpoint").Default("/var/run/docker.sock").String()
-		cagentEtcdAddr       = cagent.Flag("etcd-addr", "Address of the etcd endpoint").Default("http://127.0.0.1:2379").String()
-		cagentNettestImage   = cagent.Flag("nettest-image", "Name of the image to use for networking test").Default("gcr.io/google_containers/nettest:1.6").String()
-		cagentName           = cagent.Flag("name", "Agent name.  Must be the same as the name of the local serf node").OverrideDefaultFromEnvar(EnvAgentName).String()
-		cagentSerfRPCAddr    = cagent.Flag("serf-rpc-addr", "RPC address of the local serf node").Default("127.0.0.1:7373").String()
-		cagentInitialCluster = KeyValueListFlag(cagent.Flag("initial-cluster", "Initial cluster configuration as a comma-separated list of peers").OverrideDefaultFromEnvar(EnvInitialCluster))
-		cagentStateDir       = cagent.Flag("state-dir", "Directory to store agent-specific state").OverrideDefaultFromEnvar(EnvStateDir).String()
-		cagentTags           = KeyValueListFlag(cagent.Flag("tags", "Define a tags as comma-separated list of key:value pairs").OverrideDefaultFromEnvar(EnvTags))
+		cagent                      = app.Command("agent", "Start monitoring agent")
+		cagentRPCAddrs              = ListFlag(cagent.Flag("rpc-addr", "Address to bind the RPC listener to.  Can be specified multiple times").Default("127.0.0.1:7575"))
+		cagentKubeAddr              = cagent.Flag("kube-addr", "Address of the kubernetes API server").Default("http://127.0.0.1:8080").String()
+		cagentKubeletAddr           = cagent.Flag("kubelet-addr", "Address of the kubelet").Default("http://127.0.0.1:10248").String()
+		cagentDockerAddr            = cagent.Flag("docker-addr", "Path to the docker daemon socket").Default("/var/run/docker.sock").String()
+		cagentEtcdAddr              = cagent.Flag("etcd-addr", "Address of the etcd endpoint").Default("http://127.0.0.1:2379").String()
+		cagentNettestContainerImage = cagent.Flag("nettest-image", "Name of the image to use for networking test").Default("gcr.io/google_containers/nettest:1.6").String()
+		cagentName                  = cagent.Flag("name", "Agent name.  Must be the same as the name of the local serf node").OverrideDefaultFromEnvar(EnvAgentName).String()
+		cagentSerfRPCAddr           = cagent.Flag("serf-rpc-addr", "RPC address of the local serf node").Default("127.0.0.1:7373").String()
+		cagentInitialCluster        = KeyValueListFlag(cagent.Flag("initial-cluster", "Initial cluster configuration as a comma-separated list of peers").OverrideDefaultFromEnvar(EnvInitialCluster))
+		cagentStateDir              = cagent.Flag("state-dir", "Directory to store agent-specific state").OverrideDefaultFromEnvar(EnvStateDir).String()
+		cagentTags                  = KeyValueListFlag(cagent.Flag("tags", "Define a tags as comma-separated list of key:value pairs").OverrideDefaultFromEnvar(EnvTags))
 		// InfluxDB backend configuration
 		cagentInfluxDatabase = cagent.Flag("influxdb-database", "Database to connect to").OverrideDefaultFromEnvar(EnvInfluxDatabase).String()
 		cagentInfluxUsername = cagent.Flag("influxdb-user", "Username to use for connection").OverrideDefaultFromEnvar(EnvInfluxUser).String()
@@ -88,7 +88,11 @@ func run() error {
 	switch cmd {
 	case cagent.FullCommand():
 		if *cagentName == "" {
-			return trace.Errorf("agent name not set")
+			*cagentName, err = os.Hostname()
+			if err != nil {
+				return trace.Wrap(err, "agent name not set, failed to set it to hostname")
+			}
+			log.Infof("using hostname `%v` as agent name", *cagentName)
 		}
 		agentRole, ok := (*cagentTags)["role"]
 		if !ok {
@@ -104,6 +108,8 @@ func run() error {
 		}
 		var backends []backend.Backend
 		if *cagentInfluxDatabase != "" {
+			log.Infof("connecting to influxdb database `%v` on %v", *cagentInfluxDatabase,
+				*cagentInfluxURL)
 			influxdb, err := influxdb.New(&influxdb.Config{
 				Database: *cagentInfluxDatabase,
 				Username: *cagentInfluxUsername,
@@ -123,12 +129,12 @@ func run() error {
 			Cache:       multiplex.New(cache, backends...),
 		}
 		monitoringConfig := &config{
-			Role:         agent.Role(agentRole),
-			KubeAddr:     *cagentKubeAddr,
-			KubeletAddr:  *cagentKubeletAddr,
-			DockerAddr:   *cagentDockerAddr,
-			EtcdAddr:     *cagentEtcdAddr,
-			NettestImage: *cagentNettestImage,
+			Role:                  agent.Role(agentRole),
+			KubeAddr:              *cagentKubeAddr,
+			KubeletAddr:           *cagentKubeletAddr,
+			DockerAddr:            *cagentDockerAddr,
+			EtcdAddr:              *cagentEtcdAddr,
+			NettestContainerImage: *cagentNettestContainerImage,
 		}
 		err = runAgent(agentConfig, monitoringConfig, toAddrList(*cagentInitialCluster))
 	case cversion.FullCommand():
