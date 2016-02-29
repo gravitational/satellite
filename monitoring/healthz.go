@@ -4,6 +4,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gravitational/satellite/agent/health"
@@ -36,7 +37,13 @@ func (r *HttpHealthzChecker) Check(reporter health.Reporter) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		reporter.Add(NewProbeFromErr(r.name, trace.Errorf("unexpected HTTP status: %s", http.StatusText(resp.StatusCode))))
+		reporter.Add(&pb.Probe{
+			Checker: r.name,
+			Status:  pb.Probe_Failed,
+			Error: trace.Errorf("unexpected HTTP status: %s",
+				http.StatusText(resp.StatusCode)).Error(),
+			Code: strconv.Itoa(resp.StatusCode),
+		})
 		return
 	}
 	if err = r.checker(resp.Body); err != nil {

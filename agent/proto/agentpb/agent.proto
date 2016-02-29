@@ -81,16 +81,18 @@ message NodeStatus {
 message Probe {
   // Name of the checker that generated the probe.
   string checker = 1;
-  // Additional detail specific to the checker
+  // Optional detail specific to the checker
   string detail = 2;
+  // Optional code specific to a checker (i.e. HTTP status code)
+  string code = 3;
   enum Type {
     Unknown = 0;
     Running = 1;
     Failed = 2;
     Terminated = 3;
   }
-  Type status = 3;
-  string error = 4;
+  Type status = 4;
+  string error = 5;
 }
 
 message Timestamp {

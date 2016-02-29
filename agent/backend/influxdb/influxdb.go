@@ -113,7 +113,7 @@ func connect(config *Config) (client influx.Client, err error) {
 //
 // Probes:
 //  tags: {"checker": "systemd", "node": "worker", "state": "failed"}
-//  fields: {"error": "storage unavailable", "detail": "service"}
+//  fields: {"error": "storage unavailable", "detail": "service", "code": "500"}
 func addNode(batch influx.BatchPoints, status *pb.NodeStatus, timestamp time.Time) error {
 	tags := map[string]string{
 		"name": status.MemberStatus.Name,
@@ -141,8 +141,8 @@ func addNode(batch influx.BatchPoints, status *pb.NodeStatus, timestamp time.Tim
 		}
 		fields = map[string]interface{}{
 			"error": probe.Error,
+			"code":  probe.Code,
 		}
-		// TODO: add `Code` detail
 		if probe.Detail != "" {
 			fields["detail"] = probe.Detail
 		}
