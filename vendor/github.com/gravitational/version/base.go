@@ -24,6 +24,6 @@ var (
 )
 
 // Init sets an alternative default for the version string.
-func Init(version string) {
-	version = version
+func Init(baseVersion string) {
+	version = baseVersion
 }

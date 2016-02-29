@@ -36,6 +36,8 @@ var pkg = flag.String("pkg", "", "root package path")
 // This flag is useful when the version package is custom-vendored and has a different package path.
 var versionPackage = flag.String("verpkg", "github.com/gravitational/version", "path to the version package")
 
+var compatMode = flag.Bool("compat", false, "generate linker flags using go1.4 syntax")
+
 // semverPattern defines a regexp pattern to modify the results of `git describe` to be semver-complaint.
 var semverPattern = regexp.MustCompile(`(.+)-([0-9]{1,})-g([0-9a-f]{14})$`)
 
@@ -67,7 +69,7 @@ func run() error {
 
 	var linkFlags []string
 	linkFlag := func(key, value string) string {
-		if goVersion <= 14 {
+		if goVersion <= 14 || *compatMode {
 			return fmt.Sprintf("-X %s.%s %s", *versionPackage, key, value)
 		} else {
 			return fmt.Sprintf("-X %s.%s=%s", *versionPackage, key, value)

@@ -104,7 +104,7 @@
 		},
 		{
 			"ImportPath": "github.com/gravitational/version",
-			"Rev": "a0f162ed62e1fcec2cd454698feab021af0ccbdd"
+			"Rev": "cfc6250a884a833eed6ac0417a6f245f5ac49d7a"
 		},
 		{
 			"ImportPath": "github.com/hashicorp/go-msgpack/codec",
