@@ -26,9 +26,10 @@ func EtcdHealth(addr string) health.Checker {
 	return NewHTTPHealthzChecker("etcd-healthz", fmt.Sprintf("%v/health", addr), etcdChecker)
 }
 
-// DockerHealth creates a checker that checks health of the docker daemon
-func DockerHealth(dockerAddr string) health.Checker {
-	return NewUnixSocketHealthzChecker("docker", "http://docker/version", dockerAddr,
+// DockerHealth creates a checker that checks health of the docker daemon under
+// the specified socketPath
+func DockerHealth(socketPath string) health.Checker {
+	return NewUnixSocketHealthzChecker("docker", "http://docker/version", socketPath,
 		dockerChecker)
 }
 

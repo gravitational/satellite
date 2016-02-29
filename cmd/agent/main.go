@@ -32,6 +32,10 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
+func init() {
+	version.Init("v0.0.1-master+$Format:%h$")
+}
+
 func main() {
 	if err := run(); err != nil {
 		log.Fatal(err)
