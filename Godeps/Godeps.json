@@ -2,7 +2,8 @@
 	"ImportPath": "github.com/gravitational/satellite",
 	"GoVersion": "go1.5",
 	"Packages": [
-		"github.com/gravitational/satellite/cmd/agent/..."
+		"github.com/gravitational/satellite/cmd/agent/...",
+		"github.com/gravitational/satellite/monitoring/..."
 	],
 	"Deps": [
 		{
@@ -234,6 +235,10 @@
 			"ImportPath": "gopkg.in/alecthomas/kingpin.v2",
 			"Comment": "v2.1.11",
 			"Rev": "8cccfa8eb2e3183254457fb1749b2667fbc364c7"
+		},
+		{
+			"ImportPath": "gopkg.in/check.v1",
+			"Rev": "64131543e7896d5bcc6bd5a76287eb75ea96c673"
 		},
 		{
 			"ImportPath": "gopkg.in/yaml.v2",
