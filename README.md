@@ -92,7 +92,57 @@ Flags:
   --influxdb-url=INFLUXDB-URL    URL of the InfluxDB endpoint
 
 $ satellite agent --name=my-host --tags=role:master
+
+$ satellite help status
+usage: satellite status [<flags>]
+
+Query cluster status
+
+Flags:
+  --help           Show context-sensitive help (also try --help-long and --help-man).
+  --debug          Enable verbose mode
+  --rpc-port=7575  Local agent RPC port
+  --pretty         Pretty-print the output
+  --local          Query the status of the local node
 ```
+
+You can then query the status of the cluster or that of the local node by issuing a status query:
+
+```console
+$ satellite status --pretty
+```
+
+resulting in:
+
+```json
+{
+   "status": "degraded",
+   "nodes": [
+      {
+         "name": "example.domain",
+         "member_status": {
+            "name": "example.domain",
+            "addr": "192.168.178.32:7946",
+            "status": "alive",
+            "tags": {
+               "role": "node"
+            }
+         },
+         "status": "degraded",
+         "probes": [
+            {
+               "checker": "docker",
+               "status": "running"
+            },
+            ...
+         ]
+      }
+   ],
+   "timestamp": "2016-03-03T12:19:44.757110373Z",
+   "summary": "master node unavailable"
+}
+```
+
 
 Out of the box, the agent requires at least a single master node (agent with `role:master`). The test will mark the cluster as `degraded` if no master is available.
 
