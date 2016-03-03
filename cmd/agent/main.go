@@ -66,6 +66,12 @@ func run() error {
 		cagentInfluxPassword = cagent.Flag("influxdb-password", "Password to use for connection").OverrideDefaultFromEnvar(EnvInfluxPassword).String()
 		cagentInfluxURL      = cagent.Flag("influxdb-url", "URL of the InfluxDB endpoint").OverrideDefaultFromEnvar(EnvInfluxURL).String()
 
+		// `status` command
+		cstatus            = app.Command("status", "Query cluster status")
+		cstatusRPCPort     = cstatus.Flag("rpc-port", "Local agent RPC port").Default("7575").Int()
+		cstatusPrettyPrint = cstatus.Flag("pretty", "Pretty-print the output").Bool()
+		cstatusLocal       = cstatus.Flag("local", "Query the status of the local node").Bool()
+
 		// `version` command
 		cversion = app.Command("version", "Display version")
 	)
@@ -137,6 +143,8 @@ func run() error {
 			NettestContainerImage: *cagentNettestContainerImage,
 		}
 		err = runAgent(agentConfig, monitoringConfig, toAddrList(*cagentInitialCluster))
+	case cstatus.FullCommand():
+		status(*cstatusRPCPort, *cstatusLocal, *cstatusPrettyPrint)
 	case cversion.FullCommand():
 		version.Print()
 	}

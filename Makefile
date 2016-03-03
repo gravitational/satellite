@@ -11,8 +11,8 @@ export
 all: $(OUT)
 
 $(OUT): flags
-	go install github.com/gravitational/satellite/vendor/github.com/mattn/go-sqlite3
-	go build -o $@ -ldflags $(LINKFLAGS) github.com/gravitational/satellite/cmd/agent
+	@go install github.com/gravitational/satellite/vendor/github.com/mattn/go-sqlite3
+	@go build -o $@ -ldflags $(LINKFLAGS) github.com/gravitational/satellite/cmd/agent
 
 clean:
 	@rm -rf $(OUTDIR)
@@ -25,6 +25,7 @@ sloccount:
 
 test:
 	go test -v -test.parallel=0 ./agent/...
+	go test -v -test.parallel=0 ./monitoring/...
 
 test-package: $(OUT)
 	go test -v -test.parallel=0 ./$(p)
