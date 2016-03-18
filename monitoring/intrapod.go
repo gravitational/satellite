@@ -24,13 +24,17 @@ import (
 	"github.com/gravitational/trace"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/blang/semver"
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/errors"
+	"k8s.io/kubernetes/pkg/client/restclient"
+	"k8s.io/kubernetes/pkg/client/typed/discovery"
 	kube "k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/util/intstr"
 	"k8s.io/kubernetes/pkg/util/wait"
+	"k8s.io/kubernetes/pkg/version"
 )
 
 // This file implements a functional pod communication test.
@@ -142,27 +146,21 @@ func (r *intraPodChecker) testIntraPodCommunication(client *kube.Client) error {
 
 	passed := false
 
+	getDetail := func(detail string) ([]byte, error) {
+		proxyRequest, errProxy := getServicesProxyRequest(client, client.Get())
+		if errProxy != nil {
+			return nil, trace.Wrap(errProxy)
+		}
+		return proxyRequest.Namespace(testNamespace).
+			Name(svc.Name).
+			Suffix(detail).
+			DoRaw()
+	}
+
+	getDetails := func() ([]byte, error) { return getDetail("read") }
+	getStatus := func() ([]byte, error) { return getDetail("status") }
+
 	var body []byte
-	getDetails := func() ([]byte, error) {
-		return client.Get().
-			Namespace(testNamespace).
-			Prefix("proxy").
-			Resource("services").
-			Name(svc.Name).
-			Suffix("read").
-			DoRaw()
-	}
-
-	getStatus := func() ([]byte, error) {
-		return client.Get().
-			Namespace(testNamespace).
-			Prefix("proxy").
-			Resource("services").
-			Name(svc.Name).
-			Suffix("status").
-			DoRaw()
-	}
-
 	timeout := time.Now().Add(2 * time.Minute)
 	for i := 0; !passed && timeout.After(time.Now()); i++ {
 		time.Sleep(2 * time.Second)
@@ -336,4 +334,32 @@ func getServiceAccount(c *kube.Client, ns, name string, shouldWait bool) (*api.S
 		return nil, trace.Wrap(err)
 	}
 	return user, nil
+}
+
+var subResourceServiceAndNodeProxyVersion = version.MustParse("v1.2.0")
+
+// getServicesProxyRequest returns the service request based on the server version
+func getServicesProxyRequest(c *kube.Client, request *restclient.Request) (*restclient.Request, error) {
+	subResourceProxyAvailable, err := serverVersionGTE(subResourceServiceAndNodeProxyVersion, c)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	if subResourceProxyAvailable {
+		return request.Resource("services").SubResource("proxy"), nil
+	}
+	return request.Prefix("proxy").Resource("services"), nil
+}
+
+// TODO: this functionality eventually becomes part of client.VersionInterface
+// serverVersionGTE determines if server version >= v
+func serverVersionGTE(v semver.Version, c discovery.ServerVersionInterface) (bool, error) {
+	serverVersion, err := c.ServerVersion()
+	if err != nil {
+		return false, trace.Wrap(err, "unable to get server version")
+	}
+	parsedVersion, err := version.Parse(serverVersion.GitVersion)
+	if err != nil {
+		return false, trace.Wrap(err, "unable to parse server version %q", serverVersion.GitVersion)
+	}
+	return parsedVersion.GTE(v), nil
 }
