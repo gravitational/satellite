@@ -11,8 +11,8 @@ export
 all: $(OUT)
 
 $(OUT): flags
-	@go install github.com/gravitational/satellite/vendor/github.com/mattn/go-sqlite3
-	@go build -o $@ -ldflags $(LINKFLAGS) github.com/gravitational/satellite/cmd/agent
+	go install github.com/gravitational/satellite/vendor/github.com/mattn/go-sqlite3
+	go build -o $@ -ldflags $(LINKFLAGS) github.com/gravitational/satellite/cmd/agent
 
 clean:
 	@rm -rf $(OUTDIR)

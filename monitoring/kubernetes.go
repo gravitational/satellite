@@ -25,6 +25,7 @@ import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/trace"
 
+	"k8s.io/kubernetes/pkg/client/restclient"
 	kube "k8s.io/kubernetes/pkg/client/unversioned"
 )
 
@@ -65,7 +66,7 @@ func ConnectToKube(hostPort string) (*kube.Client, error) {
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	config := &kube.Config{
+	config := &restclient.Config{
 		Host: baseURL.String(),
 	}
 	client, err := kube.New(config)
