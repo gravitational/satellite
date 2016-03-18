@@ -29,7 +29,7 @@ import (
 	kube "k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/labels"
-	"k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/util/intstr"
 	"k8s.io/kubernetes/pkg/util/wait"
 )
 
@@ -88,7 +88,7 @@ func (r *intraPodChecker) testIntraPodCommunication(client *kube.Client) error {
 			Ports: []api.ServicePort{{
 				Protocol:   "TCP",
 				Port:       8080,
-				TargetPort: util.NewIntOrStringFromInt(8080),
+				TargetPort: intstr.FromInt(8080),
 			}},
 			Selector: map[string]string{
 				"name": serviceName,
@@ -106,7 +106,11 @@ func (r *intraPodChecker) testIntraPodCommunication(client *kube.Client) error {
 	}
 	defer cleanupService()
 
-	nodes, err := client.Nodes().List(labels.Everything(), fields.Everything())
+	listOptions := api.ListOptions{
+		LabelSelector: labels.Everything(),
+		FieldSelector: fields.Everything(),
+	}
+	nodes, err := client.Nodes().List(listOptions)
 	if err != nil {
 		return trace.Wrap(err, "failed to list nodes")
 	}

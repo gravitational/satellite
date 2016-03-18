@@ -51,7 +51,11 @@ func (r *componentStatusChecker) Check(reporter health.Reporter) {
 		reporter.Add(NewProbeFromErr(r.Name(), trace.Errorf("failed to connect to kube: %v", err)))
 		return
 	}
-	statuses, err := client.ComponentStatuses().List(labels.Everything(), fields.Everything())
+	listOptions := api.ListOptions{
+		LabelSelector: labels.Everything(),
+		FieldSelector: fields.Everything(),
+	}
+	statuses, err := client.ComponentStatuses().List(listOptions)
 	if err != nil {
 		reporter.Add(NewProbeFromErr(r.Name(), trace.Errorf("failed to query component statuses: %v", err)))
 		return
