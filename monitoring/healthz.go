@@ -28,6 +28,7 @@ import (
 )
 
 const healthzCheckTimeout = 1 * time.Second
+const healthzTLSHandshakeTimeout = 10 * time.Second
 
 // HttpResponseChecker is a function that can validate service status from response
 type HttpResponseChecker func(response io.Reader) error
@@ -82,6 +83,34 @@ func NewHTTPHealthzChecker(name, URL string, checker HttpResponseChecker) health
 		client:  client,
 		checker: checker,
 	}
+}
+
+// NewHTTPSHealthzChecker is a Checker that tests the specified HTTPS endpoint
+func NewHTTPSHealthzChecker(name, URL string, config *TLSConfig, checker HttpResponseChecker) (health.Checker, error) {
+	const dialTimeout = 30 * time.Second
+	const keepAlivePeriod = 30 * time.Second
+	tlsConfig, err := config.ClientConfig()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	transport := &http.Transport{
+		Dial: (&net.Dialer{
+			Timeout:   dialTimeout,
+			KeepAlive: keepAlivePeriod,
+		}).Dial,
+		TLSClientConfig:     tlsConfig,
+		TLSHandshakeTimeout: healthzTLSHandshakeTimeout,
+	}
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   healthzCheckTimeout,
+	}
+	return &HttpHealthzChecker{
+		name:    name,
+		URL:     URL,
+		client:  client,
+		checker: checker,
+	}, nil
 }
 
 // NewUnixSocketHealthzChecker returns a new Checker that tests

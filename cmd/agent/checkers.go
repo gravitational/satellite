@@ -18,6 +18,7 @@ package main
 import (
 	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/monitoring"
+	"github.com/gravitational/trace"
 )
 
 // config represents configuration for setting up monitoring checkers.
@@ -34,30 +35,43 @@ type config struct {
 	EtcdAddr string
 	// NettestContainerImage is the image name to use for networking test
 	NettestContainerImage string
+	// TLSConfig defines configuration to secure HTTP communication
+	TLSConfig *monitoring.TLSConfig
 }
 
 // addCheckers adds checkers to the agent.
-func addCheckers(node agent.Agent, config *config) {
+func addCheckers(node agent.Agent, config *config) (err error) {
 	switch config.Role {
 	case agent.RoleMaster:
-		addToMaster(node, config)
+		err = addToMaster(node, config)
 	case agent.RoleNode:
-		addToNode(node, config)
+		err = addToNode(node, config)
 	}
+	return trace.Wrap(err)
 }
 
-func addToMaster(node agent.Agent, config *config) {
+func addToMaster(node agent.Agent, config *config) error {
+	etcdChecker, err := monitoring.EtcdHealth(config.EtcdAddr, config.TLSConfig)
+	if err != nil {
+		return trace.Wrap(err)
+	}
 	node.AddChecker(monitoring.KubeApiServerHealth(config.KubeAddr))
 	node.AddChecker(monitoring.ComponentStatusHealth(config.KubeAddr))
 	node.AddChecker(monitoring.DockerHealth(config.DockerAddr))
-	node.AddChecker(monitoring.EtcdHealth(config.EtcdAddr))
+	node.AddChecker(etcdChecker)
 	node.AddChecker(monitoring.SystemdHealth())
 	node.AddChecker(monitoring.IntraPodCommunication(config.KubeAddr, config.NettestContainerImage))
+	return nil
 }
 
-func addToNode(node agent.Agent, config *config) {
+func addToNode(node agent.Agent, config *config) error {
+	etcdChecker, err := monitoring.EtcdHealth(config.EtcdAddr, config.TLSConfig)
+	if err != nil {
+		return trace.Wrap(err)
+	}
 	node.AddChecker(monitoring.KubeletHealth(config.KubeletAddr))
 	node.AddChecker(monitoring.DockerHealth(config.DockerAddr))
-	node.AddChecker(monitoring.EtcdHealth(config.EtcdAddr))
+	node.AddChecker(etcdChecker)
 	node.AddChecker(monitoring.SystemdHealth())
+	return nil
 }

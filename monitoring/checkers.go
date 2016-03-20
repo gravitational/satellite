@@ -37,8 +37,14 @@ func ComponentStatusHealth(kubeAddr string) health.Checker {
 }
 
 // EtcdHealth creates a checker that checks health of etcd
-func EtcdHealth(addr string) health.Checker {
-	return NewHTTPHealthzChecker("etcd-healthz", fmt.Sprintf("%v/health", addr), etcdChecker)
+func EtcdHealth(addr string, tlsConfig *TLSConfig) (health.Checker, error) {
+	if tlsConfig != nil {
+		return NewHTTPSHealthzChecker("etcd-healthz", fmt.Sprintf("%v/health", addr),
+			tlsConfig, etcdChecker)
+	} else {
+		return NewHTTPHealthzChecker("etcd-healthz", fmt.Sprintf("%v/health", addr),
+			etcdChecker), nil
+	}
 }
 
 // DockerHealth creates a checker that checks health of the docker daemon under

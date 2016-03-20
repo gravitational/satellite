@@ -25,6 +25,7 @@ import (
 	"github.com/gravitational/satellite/agent/backend/sqlite"
 	"github.com/gravitational/satellite/agent/cache"
 	"github.com/gravitational/satellite/agent/cache/multiplex"
+	"github.com/gravitational/satellite/monitoring"
 	"github.com/gravitational/trace"
 	"github.com/gravitational/version"
 
@@ -60,6 +61,9 @@ func run() error {
 		cagentInitialCluster        = KeyValueListFlag(cagent.Flag("initial-cluster", "Initial cluster configuration as a comma-separated list of peers").OverrideDefaultFromEnvar(EnvInitialCluster))
 		cagentStateDir              = cagent.Flag("state-dir", "Directory to store agent-specific state").OverrideDefaultFromEnvar(EnvStateDir).String()
 		cagentTags                  = KeyValueListFlag(cagent.Flag("tags", "Define a tags as comma-separated list of key:value pairs").OverrideDefaultFromEnvar(EnvTags))
+		// etcd TLS configuration
+		cagentEtcdCertFile = cagent.Flag("etcd-certfile", "TLS certificate file used to secure etcd communication").String()
+		cagentEtcdKeyFile  = cagent.Flag("etcd-keyfile", "TSL key file used to secure etcd communication").String()
 		// InfluxDB backend configuration
 		cagentInfluxDatabase = cagent.Flag("influxdb-database", "Database to connect to").OverrideDefaultFromEnvar(EnvInfluxDatabase).String()
 		cagentInfluxUsername = cagent.Flag("influxdb-user", "Username to use for connection").OverrideDefaultFromEnvar(EnvInfluxUser).String()
@@ -141,6 +145,13 @@ func run() error {
 			DockerAddr:            *cagentDockerAddr,
 			EtcdAddr:              *cagentEtcdAddr,
 			NettestContainerImage: *cagentNettestContainerImage,
+		}
+		if *cagentEtcdCertFile != "" {
+			tlsConfig := &monitoring.TLSConfig{
+				CertFile: *cagentEtcdCertFile,
+				KeyFile:  *cagentEtcdKeyFile,
+			}
+			monitoringConfig.TLSConfig = tlsConfig
 		}
 		err = runAgent(agentConfig, monitoringConfig, toAddrList(*cagentInitialCluster))
 	case cstatus.FullCommand():
