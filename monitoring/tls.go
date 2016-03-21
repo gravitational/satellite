@@ -2,6 +2,8 @@ package monitoring
 
 import (
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"io/ioutil"
 
 	"github.com/gravitational/trace"
@@ -11,6 +13,7 @@ import (
 // It is based on github.com/coreos/etcd/pkg/transport/listener.go
 
 type TLSConfig struct {
+	CAFile   string
 	CertFile string
 	KeyFile  string
 }
@@ -36,5 +39,36 @@ func (r *TLSConfig) ClientConfig() (*tls.Config, error) {
 		Certificates: []tls.Certificate{tlsCert},
 		MinVersion:   tls.VersionTLS10,
 	}
+	config.RootCAs, err = newCertPool([]string{r.CAFile})
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
 	return config, nil
+}
+
+// newCertPool creates x509 certPool with provided CA files.
+func newCertPool(CAFiles []string) (*x509.CertPool, error) {
+	certPool := x509.NewCertPool()
+
+	for _, CAFile := range CAFiles {
+		pemByte, err := ioutil.ReadFile(CAFile)
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
+
+		for {
+			var block *pem.Block
+			block, pemByte = pem.Decode(pemByte)
+			if block == nil {
+				break
+			}
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				return nil, trace.Wrap(err)
+			}
+			certPool.AddCert(cert)
+		}
+	}
+
+	return certPool, nil
 }

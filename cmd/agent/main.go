@@ -62,6 +62,7 @@ func run() error {
 		cagentStateDir              = cagent.Flag("state-dir", "Directory to store agent-specific state").OverrideDefaultFromEnvar(EnvStateDir).String()
 		cagentTags                  = KeyValueListFlag(cagent.Flag("tags", "Define a tags as comma-separated list of key:value pairs").OverrideDefaultFromEnvar(EnvTags))
 		// etcd TLS configuration
+		cagentEtcdCAFile   = cagent.Flag("etcd-cafile", "Certificate Authority file used to secure etcd communication").String()
 		cagentEtcdCertFile = cagent.Flag("etcd-certfile", "TLS certificate file used to secure etcd communication").String()
 		cagentEtcdKeyFile  = cagent.Flag("etcd-keyfile", "TLS key file used to secure etcd communication").String()
 		// InfluxDB backend configuration
@@ -139,19 +140,22 @@ func run() error {
 			Cache:       multiplex.New(cache, backends...),
 		}
 		monitoringConfig := &config{
-			Role:                  agent.Role(agentRole),
-			KubeAddr:              *cagentKubeAddr,
-			KubeletAddr:           *cagentKubeletAddr,
-			DockerAddr:            *cagentDockerAddr,
-			EtcdAddr:              *cagentEtcdAddr,
-			NettestContainerImage: *cagentNettestContainerImage,
+			role:        agent.Role(agentRole),
+			kubeAddr:    *cagentKubeAddr,
+			kubeletAddr: *cagentKubeletAddr,
+			dockerAddr:  *cagentDockerAddr,
+			etcd: etcdConfig{
+				addr: *cagentEtcdAddr,
+			},
+			nettestContainerImage: *cagentNettestContainerImage,
 		}
 		if *cagentEtcdCertFile != "" {
 			tlsConfig := &monitoring.TLSConfig{
+				CAFile:   *cagentEtcdCAFile,
 				CertFile: *cagentEtcdCertFile,
 				KeyFile:  *cagentEtcdKeyFile,
 			}
-			monitoringConfig.TLSConfig = tlsConfig
+			monitoringConfig.etcd.TLSConfig = tlsConfig
 		}
 		err = runAgent(agentConfig, monitoringConfig, toAddrList(*cagentInitialCluster))
 	case cstatus.FullCommand():
