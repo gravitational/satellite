@@ -16,9 +16,13 @@ limitations under the License.
 package monitoring
 
 import (
+	"crypto/tls"
 	"fmt"
+	"net"
+	"net/http"
 
 	"github.com/gravitational/satellite/agent/health"
+	"github.com/gravitational/trace"
 )
 
 // KubeApiServerHealth creates a checker for the kubernetes API server
@@ -37,14 +41,37 @@ func ComponentStatusHealth(kubeAddr string) health.Checker {
 }
 
 // EtcdHealth creates a checker that checks health of etcd
-func EtcdHealth(addr string, tlsConfig *TLSConfig) (health.Checker, error) {
-	if tlsConfig != nil {
-		return NewHTTPSHealthzChecker("etcd-healthz", fmt.Sprintf("%v/health", addr),
-			tlsConfig, etcdChecker)
-	} else {
-		return NewHTTPHealthzChecker("etcd-healthz", fmt.Sprintf("%v/health", addr),
-			etcdChecker), nil
+func EtcdHealth(config *EtcdConfig) (checker health.Checker, err error) {
+	const name = "etcd-healthz"
+
+	var tlsConfig *tls.Config
+	if config.TLSConfig != nil {
+		tlsConfig, err = config.TLSConfig.ClientConfig()
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
 	}
+	createChecker := func(addr string) (health.Checker, error) {
+		endpoint := fmt.Sprintf("%v/health", addr)
+		transport := &http.Transport{
+			Dial: (&net.Dialer{
+				Timeout:   dialTimeout,
+				KeepAlive: keepAlivePeriod,
+			}).Dial,
+			TLSClientConfig:     tlsConfig,
+			TLSHandshakeTimeout: healthzTLSHandshakeTimeout,
+		}
+		return NewHTTPHealthzCheckerWithTransport(name, endpoint, transport, etcdChecker), nil
+	}
+	var checkers []health.Checker
+	for _, endpoint := range config.Endpoints {
+		checker, err := createChecker(endpoint)
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
+		checkers = append(checkers, checker)
+	}
+	return &compositeChecker{name, checkers}, nil
 }
 
 // DockerHealth creates a checker that checks health of the docker daemon under

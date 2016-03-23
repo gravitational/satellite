@@ -54,17 +54,17 @@ func run() error {
 		cagentKubeAddr              = cagent.Flag("kube-addr", "Address of the kubernetes API server").Default("http://127.0.0.1:8080").String()
 		cagentKubeletAddr           = cagent.Flag("kubelet-addr", "Address of the kubelet").Default("http://127.0.0.1:10248").String()
 		cagentDockerAddr            = cagent.Flag("docker-addr", "Path to the docker daemon socket").Default("/var/run/docker.sock").String()
-		cagentEtcdAddr              = cagent.Flag("etcd-addr", "Address of the etcd endpoint").Default("http://127.0.0.1:2379").String()
 		cagentNettestContainerImage = cagent.Flag("nettest-image", "Name of the image to use for networking test").Default("gcr.io/google_containers/nettest:1.8").String()
 		cagentName                  = cagent.Flag("name", "Agent name.  Must be the same as the name of the local serf node").OverrideDefaultFromEnvar(EnvAgentName).String()
 		cagentSerfRPCAddr           = cagent.Flag("serf-rpc-addr", "RPC address of the local serf node").Default("127.0.0.1:7373").String()
 		cagentInitialCluster        = KeyValueListFlag(cagent.Flag("initial-cluster", "Initial cluster configuration as a comma-separated list of peers").OverrideDefaultFromEnvar(EnvInitialCluster))
 		cagentStateDir              = cagent.Flag("state-dir", "Directory to store agent-specific state").OverrideDefaultFromEnvar(EnvStateDir).String()
 		cagentTags                  = KeyValueListFlag(cagent.Flag("tags", "Define a tags as comma-separated list of key:value pairs").OverrideDefaultFromEnvar(EnvTags))
-		// etcd TLS configuration
-		cagentEtcdCAFile   = cagent.Flag("etcd-cafile", "Certificate Authority file used to secure etcd communication").String()
-		cagentEtcdCertFile = cagent.Flag("etcd-certfile", "TLS certificate file used to secure etcd communication").String()
-		cagentEtcdKeyFile  = cagent.Flag("etcd-keyfile", "TLS key file used to secure etcd communication").String()
+		// etcd configuration
+		cagentEtcdServers  = StringList(cagent.Flag("etcd-servers", "List of etcd endpoints (http://host:port), comma separated").Default("http://127.0.0.1:2379"))
+		cagentEtcdCAFile   = cagent.Flag("etcd-cafile", "SSL Certificate Authority file used to secure etcd communication").String()
+		cagentEtcdCertFile = cagent.Flag("etcd-certfile", "SSL certificate file used to secure etcd communication").String()
+		cagentEtcdKeyFile  = cagent.Flag("etcd-keyfile", "SSL key file used to secure etcd communication").String()
 		// InfluxDB backend configuration
 		cagentInfluxDatabase = cagent.Flag("influxdb-database", "Database to connect to").OverrideDefaultFromEnvar(EnvInfluxDatabase).String()
 		cagentInfluxUsername = cagent.Flag("influxdb-user", "Username to use for connection").OverrideDefaultFromEnvar(EnvInfluxUser).String()
@@ -144,12 +144,12 @@ func run() error {
 			kubeAddr:    *cagentKubeAddr,
 			kubeletAddr: *cagentKubeletAddr,
 			dockerAddr:  *cagentDockerAddr,
-			etcd: etcdConfig{
-				addr: *cagentEtcdAddr,
+			etcd: &monitoring.EtcdConfig{
+				Endpoints: *cagentEtcdServers,
 			},
 			nettestContainerImage: *cagentNettestContainerImage,
 		}
-		if *cagentEtcdCertFile != "" {
+		if *cagentEtcdCertFile != "" && *cagentEtcdKeyFile != "" {
 			tlsConfig := &monitoring.TLSConfig{
 				CAFile:   *cagentEtcdCAFile,
 				CertFile: *cagentEtcdCertFile,

@@ -19,13 +19,17 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
-	"time"
 
 	"github.com/gravitational/trace"
 )
 
-// defaultDialTimeout is the maximum amount of time a dial will wait for a connection to setup.
-const defaultDialTimeout = 30 * time.Second
+// EtcdConfig defines a configuration for accessing etcd
+type EtcdConfig struct {
+	// Endpoints lists etcd server endpoints
+	Endpoints []string
+	// TLSConfig is optional SSL configuration
+	*TLSConfig
+}
 
 // etcdChecker is an HttpResponseChecker that interprets results from
 // an etcd HTTP-based healthz end-point.

@@ -31,18 +31,10 @@ type config struct {
 	kubeletAddr string
 	// dockerAddr is the endpoint of the docker daemon
 	dockerAddr string
-	// NettestContainerImage is the image name to use for networking test
+	// nettestContainerImage is the image name to use for networking test
 	nettestContainerImage string
-	// Etcd define etcd-specific configuration
-	etcd etcdConfig
-}
-
-// etcdConfig represents etcd-specific configuration options
-type etcdConfig struct {
-	// Addr is the address of the etcd endpoint
-	addr string
-	// TLSConfig defines configuration to secure HTTP communication
-	TLSConfig *monitoring.TLSConfig
+	// etcd defines etcd-specific configuration
+	etcd *monitoring.EtcdConfig
 }
 
 // addCheckers adds checkers to the agent.
@@ -57,7 +49,7 @@ func addCheckers(node agent.Agent, config *config) (err error) {
 }
 
 func addToMaster(node agent.Agent, config *config) error {
-	etcdChecker, err := monitoring.EtcdHealth(config.etcd.addr, config.etcd.TLSConfig)
+	etcdChecker, err := monitoring.EtcdHealth(config.etcd)
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -71,7 +63,7 @@ func addToMaster(node agent.Agent, config *config) error {
 }
 
 func addToNode(node agent.Agent, config *config) error {
-	etcdChecker, err := monitoring.EtcdHealth(config.etcd.addr, config.etcd.TLSConfig)
+	etcdChecker, err := monitoring.EtcdHealth(config.etcd)
 	if err != nil {
 		return trace.Wrap(err)
 	}
