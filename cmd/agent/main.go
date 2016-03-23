@@ -50,7 +50,7 @@ func run() error {
 
 		// `agent` command
 		cagent                      = app.Command("agent", "Start monitoring agent")
-		cagentRPCAddrs              = ListFlag(cagent.Flag("rpc-addr", "Address to bind the RPC listener to.  Can be specified multiple times").Default("127.0.0.1:7575"))
+		cagentRPCAddrs              = ListFlag(cagent.Flag("rpc-addr", "List of addresses to bind the RPC listener to (host:port), comma-separated").Default("127.0.0.1:7575"))
 		cagentKubeAddr              = cagent.Flag("kube-addr", "Address of the kubernetes API server").Default("http://127.0.0.1:8080").String()
 		cagentKubeletAddr           = cagent.Flag("kubelet-addr", "Address of the kubelet").Default("http://127.0.0.1:10248").String()
 		cagentDockerAddr            = cagent.Flag("docker-addr", "Path to the docker daemon socket").Default("/var/run/docker.sock").String()
@@ -61,7 +61,7 @@ func run() error {
 		cagentStateDir              = cagent.Flag("state-dir", "Directory to store agent-specific state").OverrideDefaultFromEnvar(EnvStateDir).String()
 		cagentTags                  = KeyValueListFlag(cagent.Flag("tags", "Define a tags as comma-separated list of key:value pairs").OverrideDefaultFromEnvar(EnvTags))
 		// etcd configuration
-		cagentEtcdServers  = StringList(cagent.Flag("etcd-servers", "List of etcd endpoints (http://host:port), comma separated").Default("http://127.0.0.1:2379"))
+		cagentEtcdServers  = ListFlag(cagent.Flag("etcd-servers", "List of etcd endpoints (http://host:port), comma separated").Default("http://127.0.0.1:2379"))
 		cagentEtcdCAFile   = cagent.Flag("etcd-cafile", "SSL Certificate Authority file used to secure etcd communication").String()
 		cagentEtcdCertFile = cagent.Flag("etcd-certfile", "SSL certificate file used to secure etcd communication").String()
 		cagentEtcdKeyFile  = cagent.Flag("etcd-keyfile", "SSL key file used to secure etcd communication").String()

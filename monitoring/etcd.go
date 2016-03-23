@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/gravitational/trace"
 )
@@ -42,6 +43,18 @@ type EtcdConfig struct {
 	// KeyFile is an SSL key file used to secure communication with etcd
 	KeyFile string
 }
+
+// defaultTLSHandshakeTimeout specifies the default maximum amount of time
+// spent waiting to for a TLS handshake
+const defaultTLSHandshakeTimeout = 10 * time.Second
+
+// defaultDialTimeout is the default maximum amount of time a dial will wait for
+// a connect to complete.
+const defaultDialTimeout = 30 * time.Second
+
+// defaultKeepAlive specifies the default keep-alive period for an active
+// network connection.
+const defaultKeepAlivePeriod = 30 * time.Second
 
 // etcdChecker is an HttpResponseChecker that interprets results from
 // an etcd HTTP-based healthz end-point.
@@ -89,10 +102,10 @@ func (r *EtcdConfig) newHttpTransport() (*http.Transport, error) {
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		Dial: (&net.Dialer{
-			Timeout:   dialTimeout,
-			KeepAlive: keepAlivePeriod,
+			Timeout:   defaultDialTimeout,
+			KeepAlive: defaultKeepAlivePeriod,
 		}).Dial,
-		TLSHandshakeTimeout: healthzTLSHandshakeTimeout,
+		TLSHandshakeTimeout: defaultTLSHandshakeTimeout,
 		TLSClientConfig:     tlsConfig,
 	}
 

@@ -28,9 +28,6 @@ import (
 )
 
 const healthzCheckTimeout = 1 * time.Second
-const healthzTLSHandshakeTimeout = 10 * time.Second
-const dialTimeout = 30 * time.Second
-const keepAlivePeriod = 30 * time.Second
 
 // HttpResponseChecker is a function that can validate service health
 // from the provided response
