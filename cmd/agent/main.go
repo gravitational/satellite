@@ -146,11 +146,9 @@ func run() error {
 			dockerAddr:  *cagentDockerAddr,
 			etcd: &monitoring.EtcdConfig{
 				Endpoints: *cagentEtcdServers,
-				TLSConfig: monitoring.TLSConfig{
-					CAFile:   *cagentEtcdCAFile,
-					CertFile: *cagentEtcdCertFile,
-					KeyFile:  *cagentEtcdKeyFile,
-				},
+				CAFile:    *cagentEtcdCAFile,
+				CertFile:  *cagentEtcdCertFile,
+				KeyFile:   *cagentEtcdKeyFile,
 			},
 			nettestContainerImage: *cagentNettestContainerImage,
 		}

@@ -17,8 +17,6 @@ package monitoring
 
 import (
 	"fmt"
-	"net"
-	"net/http"
 
 	"github.com/gravitational/satellite/agent/health"
 	"github.com/gravitational/trace"
@@ -43,20 +41,12 @@ func ComponentStatusHealth(kubeAddr string) health.Checker {
 func EtcdHealth(config *EtcdConfig) (health.Checker, error) {
 	const name = "etcd-healthz"
 
-	tlsConfig, err := config.ClientConfig()
+	transport, err := config.newHttpTransport()
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
 	createChecker := func(addr string) (health.Checker, error) {
 		endpoint := fmt.Sprintf("%v/health", addr)
-		transport := &http.Transport{
-			Dial: (&net.Dialer{
-				Timeout:   dialTimeout,
-				KeepAlive: keepAlivePeriod,
-			}).Dial,
-			TLSClientConfig:     tlsConfig,
-			TLSHandshakeTimeout: healthzTLSHandshakeTimeout,
-		}
 		return NewHTTPHealthzCheckerWithTransport(name, endpoint, transport, etcdChecker), nil
 	}
 	var checkers []health.Checker
