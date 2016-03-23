@@ -24,7 +24,7 @@ func (_ *CheckersSuite) TestCreatesEtcdChecker(c *C) {
 func (_ *CheckersSuite) TestCreatesEtcdCheckerWithTLS(c *C) {
 	config := &EtcdConfig{
 		Endpoints: []string{"https://127.0.0.1:2379"},
-		TLSConfig: &TLSConfig{
+		TLSConfig: TLSConfig{
 			CAFile:   "testdata/ca.pem",
 			CertFile: "testdata/etcd.pem",
 			KeyFile:  "testdata/etcd-key.pem",

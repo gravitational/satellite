@@ -146,16 +146,13 @@ func run() error {
 			dockerAddr:  *cagentDockerAddr,
 			etcd: &monitoring.EtcdConfig{
 				Endpoints: *cagentEtcdServers,
+				TLSConfig: monitoring.TLSConfig{
+					CAFile:   *cagentEtcdCAFile,
+					CertFile: *cagentEtcdCertFile,
+					KeyFile:  *cagentEtcdKeyFile,
+				},
 			},
 			nettestContainerImage: *cagentNettestContainerImage,
-		}
-		if *cagentEtcdCertFile != "" && *cagentEtcdKeyFile != "" {
-			tlsConfig := &monitoring.TLSConfig{
-				CAFile:   *cagentEtcdCAFile,
-				CertFile: *cagentEtcdCertFile,
-				KeyFile:  *cagentEtcdKeyFile,
-			}
-			monitoringConfig.etcd.TLSConfig = tlsConfig
 		}
 		err = runAgent(agentConfig, monitoringConfig, toAddrList(*cagentInitialCluster))
 	case cstatus.FullCommand():

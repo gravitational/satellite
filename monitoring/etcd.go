@@ -28,7 +28,7 @@ type EtcdConfig struct {
 	// Endpoints lists etcd server endpoints
 	Endpoints []string
 	// TLSConfig is optional SSL configuration
-	*TLSConfig
+	TLSConfig
 }
 
 // etcdChecker is an HttpResponseChecker that interprets results from

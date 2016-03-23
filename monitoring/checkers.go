@@ -16,7 +16,6 @@ limitations under the License.
 package monitoring
 
 import (
-	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -41,15 +40,12 @@ func ComponentStatusHealth(kubeAddr string) health.Checker {
 }
 
 // EtcdHealth creates a checker that checks health of etcd
-func EtcdHealth(config *EtcdConfig) (checker health.Checker, err error) {
+func EtcdHealth(config *EtcdConfig) (health.Checker, error) {
 	const name = "etcd-healthz"
 
-	var tlsConfig *tls.Config
-	if config.TLSConfig != nil {
-		tlsConfig, err = config.TLSConfig.ClientConfig()
-		if err != nil {
-			return nil, trace.Wrap(err)
-		}
+	tlsConfig, err := config.ClientConfig()
+	if err != nil {
+		return nil, trace.Wrap(err)
 	}
 	createChecker := func(addr string) (health.Checker, error) {
 		endpoint := fmt.Sprintf("%v/health", addr)

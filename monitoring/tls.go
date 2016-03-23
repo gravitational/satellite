@@ -20,6 +20,9 @@ type TLSConfig struct {
 
 // ClientConfig generates a tls.Config object for use by an HTTP client.
 func (r *TLSConfig) ClientConfig() (*tls.Config, error) {
+	if r.Empty() {
+		return nil, nil
+	}
 	cert, err := ioutil.ReadFile(r.CertFile)
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -44,6 +47,12 @@ func (r *TLSConfig) ClientConfig() (*tls.Config, error) {
 		return nil, trace.Wrap(err)
 	}
 	return config, nil
+}
+
+// Empty determines if the configuration does not reference any certificate/key
+// files
+func (r *TLSConfig) Empty() bool {
+	return r.CAFile == "" && r.CertFile == "" && r.KeyFile == ""
 }
 
 // newCertPool creates x509 certPool with provided CA files.
