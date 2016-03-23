@@ -29,7 +29,8 @@ type compositeChecker struct {
 // Name returns the name of this checker
 func (r *compositeChecker) Name() string { return r.name }
 
-// Check runs an HTTP check and reports errors to the specified Reporter
+// Check runs an health check over the list of encapsulated checkers
+// and reports errors to the specified Reporter
 func (r *compositeChecker) Check(reporter health.Reporter) {
 	for _, checker := range r.checkers {
 		checker.Check(reporter)
