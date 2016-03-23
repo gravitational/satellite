@@ -24,7 +24,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"time"
 
 	"github.com/gravitational/trace"
 )
@@ -90,11 +89,10 @@ func (r *EtcdConfig) newHttpTransport() (*http.Transport, error) {
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		Dial: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
+			Timeout:   dialTimeout,
+			KeepAlive: keepAlivePeriod,
 		}).Dial,
-		TLSHandshakeTimeout: 10 * time.Second,
-		MaxIdleConnsPerHost: 500,
+		TLSHandshakeTimeout: healthzTLSHandshakeTimeout,
 		TLSClientConfig:     tlsConfig,
 	}
 
@@ -132,8 +130,7 @@ func (r *EtcdConfig) clientConfig() (*tls.Config, error) {
 	return config, nil
 }
 
-// Empty determines if the configuration does not reference any certificate/key
-// files
+// Empty determines if the configuration is empty
 func (r *EtcdConfig) empty() bool {
 	return r.CAFile == "" && r.CertFile == "" && r.KeyFile == ""
 }
