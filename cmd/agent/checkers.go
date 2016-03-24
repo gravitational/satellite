@@ -34,7 +34,7 @@ type config struct {
 	// nettestContainerImage is the image name to use for networking test
 	nettestContainerImage string
 	// etcd defines etcd-specific configuration
-	etcd *monitoring.EtcdConfig
+	etcd *monitoring.ETCDConfig
 }
 
 // addCheckers adds checkers to the agent.
@@ -53,7 +53,7 @@ func addToMaster(node agent.Agent, config *config) error {
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	node.AddChecker(monitoring.KubeApiServerHealth(config.kubeAddr))
+	node.AddChecker(monitoring.KubeAPIServerHealth(config.kubeAddr))
 	node.AddChecker(monitoring.ComponentStatusHealth(config.kubeAddr))
 	node.AddChecker(monitoring.DockerHealth(config.dockerAddr))
 	node.AddChecker(etcdChecker)

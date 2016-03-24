@@ -144,7 +144,7 @@ func run() error {
 			kubeAddr:    *cagentKubeAddr,
 			kubeletAddr: *cagentKubeletAddr,
 			dockerAddr:  *cagentDockerAddr,
-			etcd: &monitoring.EtcdConfig{
+			etcd: &monitoring.ETCDConfig{
 				Endpoints: *cagentEtcdServers,
 				CAFile:    *cagentEtcdCAFile,
 				CertFile:  *cagentEtcdCertFile,

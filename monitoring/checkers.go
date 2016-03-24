@@ -22,8 +22,8 @@ import (
 	"github.com/gravitational/trace"
 )
 
-// KubeApiServerHealth creates a checker for the kubernetes API server
-func KubeApiServerHealth(kubeAddr string) health.Checker {
+// KubeAPIServerHealth creates a checker for the kubernetes API server
+func KubeAPIServerHealth(kubeAddr string) health.Checker {
 	return NewHTTPHealthzChecker("kube-apiserver", fmt.Sprintf("%v/healthz", kubeAddr), kubeHealthz)
 }
 
@@ -38,10 +38,10 @@ func ComponentStatusHealth(kubeAddr string) health.Checker {
 }
 
 // EtcdHealth creates a checker that checks health of etcd
-func EtcdHealth(config *EtcdConfig) (health.Checker, error) {
+func EtcdHealth(config *ETCDConfig) (health.Checker, error) {
 	const name = "etcd-healthz"
 
-	transport, err := config.newHttpTransport()
+	transport, err := config.newHTTPTransport()
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
