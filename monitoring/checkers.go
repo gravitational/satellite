@@ -19,10 +19,11 @@ import (
 	"fmt"
 
 	"github.com/gravitational/satellite/agent/health"
+	"github.com/gravitational/trace"
 )
 
-// KubeApiServerHealth creates a checker for the kubernetes API server
-func KubeApiServerHealth(kubeAddr string) health.Checker {
+// KubeAPIServerHealth creates a checker for the kubernetes API server
+func KubeAPIServerHealth(kubeAddr string) health.Checker {
 	return NewHTTPHealthzChecker("kube-apiserver", fmt.Sprintf("%v/healthz", kubeAddr), kubeHealthz)
 }
 
@@ -37,8 +38,26 @@ func ComponentStatusHealth(kubeAddr string) health.Checker {
 }
 
 // EtcdHealth creates a checker that checks health of etcd
-func EtcdHealth(addr string) health.Checker {
-	return NewHTTPHealthzChecker("etcd-healthz", fmt.Sprintf("%v/health", addr), etcdChecker)
+func EtcdHealth(config *ETCDConfig) (health.Checker, error) {
+	const name = "etcd-healthz"
+
+	transport, err := config.newHTTPTransport()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	createChecker := func(addr string) (health.Checker, error) {
+		endpoint := fmt.Sprintf("%v/health", addr)
+		return NewHTTPHealthzCheckerWithTransport(name, endpoint, transport, etcdChecker), nil
+	}
+	var checkers []health.Checker
+	for _, endpoint := range config.Endpoints {
+		checker, err := createChecker(endpoint)
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
+		checkers = append(checkers, checker)
+	}
+	return &compositeChecker{name, checkers}, nil
 }
 
 // DockerHealth creates a checker that checks health of the docker daemon under

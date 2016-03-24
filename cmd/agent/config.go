@@ -38,28 +38,39 @@ const (
 	EnvInfluxURL      = "SATELLITE_INFLUX_URL"
 )
 
-func ListFlag(s kingpin.Settings) (result *paramList) {
-	result = new(paramList)
+// ListFlag defines a command line flag that can accumulate multiple string values
+func ListFlag(s kingpin.Settings) (result *stringList) {
+	result = new(stringList)
 	s.SetValue(result)
 	return result
 }
 
+// KeyValueListFlag defines a command line flag that can accumulate multiple key/value pairs
 func KeyValueListFlag(s kingpin.Settings) (result *kv.KeyVal) {
 	result = new(kv.KeyVal)
 	s.SetValue(result)
 	return result
 }
 
-type paramList []string
+// StringList creates a command line flag that interprets comma-separated list of values
+func StringList(s kingpin.Settings) (result *stringList) {
+	result = new(stringList)
+	s.SetValue(result)
+	return result
+}
 
-func (r *paramList) Set(value string) error {
-	for _, param := range cstrings.SplitComma(value) {
-		*r = append(*r, param)
+// stringList defines a command line flag that interprets comma-separated list of values
+type stringList []string
+
+// Set splits a comma-separated string value into a list of strings
+func (r *stringList) Set(value string) error {
+	for _, item := range cstrings.SplitComma(value) {
+		*r = append(*r, item)
 	}
 	return nil
 }
 
-func (r *paramList) String() string {
+func (r *stringList) String() string {
 	return fmt.Sprintf("%v", []string(*r))
 }
 

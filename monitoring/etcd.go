@@ -16,18 +16,47 @@ limitations under the License.
 package monitoring
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"io/ioutil"
+	"net"
+	"net/http"
 	"time"
 
 	"github.com/gravitational/trace"
 )
 
-// defaultDialTimeout is the maximum amount of time a dial will wait for a connection to setup.
+// ETCDConfig defines a set of configuration parameters for accessing
+// etcd endpoints
+type ETCDConfig struct {
+	// Endpoints lists etcd server endpoints
+	Endpoints []string
+	// CAFile is an SSL Certificate Authority file used to secure
+	// communication with etcd
+	CAFile string
+	// CertFile is an SSL certificate file used to secure
+	// communication with etcd
+	CertFile string
+	// KeyFile is an SSL key file used to secure communication with etcd
+	KeyFile string
+}
+
+// defaultTLSHandshakeTimeout specifies the default maximum amount of time
+// spent waiting to for a TLS handshake
+const defaultTLSHandshakeTimeout = 10 * time.Second
+
+// defaultDialTimeout is the default maximum amount of time a dial will wait for
+// a connect to complete.
 const defaultDialTimeout = 30 * time.Second
 
-// etcdChecker is an HttpResponseChecker that interprets results from
+// defaultKeepAlive specifies the default keep-alive period for an active
+// network connection.
+const defaultKeepAlivePeriod = 30 * time.Second
+
+// etcdChecker is an HTTPResponseChecker that interprets results from
 // an etcd HTTP-based healthz end-point.
 func etcdChecker(response io.Reader) error {
 	payload, err := ioutil.ReadAll(response)
@@ -46,6 +75,8 @@ func etcdChecker(response io.Reader) error {
 	return nil
 }
 
+// etcdStatus determines if the specified etcd status value
+// indicates a healthy service
 func etcdStatus(payload []byte) (healthy bool, err error) {
 	result := struct{ Health string }{}
 	nresult := struct{ Health bool }{}
@@ -58,4 +89,88 @@ func etcdStatus(payload []byte) (healthy bool, err error) {
 	}
 
 	return (result.Health == "true" || nresult.Health == true), nil
+}
+
+// newHTTPTransport creates a new http.Transport from the specified
+// set of attributes.
+// The resulting transport can be used to create an http.Client
+func (r *ETCDConfig) newHTTPTransport() (*http.Transport, error) {
+	tlsConfig, err := r.clientConfig()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		Dial: (&net.Dialer{
+			Timeout:   defaultDialTimeout,
+			KeepAlive: defaultKeepAlivePeriod,
+		}).Dial,
+		TLSHandshakeTimeout: defaultTLSHandshakeTimeout,
+		TLSClientConfig:     tlsConfig,
+	}
+
+	return transport, nil
+}
+
+// clientConfig generates a tls.Config object for use by an HTTP client.
+func (r *ETCDConfig) clientConfig() (*tls.Config, error) {
+	if r.empty() {
+		return nil, nil
+	}
+	cert, err := ioutil.ReadFile(r.CertFile)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	key, err := ioutil.ReadFile(r.KeyFile)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	tlsCert, err := tls.X509KeyPair(cert, key)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	config := &tls.Config{
+		Certificates: []tls.Certificate{tlsCert},
+		MinVersion:   tls.VersionTLS10,
+	}
+	config.RootCAs, err = newCertPool([]string{r.CAFile})
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	return config, nil
+}
+
+// Empty determines if the configuration is empty
+func (r *ETCDConfig) empty() bool {
+	return r.CAFile == "" && r.CertFile == "" && r.KeyFile == ""
+}
+
+// newCertPool creates x509 certPool with provided CA files.
+func newCertPool(CAFiles []string) (*x509.CertPool, error) {
+	certPool := x509.NewCertPool()
+
+	for _, CAFile := range CAFiles {
+		pemByte, err := ioutil.ReadFile(CAFile)
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
+
+		for {
+			var block *pem.Block
+			block, pemByte = pem.Decode(pemByte)
+			if block == nil {
+				break
+			}
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				return nil, trace.Wrap(err)
+			}
+			certPool.AddCert(cert)
+		}
+	}
+
+	return certPool, nil
 }

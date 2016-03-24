@@ -18,46 +18,58 @@ package main
 import (
 	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/monitoring"
+	"github.com/gravitational/trace"
 )
 
 // config represents configuration for setting up monitoring checkers.
 type config struct {
-	// Role is the current agent's role
-	Role agent.Role
-	// KubeAddr is the address of the kubernetes API server
-	KubeAddr string
-	// KubeletAddr is the address of the kubelet
-	KubeletAddr string
-	// DockerAddr is the endpoint of the docker daemon
-	DockerAddr string
-	// EtcdAddr is the address of the etcd endpoint
-	EtcdAddr string
-	// NettestContainerImage is the image name to use for networking test
-	NettestContainerImage string
+	// role is the current agent's role
+	role agent.Role
+	// kubeAddr is the address of the kubernetes API server
+	kubeAddr string
+	// kubeletAddr is the address of the kubelet
+	kubeletAddr string
+	// dockerAddr is the endpoint of the docker daemon
+	dockerAddr string
+	// nettestContainerImage is the image name to use for networking test
+	nettestContainerImage string
+	// etcd defines etcd-specific configuration
+	etcd *monitoring.ETCDConfig
 }
 
 // addCheckers adds checkers to the agent.
-func addCheckers(node agent.Agent, config *config) {
-	switch config.Role {
+func addCheckers(node agent.Agent, config *config) (err error) {
+	switch config.role {
 	case agent.RoleMaster:
-		addToMaster(node, config)
+		err = addToMaster(node, config)
 	case agent.RoleNode:
-		addToNode(node, config)
+		err = addToNode(node, config)
 	}
+	return trace.Wrap(err)
 }
 
-func addToMaster(node agent.Agent, config *config) {
-	node.AddChecker(monitoring.KubeApiServerHealth(config.KubeAddr))
-	node.AddChecker(monitoring.ComponentStatusHealth(config.KubeAddr))
-	node.AddChecker(monitoring.DockerHealth(config.DockerAddr))
-	node.AddChecker(monitoring.EtcdHealth(config.EtcdAddr))
+func addToMaster(node agent.Agent, config *config) error {
+	etcdChecker, err := monitoring.EtcdHealth(config.etcd)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	node.AddChecker(monitoring.KubeAPIServerHealth(config.kubeAddr))
+	node.AddChecker(monitoring.ComponentStatusHealth(config.kubeAddr))
+	node.AddChecker(monitoring.DockerHealth(config.dockerAddr))
+	node.AddChecker(etcdChecker)
 	node.AddChecker(monitoring.SystemdHealth())
-	node.AddChecker(monitoring.IntraPodCommunication(config.KubeAddr, config.NettestContainerImage))
+	node.AddChecker(monitoring.IntraPodCommunication(config.kubeAddr, config.nettestContainerImage))
+	return nil
 }
 
-func addToNode(node agent.Agent, config *config) {
-	node.AddChecker(monitoring.KubeletHealth(config.KubeletAddr))
-	node.AddChecker(monitoring.DockerHealth(config.DockerAddr))
-	node.AddChecker(monitoring.EtcdHealth(config.EtcdAddr))
+func addToNode(node agent.Agent, config *config) error {
+	etcdChecker, err := monitoring.EtcdHealth(config.etcd)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	node.AddChecker(monitoring.KubeletHealth(config.kubeletAddr))
+	node.AddChecker(monitoring.DockerHealth(config.dockerAddr))
+	node.AddChecker(etcdChecker)
 	node.AddChecker(monitoring.SystemdHealth())
+	return nil
 }

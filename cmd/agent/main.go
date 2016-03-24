@@ -25,6 +25,7 @@ import (
 	"github.com/gravitational/satellite/agent/backend/sqlite"
 	"github.com/gravitational/satellite/agent/cache"
 	"github.com/gravitational/satellite/agent/cache/multiplex"
+	"github.com/gravitational/satellite/monitoring"
 	"github.com/gravitational/trace"
 	"github.com/gravitational/version"
 
@@ -49,17 +50,21 @@ func run() error {
 
 		// `agent` command
 		cagent                      = app.Command("agent", "Start monitoring agent")
-		cagentRPCAddrs              = ListFlag(cagent.Flag("rpc-addr", "Address to bind the RPC listener to.  Can be specified multiple times").Default("127.0.0.1:7575"))
+		cagentRPCAddrs              = ListFlag(cagent.Flag("rpc-addr", "List of addresses to bind the RPC listener to (host:port), comma-separated").Default("127.0.0.1:7575"))
 		cagentKubeAddr              = cagent.Flag("kube-addr", "Address of the kubernetes API server").Default("http://127.0.0.1:8080").String()
 		cagentKubeletAddr           = cagent.Flag("kubelet-addr", "Address of the kubelet").Default("http://127.0.0.1:10248").String()
 		cagentDockerAddr            = cagent.Flag("docker-addr", "Path to the docker daemon socket").Default("/var/run/docker.sock").String()
-		cagentEtcdAddr              = cagent.Flag("etcd-addr", "Address of the etcd endpoint").Default("http://127.0.0.1:2379").String()
 		cagentNettestContainerImage = cagent.Flag("nettest-image", "Name of the image to use for networking test").Default("gcr.io/google_containers/nettest:1.8").String()
 		cagentName                  = cagent.Flag("name", "Agent name.  Must be the same as the name of the local serf node").OverrideDefaultFromEnvar(EnvAgentName).String()
 		cagentSerfRPCAddr           = cagent.Flag("serf-rpc-addr", "RPC address of the local serf node").Default("127.0.0.1:7373").String()
 		cagentInitialCluster        = KeyValueListFlag(cagent.Flag("initial-cluster", "Initial cluster configuration as a comma-separated list of peers").OverrideDefaultFromEnvar(EnvInitialCluster))
 		cagentStateDir              = cagent.Flag("state-dir", "Directory to store agent-specific state").OverrideDefaultFromEnvar(EnvStateDir).String()
 		cagentTags                  = KeyValueListFlag(cagent.Flag("tags", "Define a tags as comma-separated list of key:value pairs").OverrideDefaultFromEnvar(EnvTags))
+		// etcd configuration
+		cagentEtcdServers  = ListFlag(cagent.Flag("etcd-servers", "List of etcd endpoints (http://host:port), comma separated").Default("http://127.0.0.1:2379"))
+		cagentEtcdCAFile   = cagent.Flag("etcd-cafile", "SSL Certificate Authority file used to secure etcd communication").String()
+		cagentEtcdCertFile = cagent.Flag("etcd-certfile", "SSL certificate file used to secure etcd communication").String()
+		cagentEtcdKeyFile  = cagent.Flag("etcd-keyfile", "SSL key file used to secure etcd communication").String()
 		// InfluxDB backend configuration
 		cagentInfluxDatabase = cagent.Flag("influxdb-database", "Database to connect to").OverrideDefaultFromEnvar(EnvInfluxDatabase).String()
 		cagentInfluxUsername = cagent.Flag("influxdb-user", "Username to use for connection").OverrideDefaultFromEnvar(EnvInfluxUser).String()
@@ -135,12 +140,17 @@ func run() error {
 			Cache:       multiplex.New(cache, backends...),
 		}
 		monitoringConfig := &config{
-			Role:                  agent.Role(agentRole),
-			KubeAddr:              *cagentKubeAddr,
-			KubeletAddr:           *cagentKubeletAddr,
-			DockerAddr:            *cagentDockerAddr,
-			EtcdAddr:              *cagentEtcdAddr,
-			NettestContainerImage: *cagentNettestContainerImage,
+			role:        agent.Role(agentRole),
+			kubeAddr:    *cagentKubeAddr,
+			kubeletAddr: *cagentKubeletAddr,
+			dockerAddr:  *cagentDockerAddr,
+			etcd: &monitoring.ETCDConfig{
+				Endpoints: *cagentEtcdServers,
+				CAFile:    *cagentEtcdCAFile,
+				CertFile:  *cagentEtcdCertFile,
+				KeyFile:   *cagentEtcdKeyFile,
+			},
+			nettestContainerImage: *cagentNettestContainerImage,
 		}
 		err = runAgent(agentConfig, monitoringConfig, toAddrList(*cagentInitialCluster))
 	case cstatus.FullCommand():
