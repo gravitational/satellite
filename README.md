@@ -54,8 +54,11 @@ Commands:
   agent [<flags>]
     Start monitoring agent
 
+  status [<flags>]
+    Query cluster status
+
   version
-    Display version details
+    Display version
 
 
 $ satellite agent help
@@ -66,16 +69,14 @@ Start monitoring agent
 Flags:
   --help                         Show context-sensitive help (also try --help-long and --help-man).
   --debug                        Enable verbose mode
-  --rpc-addr=127.0.0.1:7575      Address to bind the RPC listener to. Can be specified multiple times
+  --rpc-addr=127.0.0.1:7575      List of addresses to bind the RPC listener to (host:port), comma-separated
   --kube-addr="http://127.0.0.1:8080"  
                                  Address of the kubernetes API server
   --kubelet-addr="http://127.0.0.1:10248"  
                                  Address of the kubelet
   --docker-addr="/var/run/docker.sock"  
                                  Path to the docker daemon socket
-  --etcd-addr="http://127.0.0.1:2379"  
-                                 Address of the etcd endpoint
-  --nettest-image="gcr.io/google_containers/nettest:1.6"  
+  --nettest-image="gcr.io/google_containers/nettest:1.8"  
                                  Name of the image to use for networking test
   --name=NAME                    Agent name. Must be the same as the name of the local serf node
   --serf-rpc-addr="127.0.0.1:7373"  
@@ -84,6 +85,11 @@ Flags:
                                  Initial cluster configuration as a comma-separated list of peers
   --state-dir=STATE-DIR          Directory to store agent-specific state
   --tags=TAGS                    Define a tags as comma-separated list of key:value pairs
+  --etcd-servers=http://127.0.0.1:2379  
+                                 List of etcd endpoints (http://host:port), comma separated
+  --etcd-cafile=ETCD-CAFILE      SSL Certificate Authority file used to secure etcd communication
+  --etcd-certfile=ETCD-CERTFILE  SSL certificate file used to secure etcd communication
+  --etcd-keyfile=ETCD-KEYFILE    SSL key file used to secure etcd communication
   --influxdb-database=INFLUXDB-DATABASE  
                                  Database to connect to
   --influxdb-user=INFLUXDB-USER  Username to use for connection
