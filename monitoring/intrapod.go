@@ -119,8 +119,8 @@ func (r *intraPodChecker) testIntraPodCommunication(client *kube.Client) error {
 		return trace.Wrap(err, "failed to list nodes")
 	}
 
-	if len(nodes.Items) < 2 {
-		return trace.Errorf("expected at least 2 ready nodes - got %d (%v)", len(nodes.Items), nodes.Items)
+	if len(nodes.Items) < 1 {
+		return trace.Errorf("expected at least 1 ready node - got %d (%v)", len(nodes.Items), nodes.Items)
 	}
 
 	podNames, err := launchNetTestPodPerNode(client, nodes, serviceName, r.nettestContainerImage, testNamespace)
