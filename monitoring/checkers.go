@@ -72,8 +72,8 @@ func SystemdHealth() health.Checker {
 	return NewSystemdChecker()
 }
 
-// IntraPodCommunication creates a checker that runs a network test in the cluster
+// InterPodCommunication creates a checker that runs a network test in the cluster
 // by scheduling pods and verifying the communication
-func IntraPodCommunication(kubeAddr, nettestImage string) health.Checker {
-	return NewIntraPodChecker(kubeAddr, nettestImage)
+func InterPodCommunication(kubeAddr, nettestImage string) health.Checker {
+	return NewInterPodChecker(kubeAddr, nettestImage)
 }

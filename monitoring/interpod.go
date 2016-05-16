@@ -46,29 +46,29 @@ const testNamespace = "planet-test"
 // serviceNamePrefix is the prefix used to name test pods.
 const serviceNamePrefix = "nettest-"
 
-// intraPodChecker is a Checker that runs a networking test in the cluster
+// interPodChecker is a Checker that runs a networking test in the cluster
 // by scheduling pods and verifying communication.
-type intraPodChecker struct {
+type interPodChecker struct {
 	*KubeChecker
 	nettestContainerImage string
 }
 
-// NewIntraPodChecker returns an instance of intraPodChecker.
-func NewIntraPodChecker(kubeAddr, nettestContainerImage string) health.Checker {
-	checker := &intraPodChecker{
+// NewInterPodChecker returns an instance of interPodChecker.
+func NewInterPodChecker(kubeAddr, nettestContainerImage string) health.Checker {
+	checker := &interPodChecker{
 		nettestContainerImage: nettestContainerImage,
 	}
 	kubeChecker := &KubeChecker{
 		name:     "networking",
 		hostPort: kubeAddr,
-		checker:  checker.testIntraPodCommunication,
+		checker:  checker.testInterPodCommunication,
 	}
 	checker.KubeChecker = kubeChecker
 	return kubeChecker
 }
 
-// testIntraPodCommunication implements the intra-pod communication test.
-func (r *intraPodChecker) testIntraPodCommunication(client *kube.Client) error {
+// testInterPodCommunication implements the inter-pod communication test.
+func (r *interPodChecker) testInterPodCommunication(client *kube.Client) error {
 	serviceName := generateName(serviceNamePrefix)
 	if err := createNamespaceIfNeeded(client, testNamespace); err != nil {
 		return trace.Wrap(err, "failed to create namespace `%v`", testNamespace)

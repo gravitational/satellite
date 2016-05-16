@@ -58,7 +58,7 @@ func addToMaster(node agent.Agent, config *config) error {
 	node.AddChecker(monitoring.DockerHealth(config.dockerAddr))
 	node.AddChecker(etcdChecker)
 	node.AddChecker(monitoring.SystemdHealth())
-	node.AddChecker(monitoring.IntraPodCommunication(config.kubeAddr, config.nettestContainerImage))
+	node.AddChecker(monitoring.InterPodCommunication(config.kubeAddr, config.nettestContainerImage))
 	return nil
 }
 
