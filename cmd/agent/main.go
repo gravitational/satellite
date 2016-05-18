@@ -60,6 +60,7 @@ func run() error {
 		cagentInitialCluster        = KeyValueListFlag(cagent.Flag("initial-cluster", "Initial cluster configuration as a comma-separated list of peers").OverrideDefaultFromEnvar(EnvInitialCluster))
 		cagentStateDir              = cagent.Flag("state-dir", "Directory to store agent-specific state").OverrideDefaultFromEnvar(EnvStateDir).String()
 		cagentTags                  = KeyValueListFlag(cagent.Flag("tags", "Define a tags as comma-separated list of key:value pairs").OverrideDefaultFromEnvar(EnvTags))
+		disableInterPodCheck        = cagent.Flag("disable-interpod-check", "Disable inter-pod check for single node cluster").Bool()
 		// etcd configuration
 		cagentEtcdServers  = ListFlag(cagent.Flag("etcd-servers", "List of etcd endpoints (http://host:port), comma separated").Default("http://127.0.0.1:2379"))
 		cagentEtcdCAFile   = cagent.Flag("etcd-cafile", "SSL Certificate Authority file used to secure etcd communication").String()
@@ -140,10 +141,11 @@ func run() error {
 			Cache:       multiplex.New(cache, backends...),
 		}
 		monitoringConfig := &config{
-			role:        agent.Role(agentRole),
-			kubeAddr:    *cagentKubeAddr,
-			kubeletAddr: *cagentKubeletAddr,
-			dockerAddr:  *cagentDockerAddr,
+			role:                 agent.Role(agentRole),
+			kubeAddr:             *cagentKubeAddr,
+			kubeletAddr:          *cagentKubeletAddr,
+			dockerAddr:           *cagentDockerAddr,
+			disableInterPodCheck: *disableInterPodCheck,
 			etcd: &monitoring.ETCDConfig{
 				Endpoints: *cagentEtcdServers,
 				CAFile:    *cagentEtcdCAFile,
