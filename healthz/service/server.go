@@ -1,76 +1,73 @@
 package service
 
 import (
-	"context"
-	"net/http"
 	"crypto/tls"
 	"net"
+	"net/http"
 
-	"github.com/gravitational/satellite/healthz/config"
-	"github.com/gravitational/satellite/healthz/clusterstatus"
-	"github.com/gravitational/satellite/healthz/handlers"
 	log "github.com/Sirupsen/logrus"
+	"github.com/gravitational/satellite/healthz/clusterstatus"
+	"github.com/gravitational/satellite/healthz/config"
+	"github.com/gravitational/satellite/healthz/handlers"
 	"github.com/gravitational/trace"
 )
 
+// HealthzServer works as router and listener (tcp and tls)
 type HealthzServer struct {
-	Server 	 http.Server
+	http.Server
 	Listener net.Listener
 }
 
-func HandlerWithContext(key, value interface{}, next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.WithValue(r.Context(), key, value)
-		next(w, r.WithContext(ctx))
-	}
-}
-
-func HandlerWithLogs(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		log.Infof("%s %s %s %s", r.RemoteAddr, r.Host, r.RequestURI, r.UserAgent())
-		next(w, r)
-	}
-}
-
-func NewServer(c config.Config, status clusterstatus.ClusterStatus) *HealthzServer {
+// NewServer creates server with configured routes, tls and general configuration
+func NewServer(cfg *config.Config, status *clusterstatus.ClusterStatus) (*HealthzServer, error) {
 	mux := http.NewServeMux()
-	handlerHealthz := HandlerWithContext(config.ContextKey, c, handlers.HandlerHealthz)
-	handlerHealthz = HandlerWithContext(clusterstatus.ContextKey, status, handlerHealthz)
-	handlerHealthz = HandlerWithLogs(handlerHealthz)
+	handlerHealthz := func(w http.ResponseWriter, r *http.Request) {
+		ctx := config.AttachToContext(r.Context(), cfg)
+		handlers.HandlerHealthz(w, r.WithContext(ctx))
+	}
+	handlerHealthz = func(w http.ResponseWriter, r *http.Request) {
+		ctx := clusterstatus.AttachToContext(r.Context(), status)
+		handlerHealthz(w, r.WithContext(ctx))
+	}
+	handlerHealthz = func(w http.ResponseWriter, r *http.Request) {
+		log.Infof("%s %s %s %s", r.RemoteAddr, r.Host, r.RequestURI, r.UserAgent())
+		handlerHealthz(w, r)
+	}
 	mux.HandleFunc("/healthz", handlerHealthz)
 
-	tcpListener, err := net.Listen("tcp", c.Listen)
+	tcpListener, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
-		trace.Fatalf("Error creating listener: %s", err.Error())
+		return nil, trace.Wrap(err)
 	}
 
 	var server HealthzServer
 
-	if c.CertFile != "" && c.KeyFile != "" && c.CAFile != "" {
-		tc, err := NewServerTLS(c.CertFile, c.KeyFile, c.CAFile)
+	if cfg.CertFile != "" && cfg.KeyFile != "" && cfg.CAFile != "" {
+		tc, err := NewServerTLS(cfg.CertFile, cfg.KeyFile, cfg.CAFile)
 		if err != nil {
-			log.Fatal(trace.Wrap(err))
+			return nil, trace.Wrap(err)
 		}
 		tlsListener := tls.NewListener(tcpListener, tc)
 		server = HealthzServer{
-			Server: http.Server{
-				Handler: mux,
+			http.Server{
+				Handler:   mux,
 				TLSConfig: tc,
 			},
-			Listener: tlsListener,
+			tlsListener,
 		}
 	} else {
 		server = HealthzServer{
-			Server: http.Server{
+			http.Server{
 				Handler: mux,
 			},
-			Listener: tcpListener,
+			tcpListener,
 		}
 	}
 
-	return &server
+	return &server, nil
 }
 
+// Start starts preconfigured server
 func (s *HealthzServer) Start() error {
-	return s.Server.Serve(s.Listener)
+	return s.Serve(s.Listener)
 }

@@ -1,10 +1,12 @@
 package service
 
 import (
-	"io/ioutil"
-	"fmt"
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
+	"io/ioutil"
+
+	"github.com/gravitational/trace"
 )
 
 // CertPoolFromFile returns an x509.CertPool containing the certificates
@@ -40,11 +42,11 @@ func CertFromFilePair(certFile, keyFile string) (*tls.Certificate, error) {
 func NewServerTLS(certFile, keyFile, caFile string) (*tls.Config, error) {
 	cert, err := CertFromFilePair(certFile, keyFile)
 	if err != nil {
-		return nil, err
+		return nil, trace.Wrap(err)
 	}
 	cp, err := CertPoolFromFile(caFile)
 	if err != nil {
-		return nil, err
+		return nil, trace.Wrap(err)
 	}
 	return &tls.Config{
 		Certificates: []tls.Certificate{*cert},

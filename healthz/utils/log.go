@@ -3,10 +3,13 @@ package utils
 import (
 	"os"
 	"strings"
-	"github.com/gravitational/trace"
+
 	log "github.com/Sirupsen/logrus"
+	"github.com/gravitational/trace"
 )
 
+// SetupLogging configures logging: sets up log level, output to stderr and
+// formatter TextFormatter
 func SetupLogging(level string) error {
 	lvl := strings.ToLower(level)
 	if lvl == "debug" {

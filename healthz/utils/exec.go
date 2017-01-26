@@ -9,15 +9,15 @@ import (
 	"github.com/gravitational/trace"
 )
 
-// ExecCommand executes custom command with kubectl
-func ExecCommand(command string, args ...string) ([]byte, error) {
+// ExecCommand executes custom command, logs it's errors, returns output and error if any
+func ExecCommand(command string, args ...string) (out []byte, err error) {
 	cmd := exec.Command(command, args...)
-	log.Debugf("Executing '%s %s'", command, strings.Join(args, " "))
+	log.Debugf("executing '%s %s'", command, strings.Join(args, " "))
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		log.Error(err)
 	}

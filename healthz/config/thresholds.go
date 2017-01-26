@@ -1,37 +1,25 @@
 package config
 
 import (
-	"strconv"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/gravitational/trace"
 )
 
-const DefaultThreshold = 10
+const defaultThreshold = 10
 
+// Thresholds stores intervals of
 type Thresholds struct {
-	NodeCounts []uint
-	DeadPcts   map[uint]uint8
+	NodeCounts          []int
+	UnavailablePercents map[int]int
 }
 
-type uintSlice []uint
-
-func (t uintSlice) Len() int {
-	return len(t)
-}
-
-func (t uintSlice) Swap(i, j int) {
-	t[i], t[j] = t[j], t[i]
-}
-
-func (t uintSlice) Less(i, j int) bool {
-	return t[i] < t[j]
-}
-
+// NewThresholds creates new Thresholds from string
 func NewThresholds(unparsed string) (*Thresholds, error) {
 	t := Thresholds{}
-	t.DeadPcts = make(map[uint]uint8)
+	t.UnavailablePercents = make(map[int]int)
 	for _, unparsedThresh := range strings.Split(unparsed, ",") {
 		a := strings.Split(unparsedThresh, ":")
 		if len(a) != 2 {
@@ -41,23 +29,24 @@ func NewThresholds(unparsed string) (*Thresholds, error) {
 		if err != nil {
 			return nil, trace.Wrap(err)
 		}
-		deadPct, err := strconv.Atoi(a[1])
+		unavailablePercent, err := strconv.Atoi(a[1])
 		if err != nil {
 			return nil, trace.Wrap(err)
 		}
-		t.NodeCounts = append(t.NodeCounts, uint(nodeCount))
-		t.DeadPcts[uint(nodeCount)] = uint8(deadPct)
+		t.NodeCounts = append(t.NodeCounts, nodeCount)
+		t.UnavailablePercents[nodeCount] = unavailablePercent
 	}
-	sort.Sort(uintSlice(t.NodeCounts))
+	sort.Sort(sort.IntSlice(t.NodeCounts))
 	return &t, nil
 }
 
-func (t Thresholds) GetByNodeCount(nodeCount uint) uint8 {
-	var thresh uint8 = DefaultThreshold
+// GetByNodeCount finds threshold for specified point
+func (t Thresholds) GetByNodeCount(nodeCount int) int {
+	thresh := defaultThreshold
 	for _, val := range t.NodeCounts {
 		// Lot of assignments but simple logic
 		if nodeCount >= val {
-			thresh = t.DeadPcts[val]
+			thresh = t.UnavailablePercents[val]
 		} else {
 			break
 		}
