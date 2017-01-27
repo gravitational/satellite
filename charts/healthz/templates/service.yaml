@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{.Values.satelliteHealthz.name | default "satellite-healthz"}}
+  name: {{.Values.healthz.name | default "healthz"}}
   labels:
     heritage: {{ .Release.Service | quote }}
     release: {{ .Release.Name | quote }}
@@ -9,10 +9,10 @@ metadata:
 spec:
   type: LoadBalancer
   ports:
-  - port: {{.Values.satelliteHealthz.port | default 8080}}
+  - port: {{.Values.healthz.port | default 8080}}
     protocol: TCP
-    name: satelliteHealthz
+    name: healthz
     targetPort: 8080
   selector:
-    app: {{.Values.satelliteHealthz.name | default "satellite-healthz"}}
+    app: {{.Values.healthz.name | default "healthz"}}
 

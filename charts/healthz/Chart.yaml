@@ -1,4 +1,4 @@
-name: satellite-healthz
+name: healthz
 version: 0.0.1
 description: Simple monitoring agent for K8S cluster
 keywords:

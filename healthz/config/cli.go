@@ -1,97 +1,29 @@
 package config
 
 import (
-	"context"
-	"time"
+	"fmt"
 
-	"github.com/gravitational/trace"
 	"gopkg.in/alecthomas/kingpin.v2"
+
+	"github.com/gravitational/satellite/healthz/defaults"
 )
 
-const (
-	envDebug      = "DEBUG"
-	envThresholds = "HEALTH_THRESHOLDS"
-	envAccessKey  = "HEALTH_ACCESSKEY"
-	envListen     = "HEALTH_LISTEN"
-	envInterval   = "HEALTH_INTERVAL"
-	envLogLevel   = "HEALTH_LOGLEVEL"
-	envCertFile   = "HEALTH_CERTFILE"
-	envCAFile     = "HEALTH_CAFILE"
-	envKeyFile    = "HEALTH_KEYFILE"
-)
-
-const (
-	docThresholds = "Specify thresholds for amount of unavailable nodes in cluster." +
-		"Format is `0=Y,Z=U`. It does mean that for cluster with size from " +
-		"0 to Z (excluded) nodes check will fail if more than Y% of nodes is " +
-		"unavailable. And for cluster with size bigger than Z nodes it will fail if " +
-		"more than U% nodes is unavailable. Thresholds MUST be specified starting with 0."
-	docAccessKey = "Key to access health-check url. Must be supplied as `accesskey` " +
-		"query parameter either in POST (recommended) or in GET query string."
-)
-
-const (
-	flagDebug      = "debug"
-	flagThresholds = "thresholds"
-	flagAccessKey  = "access-key"
-	flagListen     = "listen"
-	flagInterval   = "interval"
-	flagLogLevel   = "log-level"
-	flagCertFile   = "cert-file"
-	flagKeyFile    = "key-file"
-	flagCAFile     = "ca-file"
-)
-
-type key int
-
-const (
-	contextKey key = iota
-)
-
-// Config stores application general configuration
-type Config struct {
-	AccessKey  string
-	Listen     string
-	Interval   time.Duration
-	LogLevel   string
-	CertFile   string
-	CAFile     string
-	KeyFile    string
-	Thresholds *Thresholds
-}
-
-// AttachToContext adds *Config to context
-func AttachToContext(ctx context.Context, cfg *Config) context.Context {
-	return context.WithValue(ctx, contextKey, cfg)
-}
-
-// FromContext tries to get *Config from context
-func FromContext(ctx context.Context) (*Config, bool) {
-	cfg, ok := ctx.Value(contextKey).(*Config)
-	return cfg, ok
-}
-
-// ParseCLIFlags parses and stores supplied command flags into config structure
-func ParseCLIFlags(c *Config) error {
-	thresholds := kingpin.Flag(flagThresholds, docThresholds).Default("0:30,5:20").Envar(envThresholds).String()
-	debug := kingpin.Flag(flagDebug, "Turn on debug mode").Default("").Envar(envDebug).String()
-	kingpin.Flag(flagAccessKey, docAccessKey).Required().Envar(envAccessKey).StringVar(&c.AccessKey)
-	kingpin.Flag(flagListen, "Address to listen on.").Default("0.0.0.0:8080").Envar(envListen).StringVar(&c.Listen)
-	kingpin.Flag(flagInterval, "Interval between checks.").Default("1m").Envar(envInterval).DurationVar(&c.Interval)
-	kingpin.Flag(flagLogLevel, "Log level.").Default("info").Envar(envLogLevel).EnumVar(&c.LogLevel, "debug", "info", "warning", "error", "fatal", "panic")
-	kingpin.Flag(flagCertFile, "Path to the client server TLS cert file.").Envar(envCertFile).StringVar(&c.CertFile)
-	kingpin.Flag(flagKeyFile, "Path to the client server TLS key file.").Envar(envKeyFile).StringVar(&c.KeyFile)
-	kingpin.Flag(flagCAFile, "Path to the client server TLS CA file.").Envar(envCAFile).StringVar(&c.CAFile)
+// ParseCLIFlags updates config with supplied command line flags values
+func ParseCLIFlags(cfg *Config) {
+	kingpin.Flag("debug", "Turn on debug mode").Envar("DEBUG").BoolVar(&cfg.Debug)
+	kingpin.Flag("listen-addr", "Address to listen on.").Default("0.0.0.0:8080").Envar("HEALTH_LISTEN_ADDR").StringVar(&cfg.ListenAddr)
+	kingpin.Flag("check-interval", "Interval between checks.").Default("1m").Envar("HEALTH_CHECK_INTERVAL").DurationVar(&cfg.CheckInterval)
+	accessKeyDoc := fmt.Sprintf("Key to access health status. HTTP client must supply it as `%s` param.", defaults.AccessKeyParam)
+	kingpin.Flag("access-key", accessKeyDoc).Required().Envar("HEALTH_ACCESS_KEY").StringVar(&cfg.AccessKey)
+	kingpin.Flag("cert-file", "Path to TLS cert file.").Envar("HEALTH_CERT_FILE").StringVar(&cfg.CertFile)
+	kingpin.Flag("key-file", "Path to TLS key file.").Envar("HEALTH_KEY_FILE").StringVar(&cfg.KeyFile)
+	kingpin.Flag("ca-file", "Path to TLS CA file.").Envar("HEALTH_CA_FILE").StringVar(&cfg.CAFile)
+	kingpin.Flag("kube-addr", "K8S apiserver address.").Default("http://localhost:8080").Envar("HEALTH_KUBE_ADDR").StringVar(&cfg.KubeAddr)
+	etcdEndpoint := kingpin.Flag("etcd-endpoint", "Etcd machine address.").Default("http://localhost:4001").Envar("ETCDCTL_PEERS").String()
+	kingpin.Flag("etcd-cert-file", "Path to etcd TLS cert file.").Envar("ETCDCTL_CERT_FILE").StringVar(&cfg.ETCDConfig.CertFile)
+	kingpin.Flag("etcd-key-file", "Path to etcd TLS key file.").Envar("ETCDCTL_KEY_FILE").StringVar(&cfg.ETCDConfig.KeyFile)
+	kingpin.Flag("etcd-ca-file", "Path to etcd TLS CA file.").Envar("ETCDCTL_CA_FILE").StringVar(&cfg.ETCDConfig.CAFile)
 	kingpin.Parse()
 
-	if *debug != "" {
-		c.LogLevel = "debug"
-	}
-
-	var err error
-	c.Thresholds, err = NewThresholds(*thresholds)
-	if err != nil {
-		return trace.Errorf("unable to parse threshold value: %s", *thresholds)
-	}
-	return nil
+	cfg.ETCDConfig.Endpoints = []string{*etcdEndpoint}
 }

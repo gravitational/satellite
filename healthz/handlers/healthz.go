@@ -1,41 +1,31 @@
-// Package handlers implements http handlers for healthz server
 package handlers
 
 import (
-	"io"
+	"fmt"
 	"net/http"
 
-	log "github.com/Sirupsen/logrus"
-	"github.com/gravitational/satellite/healthz/clusterstatus"
-	"github.com/gravitational/satellite/healthz/config"
-	"github.com/gravitational/trace"
+	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/healthz/defaults"
 )
 
-// HandlerHealthz checks access key and responds with evaluated cluster health
-func HandlerHealthz(w http.ResponseWriter, req *http.Request) {
-	config, ok := config.FromContext(req.Context())
-	if !ok {
-		http.Error(w, "Bad gateway", http.StatusBadGateway)
-		return
+// Auth checks if client supplied proper access key, if not sends
+// HTTP 401 Unauthorized and return false, otherwise returns true
+func Auth(accessKey string, w http.ResponseWriter, req *http.Request) (passed bool) {
+	if req.FormValue(defaults.AccessKeyParam) != accessKey {
+		httpStatus := http.StatusUnauthorized
+		http.Error(w, http.StatusText(httpStatus), httpStatus)
+		return false
 	}
+	return true
+}
 
-	clusterStatus, ok := clusterstatus.FromContext(req.Context())
-	if !ok {
-		http.Error(w, "Bad gateway", http.StatusBadGateway)
-		return
-	}
-
-	if req.FormValue("accesskey") != config.AccessKey {
-		http.Error(w, "401 Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	if healthy, msg := clusterStatus.EvaluateStatus(config.Thresholds); healthy {
-		http.Error(w, msg, http.StatusServiceUnavailable)
-		return
-	}
-
-	if _, err := io.WriteString(w, "Cluster is healthy"); err != nil {
-		log.Errorf("error writing response %s", trace.Wrap(err).Error())
+// Healthz sends health status to client
+func Healthz(clusterHealth pb.Probe, w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
+	switch clusterHealth.Status {
+	case pb.Probe_Running:
+		fmt.Fprint(w, clusterHealth.Error)
+	default:
+		http.Error(w, clusterHealth.Error, http.StatusBadGateway)
 	}
 }

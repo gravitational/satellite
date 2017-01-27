@@ -37,6 +37,11 @@ func ComponentStatusHealth(kubeAddr string) health.Checker {
 	return NewComponentStatusChecker(kubeAddr)
 }
 
+// NodesStatusHealth creates a checker for the number of ready kubernetes nodes
+func NodesStatusHealth(kubeAddr string) health.Checker {
+	return NewNodesStatusChecker(kubeAddr)
+}
+
 // EtcdHealth creates a checker that checks health of etcd
 func EtcdHealth(config *ETCDConfig) (health.Checker, error) {
 	const name = "etcd-healthz"

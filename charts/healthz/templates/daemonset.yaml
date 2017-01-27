@@ -1,7 +1,7 @@
 apiVersion: extensions/v1beta1
 kind: DaemonSet
 metadata:
-  name: {{.Values.satelliteHealthz.name | default "satellite-healthz"}}
+  name: {{.Values.healthz.name | default "healthz"}}
   labels:
     # The "heritage" label is used to track which tool deployed a given chart.
     heritage: {{ .Release.Service | quote }}
@@ -14,20 +14,20 @@ spec:
   template:
     metadata:
       labels:
-        app: {{.Values.satelliteHealthz.name | default "satellite-healthz"}}
+        app: {{.Values.healthz.name | default "healthz"}}
         release: {{.Release.Name | quote }}
     spec:
       containers:
-      - name: satellite-healthz
-        image: {{.Values.satelliteHealthz.image.repo | default "satellite-healthz"}}:{{.Values.satelliteHealthz.image.tag | default "stable"}}
-        imagePullPolicy: {{.Values.satelliteHealthz.image.pullPolicy | default "IfNotPresent" | quote}}
+      - name: healthz
+        image: {{.Values.healthz.image.repo | default "healthz"}}:{{.Values.healthz.image.tag | default "stable"}}
+        imagePullPolicy: {{.Values.healthz.image.pullPolicy | default "IfNotPresent" | quote}}
         env:
-          - name: HEALTH_LISTEN
+          - name: HEALTH_LISTEN_ADDR
             value: "0.0.0.0:8080"
           - name: HEALTH_ACCESS_KEY
             valueFrom:
               secretKeyRef:
-                name: {{.Values.satelliteHealthz.name | default "satellite-healthz"}}
+                name: {{.Values.healthz.name | default "healthz"}}
                 key: accesskey
         ports:
           - name: https

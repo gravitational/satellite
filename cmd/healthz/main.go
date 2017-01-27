@@ -2,35 +2,50 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/gravitational/satellite/healthz/clusterstatus"
-	"github.com/gravitational/satellite/healthz/config"
-	"github.com/gravitational/satellite/healthz/service"
-	"github.com/gravitational/satellite/healthz/utils"
 	"github.com/gravitational/trace"
+
+	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/healthz/checks"
+	"github.com/gravitational/satellite/healthz/config"
+	"github.com/gravitational/satellite/healthz/handlers"
+	"github.com/gravitational/satellite/healthz/utils"
 )
 
+func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+		fmt.Printf("ERROR: %v\n", err.Error())
+		os.Exit(255)
+	}
+}
+
 func run() error {
-	status := clusterstatus.NewClusterStatus()
-	cfg := &config.Config{}
+	cfg := config.Config{}
+	config.ParseCLIFlags(&cfg)
 
-	if err := config.ParseCLIFlags(cfg); err != nil {
-		return trace.Wrap(err)
+	if cfg.Debug {
+		trace.EnableDebug()
+		log.SetLevel(log.DebugLevel)
 	}
+	log.SetFormatter(&log.TextFormatter{})
+	log.SetOutput(os.Stderr)
 
-	if err := utils.SetupLogging(cfg.LogLevel); err != nil {
-		return trace.Wrap(err)
-	}
+	log.Debug(trace.Errorf("starting using config: %#v", cfg))
 
 	ctx, cancel := context.WithCancel(context.Background())
-
 	go func() {
 		exitSignals := make(chan os.Signal, 1)
+		signal.Ignore()
 		signal.Notify(exitSignals, syscall.SIGTERM, syscall.SIGINT)
 
 		select {
@@ -40,37 +55,79 @@ func run() error {
 		}
 	}()
 
-	go func() {
-		ticker := time.NewTimer(cfg.Interval)
-		defer ticker.Stop()
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if err := status.DoChecks(); err != nil {
-				log.Errorf(err.Error())
-			}
-		}
-	}()
+	errChan := make(chan error, 10)
+	askForStatusChan := make(chan bool, 10)
+	sendStatusToClientChan := make(chan pb.Probe, 10)
+	updateActualStatusChan := make(chan pb.Probe, 10)
 
-	server, err := service.NewServer(cfg, status)
+	http.HandleFunc("/healthz", func(w http.ResponseWriter, req *http.Request) {
+		log.Infof("%s %s %s %s", req.RemoteAddr, req.Host, req.RequestURI, req.UserAgent())
+		if !handlers.Auth(cfg.AccessKey, w, req) {
+			return
+		}
+		askForStatusChan <- true
+		clusterHealth := <-sendStatusToClientChan
+		handlers.Healthz(clusterHealth, w, req)
+	})
+
+	listener, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
 		return trace.Wrap(err)
 	}
 
+	if cfg.CAFile != "" && cfg.KeyFile != "" && cfg.CertFile != "" {
+		tlsConfig, err := utils.NewServerTLS(cfg.CertFile, cfg.KeyFile, cfg.CAFile)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+		listener = tls.NewListener(listener, tlsConfig)
+	}
+
+	// Updates locally stored cluster status from health-checking coroutine,
+	// sends it to client on request arrived
 	go func() {
-		if err := server.Start(); err != nil {
-			log.Fatal(trace.Wrap(err))
+		clusterHealth := pb.Probe{
+			Status: pb.Probe_Running,
+			Error:  reasonNoChecksYet,
+		}
+		for {
+			select {
+			case clusterHealth = <-updateActualStatusChan:
+			case <-askForStatusChan:
+				sendStatusToClientChan <- clusterHealth
+			}
 		}
 	}()
 
-	<-ctx.Done()
+	go func() {
+		if err := http.Serve(listener, nil); err != nil {
+			errChan <- trace.Wrap(err)
+			return
+		}
+	}()
 
-	return nil
-}
+	go func() {
+		for {
+			ticker := time.NewTimer(cfg.CheckInterval)
+			defer ticker.Stop()
+			select {
+			case <-ticker.C:
+				status, err := checks.RunAll(cfg)
+				if err != nil {
+					errChan <- trace.Wrap(err)
+					return
+				}
+				updateActualStatusChan <- *status
+			}
+		}
+	}()
 
-func main() {
-	if err := run(); err != nil {
-		log.Fatal(err)
+	select {
+	case err := <-errChan:
+		return err
+	case <-ctx.Done():
+		return nil
 	}
 }
+
+const reasonNoChecksYet = "No checks ran yet"
