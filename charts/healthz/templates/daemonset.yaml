@@ -24,6 +24,24 @@ spec:
         env:
           - name: HEALTH_LISTEN_ADDR
             value: "0.0.0.0:8080"
+          - name: ETCD_CERT_FILE
+            value: /healthz-secret/etcd-cert.pem
+          - name: ETCD_KEY_FILE
+            value: /healthz-secret/etcd-key.pem
+          - name: ETCD_CA_FILE
+            value: /healthz-secret/etcd-ca.pem
+          - name: HEALTH_CERT_FILE
+            value: /healthz-secret/cert.pem
+          - name: HEALTH_KEY_FILE
+            value: /healthz-secret/key.pem
+          - name: HEALTH_CA_FILE
+            value: /healthz-secret/ca.pem
+          - name: HEALTH_CHECK_INTERVAL
+            value: {{.Values.healthz.checkInterval | default "1m"}}
+          - name: HEALTH_KUBE_ADDR
+            value: {{.Values.healthz.kubeAddr | default ""}}
+          - name: HEALTH_ETCD_ADDR
+            value: {{.Values.healthz.etcd.addr | default ""}}
           - name: HEALTH_ACCESS_KEY
             valueFrom:
               secretKeyRef:
@@ -33,3 +51,11 @@ spec:
           - name: https
             protocol: TCP
             containerPort: 8080
+        volumeMount:
+          - name: healthz-secret
+            mountPath: /healthz-secret
+            readOnly: true
+      volumes:
+        - name: healthz-secret
+          secret:
+            secretName: {{.Values.healthz.name | default "healthz"}}

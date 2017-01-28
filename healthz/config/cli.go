@@ -35,11 +35,11 @@ func ParseCLIFlags(cfg *Config) {
 	kingpin.Flag("key-file", "Path to TLS key file.").Envar("HEALTH_KEY_FILE").StringVar(&cfg.KeyFile)
 	kingpin.Flag("ca-file", "Path to TLS CA file.").Envar("HEALTH_CA_FILE").StringVar(&cfg.CAFile)
 	kingpin.Flag("kube-addr", "K8S apiserver address.").Default("http://localhost:8080").Envar("HEALTH_KUBE_ADDR").StringVar(&cfg.KubeAddr)
-	etcdEndpoint := kingpin.Flag("etcd-endpoint", "Etcd machine address.").Default("http://localhost:4001").Envar("ETCDCTL_PEERS").String()
+	etcdAddr := kingpin.Flag("etcd-addr", "Etcd machine address.").Default("http://localhost:4001").Envar("HEALTH_ETCD_ADDR").String()
 	kingpin.Flag("etcd-cert-file", "Path to etcd TLS cert file.").Envar("ETCDCTL_CERT_FILE").StringVar(&cfg.ETCDConfig.CertFile)
 	kingpin.Flag("etcd-key-file", "Path to etcd TLS key file.").Envar("ETCDCTL_KEY_FILE").StringVar(&cfg.ETCDConfig.KeyFile)
 	kingpin.Flag("etcd-ca-file", "Path to etcd TLS CA file.").Envar("ETCDCTL_CA_FILE").StringVar(&cfg.ETCDConfig.CAFile)
 	kingpin.Parse()
 
-	cfg.ETCDConfig.Endpoints = []string{*etcdEndpoint}
+	cfg.ETCDConfig.Endpoints = []string{*etcdAddr}
 }

@@ -5,13 +5,21 @@
 healthz:
   name: healthz
   accesskey: ""
+  debug: true
+  checkInterval: 1m
+  kubeAddr: "http://localhost:8080"
   image:
-    repo: "quay.io/gravitational/healthz"
+    repo: "quay.io/gravitational/satellite"
     tag: "stable"
     pullPolicy: "IfNotPresent"
   port: 8080
   ssl:
     enabled: false
+    cert: ""
+    key: ""
+    ca: ""
+  etcd:
+    addr: "http://localhost:4001"
     cert: ""
     key: ""
     ca: ""

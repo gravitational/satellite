@@ -2,22 +2,32 @@
 
 REPODIR = $(shell pwd)
 BUILDDIR = $(REPODIR)/build
-OUT = $(BUILDDIR)/satellite
 PWD := $(shell pwd)
 export
 
 .DEFAULT_GOAL = all
 
-all: $(OUT)
+all: binaries
 
-$(OUT): flags
+binaries: $(BUILDDIR)/satellite $(BUILDDIR)/healthz
+
+$(BUILDDIR)/satellite: linkflags
 	go install github.com/gravitational/satellite/vendor/github.com/mattn/go-sqlite3
 	go build -o $@ -ldflags $(LINKFLAGS) github.com/gravitational/satellite/cmd/agent
+
+$(BUILDDIR)/healthz: linkflags
+	go build -o $@ -ldflags $(LINKFLAGS) github.com/gravitational/satellite/cmd/healthz
+
+docker-image: binaries dockerflags
+	docker build -t satellite:$(DOCKERFLAGS) $(PWD)
 
 clean:
 	@rm -rf $(OUTDIR)
 
-flags:
+dockerflags:
+	$(eval DOCKERFLAGS := "$(shell linkflags -docker-tag -pkg=$(PWD) -verpkg=github.com/gravitational/satellite/vendor/github.com/gravitational/version)")
+
+linkflags:
 	$(eval LINKFLAGS := "$(shell linkflags -pkg=$(PWD) -verpkg=github.com/gravitational/satellite/vendor/github.com/gravitational/version)")
 
 sloccount:
@@ -27,10 +37,10 @@ test:
 	go test -v -test.parallel=0 ./agent/...
 	go test -v -test.parallel=0 ./monitoring/...
 
-test-package: $(OUT)
+test-package: binaries
 	go test -v -test.parallel=0 ./$(p)
 
-test-grep-package: $(OUT)
+test-grep-package: binaries
 	go test -v ./$(p) -check.f=$(e)
 
 cover-package:
