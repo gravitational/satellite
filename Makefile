@@ -1,4 +1,4 @@
-.PHONY: sloccount clean all flags test test-package test-grep-package cover-package
+.PHONY: sloccount clean all flags test test-style test-package test-grep-package cover-package
 
 REPODIR = $(shell pwd)
 BUILDDIR = $(REPODIR)/build
@@ -37,6 +37,9 @@ test:
 	go test -v -test.parallel=0 ./agent/...
 	go test -v -test.parallel=0 ./monitoring/...
 
+test-style:
+	@scripts/validate-license.sh
+
 test-package: binaries
 	go test -v -test.parallel=0 ./$(p)
 
@@ -46,7 +49,3 @@ test-grep-package: binaries
 cover-package:
 	go test -v ./$(p)  -coverprofile=$(BUILDDIR)/coverage.out
 	go tool cover -html=$(BUILDDIR)/coverage.out
-
-
-
-
