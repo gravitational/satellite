@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -56,18 +57,21 @@ func run() error {
 	}()
 
 	errChan := make(chan error, 10)
-	askForStatusChan := make(chan bool, 10)
-	sendStatusToClientChan := make(chan pb.Probe, 10)
-	updateActualStatusChan := make(chan pb.Probe, 10)
+	clusterHealth := &pb.Probe{
+		Status: pb.Probe_Running,
+		Error:  reasonNoChecksYet,
+	}
+	clusterHealthMu := sync.Mutex{}
 
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, req *http.Request) {
 		log.Infof("%s %s %s %s", req.RemoteAddr, req.Host, req.RequestURI, req.UserAgent())
 		if !handlers.Auth(cfg.AccessKey, w, req) {
 			return
 		}
-		askForStatusChan <- true
-		clusterHealth := <-sendStatusToClientChan
-		handlers.Healthz(clusterHealth, w, req)
+		clusterHealthMu.Lock()
+		status := *clusterHealth
+		clusterHealthMu.Unlock()
+		handlers.Healthz(status, w, req)
 	})
 
 	listener, err := net.Listen("tcp", cfg.ListenAddr)
@@ -82,22 +86,6 @@ func run() error {
 		}
 		listener = tls.NewListener(listener, tlsConfig)
 	}
-
-	// Updates locally stored cluster status from health-checking coroutine,
-	// sends it to client on request arrived
-	go func() {
-		clusterHealth := pb.Probe{
-			Status: pb.Probe_Running,
-			Error:  reasonNoChecksYet,
-		}
-		for {
-			select {
-			case clusterHealth = <-updateActualStatusChan:
-			case <-askForStatusChan:
-				sendStatusToClientChan <- clusterHealth
-			}
-		}
-	}()
 
 	go func() {
 		if err := http.Serve(listener, nil); err != nil {
@@ -117,7 +105,9 @@ func run() error {
 					errChan <- trace.Wrap(err)
 					return
 				}
-				updateActualStatusChan <- *status
+				clusterHealthMu.Lock()
+				clusterHealth = status
+				clusterHealthMu.Unlock()
 			}
 		}
 	}()
