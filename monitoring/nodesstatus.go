@@ -79,12 +79,12 @@ func (r *nodesStatusChecker) Check(reporter health.Reporter) {
 		percentNodesReady = 100. * float32(nodesReady) / float32(nodesCount)
 	}
 
-	if percentNodesReady < nodesReadyThresh {
+	if percentNodesReady < nodesReadyThreshold {
 		reporter.Add(&pb.Probe{
 			Checker: r.Name(),
 			Status:  pb.Probe_Failed,
 			Error: fmt.Sprintf("Ready nodes shortage: %v%% (threshold %v%%)",
-				percentNodesReady, nodesReadyThresh),
+				percentNodesReady, nodesReadyThreshold),
 		})
 	} else {
 		reporter.Add(&pb.Probe{
@@ -95,4 +95,4 @@ func (r *nodesStatusChecker) Check(reporter health.Reporter) {
 }
 
 // TODO: ⎣n⧸5 + log₄n⎦ can be used as nice approach or supply it from config
-const nodesReadyThresh = 75
+const nodesReadyThreshold = 75
