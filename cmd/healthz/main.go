@@ -31,7 +31,6 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/gravitational/trace"
 
-	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/healthz/checks"
 	"github.com/gravitational/satellite/healthz/config"
 	"github.com/gravitational/satellite/healthz/handlers"
@@ -74,16 +73,13 @@ func run() error {
 	}()
 
 	errChan := make(chan error, 10)
-	clusterHealth := &pb.Probe{
-		Status: pb.Probe_Running,
-		Error:  reasonNoChecksYet,
-	}
-	clusterHealthMu := sync.Mutex{}
-
 	runner, err := checks.NewRunner(cfg.KubeAddr, cfg.KubeNodesThreshold, cfg.ETCDConfig)
 	if err != nil {
 		return trace.Wrap(err)
 	}
+
+	clusterHealth := runner.Run()
+	clusterHealthMu := sync.Mutex{}
 
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, req *http.Request) {
 		log.Infof("%s %s %s %s", req.RemoteAddr, req.Host, req.RequestURI, req.UserAgent())
@@ -139,5 +135,3 @@ func run() error {
 		return nil
 	}
 }
-
-const reasonNoChecksYet = "No checks ran yet"
