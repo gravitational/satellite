@@ -35,6 +35,7 @@ func ParseCLIFlags(cfg *Config) {
 	kingpin.Flag("key-file", "Path to TLS key file.").Envar("HEALTH_KEY_FILE").StringVar(&cfg.KeyFile)
 	kingpin.Flag("ca-file", "Path to TLS CA file.").Envar("HEALTH_CA_FILE").StringVar(&cfg.CAFile)
 	kingpin.Flag("kube-addr", "K8S apiserver address.").Default("http://localhost:8080").Envar("HEALTH_KUBE_ADDR").StringVar(&cfg.KubeAddr)
+	kingpin.Flag("kube-nodes-threshold", "Minimal percent of K8S nodes must be ready to assume cluster is healthy").Default("75").Envar("HEALTH_KUBE_NODES_THRESHOLD").IntVar(&cfg.KubeNodesThreshold)
 	kingpin.Flag("etcd-addr", "Etcd machine address.").Default("http://localhost:4001,http://localhost:2380").Envar("ETCDCTL_PEERS").StringsVar(&cfg.ETCDConfig.Endpoints)
 	kingpin.Flag("etcd-cert-file", "Path to etcd TLS cert file.").Envar("ETCDCTL_CERT_FILE").StringVar(&cfg.ETCDConfig.CertFile)
 	kingpin.Flag("etcd-key-file", "Path to etcd TLS key file.").Envar("ETCDCTL_KEY_FILE").StringVar(&cfg.ETCDConfig.KeyFile)

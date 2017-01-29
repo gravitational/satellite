@@ -29,17 +29,19 @@ import (
 )
 
 // NewNodesStatusChecker returns a Checker that tests kubernetes nodes availability
-func NewNodesStatusChecker(hostPort string) health.Checker {
+func NewNodesStatusChecker(hostPort string, nodesReadyThreshold int) health.Checker {
 	return &nodesStatusChecker{
-		hostPort: hostPort,
+		hostPort:            hostPort,
+		nodesReadyThreshold: nodesReadyThreshold,
 	}
 }
 
 // nodesStatusChecker tests and reports health failures in kubernetes
 // nodes availability
 type nodesStatusChecker struct {
-	name     string
-	hostPort string
+	name                string
+	hostPort            string
+	nodesReadyThreshold int
 }
 
 // Name returns the name of this checker
@@ -75,17 +77,17 @@ func (r *nodesStatusChecker) Check(reporter health.Reporter) {
 		}
 	}
 
-	var percentNodesReady float32
+	percentNodesReady := 0
 	if nodesCount > 0 {
-		percentNodesReady = 100. * float32(nodesReady) / float32(nodesCount)
+		percentNodesReady = int(100. * float32(nodesReady) / float32(nodesCount))
 	}
 
-	if percentNodesReady < nodesReadyThreshold {
+	if percentNodesReady < r.nodesReadyThreshold {
 		reporter.Add(&pb.Probe{
 			Checker: r.Name(),
 			Status:  pb.Probe_Failed,
 			Error: fmt.Sprintf("Not enough ready nodes: %v%% (threshold %v%%)",
-				percentNodesReady, nodesReadyThreshold),
+				percentNodesReady, r.nodesReadyThreshold),
 		})
 	} else {
 		reporter.Add(&pb.Probe{
@@ -94,6 +96,3 @@ func (r *nodesStatusChecker) Check(reporter health.Reporter) {
 		})
 	}
 }
-
-// TODO: ⎣n⧸5 + log₄n⎦ can be used as nice approach or supply it from config
-const nodesReadyThreshold = 75

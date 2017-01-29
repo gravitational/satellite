@@ -39,8 +39,8 @@ func ComponentStatusHealth(kubeAddr string) health.Checker {
 }
 
 // NodesStatusHealth creates a checker that reports a number of ready kubernetes nodes
-func NodesStatusHealth(kubeAddr string) health.Checker {
-	return NewNodesStatusChecker(kubeAddr)
+func NodesStatusHealth(kubeAddr string, nodesReadyThreshold int) health.Checker {
+	return NewNodesStatusChecker(kubeAddr, nodesReadyThreshold)
 }
 
 // EtcdHealth creates a checker that checks health of etcd

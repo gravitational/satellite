@@ -80,7 +80,7 @@ func run() error {
 	}
 	clusterHealthMu := sync.Mutex{}
 
-	runner, err := checks.NewRunner(cfg.KubeAddr, cfg.ETCDConfig)
+	runner, err := checks.NewRunner(cfg.KubeAddr, cfg.KubeNodesThreshold, cfg.ETCDConfig)
 	if err != nil {
 		return trace.Wrap(err)
 	}
