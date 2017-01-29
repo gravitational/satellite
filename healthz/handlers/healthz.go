@@ -24,8 +24,8 @@ import (
 	"github.com/gravitational/satellite/healthz/defaults"
 )
 
-// Auth checks if client supplied proper access key, if not sends
-// HTTP 401 Unauthorized and return false, otherwise returns true
+// Auth checks if client supplied proper access key and responds with HTTP 401
+// if authorization fails. Returns true if authorization was successful
 func Auth(accessKey string, w http.ResponseWriter, req *http.Request) (passed bool) {
 	if req.FormValue(defaults.AccessKeyParam) != accessKey {
 		httpStatus := http.StatusUnauthorized

@@ -84,7 +84,7 @@ func (r *nodesStatusChecker) Check(reporter health.Reporter) {
 		reporter.Add(&pb.Probe{
 			Checker: r.Name(),
 			Status:  pb.Probe_Failed,
-			Error: fmt.Sprintf("Ready nodes shortage: %v%% (threshold %v%%)",
+			Error: fmt.Sprintf("Not enough ready nodes: %v%% (threshold %v%%)",
 				percentNodesReady, nodesReadyThreshold),
 		})
 	} else {

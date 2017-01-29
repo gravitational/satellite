@@ -25,29 +25,38 @@ import (
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-	"github.com/gravitational/satellite/healthz/config"
 	"github.com/gravitational/satellite/monitoring"
 )
 
-// RunAll runs all checks successively and reports general cluster status
-func RunAll(cfg config.Config) (*pb.Probe, error) {
-	var probes health.Probes
-	var checkers health.Checkers
+// Runner stores configures checkers and provides interface to configure
+// and run them
+type Runner struct {
+	health.Checkers
+}
 
-	checkers.AddChecker(monitoring.KubeAPIServerHealth(cfg.KubeAddr))
-	checkers.AddChecker(monitoring.NodesStatusHealth(cfg.KubeAddr))
-	etcdChecker, err := monitoring.EtcdHealth(&cfg.ETCDConfig)
+// NewRunner creates Runner with checks configured using provided options
+func NewRunner(kubeAddr string, etcdConfig monitoring.ETCDConfig) (*Runner, error) {
+	runner := &Runner{}
+	runner.AddChecker(monitoring.KubeAPIServerHealth(kubeAddr))
+	runner.AddChecker(monitoring.NodesStatusHealth(kubeAddr))
+	etcdChecker, err := monitoring.EtcdHealth(&etcdConfig)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	checkers.AddChecker(etcdChecker)
+	runner.AddChecker(etcdChecker)
+	return runner, nil
+}
 
-	for _, c := range checkers {
+// Run runs all checks successively and reports general cluster status
+func (c *Runner) Run() *pb.Probe {
+	var probes health.Probes
+
+	for _, c := range c.Checkers {
 		log.Infof("running checker %s", c.Name())
 		c.Check(&probes)
 	}
 
-	return finalHealth(probes), nil
+	return finalHealth(probes)
 }
 
 // finalHealth aggregates statuses from all probes into one summarized health status
@@ -58,7 +67,6 @@ func finalHealth(probes health.Probes) *pb.Probe {
 	for _, probe := range probes {
 		switch probe.Status {
 		case pb.Probe_Running:
-			status = pb.Probe_Running
 			errors = append(errors, fmt.Sprintf("Check %s: OK", probe.Checker))
 		default:
 			status = pb.Probe_Failed

@@ -60,6 +60,7 @@ func run() error {
 	log.Debug(trace.Errorf("starting using config: %#v", cfg))
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	go func() {
 		exitSignals := make(chan os.Signal, 1)
 		signal.Ignore()
@@ -78,6 +79,11 @@ func run() error {
 		Error:  reasonNoChecksYet,
 	}
 	clusterHealthMu := sync.Mutex{}
+
+	runner, err := checks.NewRunner(cfg.KubeAddr, cfg.ETCDConfig)
+	if err != nil {
+		return trace.Wrap(err)
+	}
 
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, req *http.Request) {
 		log.Infof("%s %s %s %s", req.RemoteAddr, req.Host, req.RequestURI, req.UserAgent())
@@ -116,14 +122,12 @@ func run() error {
 			defer ticker.Stop()
 			select {
 			case <-ticker.C:
-				status, err := checks.RunAll(cfg)
-				if err != nil {
-					errChan <- trace.Wrap(err)
-					return
-				}
+				status := runner.Run()
 				clusterHealthMu.Lock()
 				clusterHealth = status
 				clusterHealthMu.Unlock()
+			case <-ctx.Done():
+				return
 			}
 		}
 	}()

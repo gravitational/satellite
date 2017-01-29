@@ -38,7 +38,7 @@ func ComponentStatusHealth(kubeAddr string) health.Checker {
 	return NewComponentStatusChecker(kubeAddr)
 }
 
-// NodesStatusHealth creates a checker for the number of ready kubernetes nodes
+// NodesStatusHealth creates a checker that reports a number of ready kubernetes nodes
 func NodesStatusHealth(kubeAddr string) health.Checker {
 	return NewNodesStatusChecker(kubeAddr)
 }
