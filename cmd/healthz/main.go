@@ -40,7 +40,7 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		log.Fatal(err)
+		log.Fatal(trace.DebugReport(err))
 		fmt.Printf("ERROR: %v\n", err.Error())
 		os.Exit(255)
 	}
@@ -50,14 +50,14 @@ func run() error {
 	cfg := config.Config{}
 	config.ParseCLIFlags(&cfg)
 
+	trace.SetDebug(cfg.Debug)
 	if cfg.Debug {
-		trace.EnableDebug()
 		log.SetLevel(log.DebugLevel)
 	}
 	log.SetFormatter(&log.TextFormatter{})
 	log.SetOutput(os.Stderr)
 
-	log.Debug(trace.Errorf("starting using config: %#v", cfg))
+	log.Debugf("[%q] starting using config: %#v", utils.SourceFileAndLine(), cfg)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

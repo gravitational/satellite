@@ -1,4 +1,4 @@
-.PHONY: sloccount clean all flags test test-style test-package test-grep-package cover-package
+.PHONY: binaries sloccount clean all flags test test-style test-package test-grep-package cover-package
 
 REPODIR = $(shell pwd)
 BUILDDIR = $(REPODIR)/build

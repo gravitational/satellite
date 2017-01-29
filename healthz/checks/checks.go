@@ -25,6 +25,7 @@ import (
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/healthz/utils"
 	"github.com/gravitational/satellite/monitoring"
 )
 
@@ -78,6 +79,6 @@ func finalHealth(probes health.Probes) *pb.Probe {
 		Status: status,
 		Error:  strings.Join(errors, "\n"),
 	}
-	log.Debug(trace.Errorf("cluster new health: %#v", clusterHealth))
+	log.Debugf("[%q] cluster new health: %#v", utils.SourceFileAndLine(), clusterHealth)
 	return &clusterHealth
 }

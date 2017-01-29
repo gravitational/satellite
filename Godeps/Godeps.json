@@ -1,6 +1,7 @@
 {
 	"ImportPath": "github.com/gravitational/satellite",
 	"GoVersion": "go1.5",
+	"GodepVersion": "v78",
 	"Packages": [
 		"./cmd/agent/...",
 		"./monitoring/..."
@@ -86,7 +87,7 @@
 		},
 		{
 			"ImportPath": "github.com/gravitational/trace",
-			"Rev": "faf98f5dca0d22a5e26ae794a4786c46ffc252b9"
+			"Rev": "ce68d9772ec67215fb364a11f770a52f7dcef8d2"
 		},
 		{
 			"ImportPath": "github.com/gravitational/version",
