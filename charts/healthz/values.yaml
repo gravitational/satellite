@@ -7,12 +7,14 @@ healthz:
   accesskey: ""
   debug: true
   checkInterval: 1m
-  kubeAddr: "http://localhost:8080"
+  kube:
+    addr: "http://localhost:8080"
+    nodesThreshold: "75"
   image:
     repo: "quay.io/gravitational/satellite"
     tag: "stable"
     pullPolicy: "IfNotPresent"
-  port: 8080
+  port: "8080"
   ssl:
     enabled: false
     cert: ""

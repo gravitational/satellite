@@ -24,12 +24,14 @@ spec:
         env:
           - name: HEALTH_LISTEN_ADDR
             value: "0.0.0.0:8080"
-          - name: ETCD_CERT_FILE
-            value: /healthz-secret/etcd-cert.pem
-          - name: ETCD_KEY_FILE
-            value: /healthz-secret/etcd-key.pem
-          - name: ETCD_CA_FILE
-            value: /healthz-secret/etcd-ca.pem
+          - name: ETCDCTL_PEERS
+            values: {{.Values.healthz.etcd.peers | default "http://localhost:4001,http://localhost:2380"}}
+          - name: ETCDCTL_CERT_FILE
+            value: /healthz-secret/etcdctl-cert.pem
+          - name: ETCDCTL_KEY_FILE
+            value: /healthz-secret/etcdctl-key.pem
+          - name: ETCDCTL_CA_FILE
+            value: /healthz-secret/etcdctl-ca.pem
           - name: HEALTH_CERT_FILE
             value: /healthz-secret/cert.pem
           - name: HEALTH_KEY_FILE
@@ -39,9 +41,9 @@ spec:
           - name: HEALTH_CHECK_INTERVAL
             value: {{.Values.healthz.checkInterval | default "1m"}}
           - name: HEALTH_KUBE_ADDR
-            value: {{.Values.healthz.kubeAddr | default ""}}
-          - name: HEALTH_ETCD_ADDR
-            value: {{.Values.healthz.etcd.peers | default ""}}
+            value: {{.Values.healthz.kube.addr | default ""}}
+          - name: HEALTH_KUBE_NODES_THRESHOLD
+            value: {{.Values.healthz.kube.nodesThreshold | default "75"}}
           - name: HEALTH_ACCESS_KEY
             valueFrom:
               secretKeyRef:
