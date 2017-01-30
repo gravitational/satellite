@@ -29,7 +29,7 @@ import (
 	"github.com/gravitational/satellite/monitoring"
 )
 
-// Runner stores configures checkers and provides interface to configure
+// Runner stores configured checkers and provides interface to configure
 // and run them
 type Runner struct {
 	health.Checkers
@@ -37,14 +37,14 @@ type Runner struct {
 
 // NewRunner creates Runner with checks configured using provided options
 func NewRunner(kubeAddr string, kubeNodesReadyThreshold int, etcdConfig monitoring.ETCDConfig) (*Runner, error) {
-	runner := &Runner{}
-	runner.AddChecker(monitoring.KubeAPIServerHealth(kubeAddr))
-	runner.AddChecker(monitoring.NodesStatusHealth(kubeAddr, kubeNodesReadyThreshold))
 	etcdChecker, err := monitoring.EtcdHealth(&etcdConfig)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
+	runner := &Runner{}
 	runner.AddChecker(etcdChecker)
+	runner.AddChecker(monitoring.KubeAPIServerHealth(kubeAddr))
+	runner.AddChecker(monitoring.NodesStatusHealth(kubeAddr, kubeNodesReadyThreshold))
 	return runner, nil
 }
 
