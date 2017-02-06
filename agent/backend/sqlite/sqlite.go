@@ -23,7 +23,6 @@ import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/trace"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/jonboulle/clockwork"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -358,22 +357,16 @@ func tagSelector(status *pb.SystemStatus) accumulator {
 	}
 }
 
-// scavengeTimeout is the amount of time between cleanup iterations.
-const scavengeTimeout = 24 * time.Hour
+// valueTTL defines the time-to-live for health probes
+const valueTTL = 10 * time.Minute
 
-// scavengeLoop is the background process to cleanup time series values older than
-// the specified threshold.
-func (r *backend) scavengeLoop() {
-	for {
-		select {
-		case <-r.clock.After(scavengeTimeout):
-			if err := r.deleteOlderThan(r.clock.Now().Add(-scavengeTimeout)); err != nil {
-				log.Errorf("failed to scavenge stats: %v", err)
-			}
-		case <-r.done:
-			return
-		}
+// Recycle removes probe values older than the configured TTL.
+func (r *backend) Recycle() error {
+	err := r.deleteOlderThan(r.clock.Now().Add(-valueTTL))
+	if err != nil {
+		return trace.Wrap(err, "failed to clean up stale stats")
 	}
+	return nil
 }
 
 // deleteOlderThan removes items older than the specified time limit.
@@ -431,7 +424,6 @@ func newBackend(db *sql.DB, clock clockwork.Clock) (*backend, error) {
 		clock: clock,
 		done:  make(chan struct{}),
 	}
-	go backend.scavengeLoop()
 	return backend, nil
 }
 

@@ -88,8 +88,8 @@ func (r *BackendSuite) TestUpdatesStatus(c *C) {
 	c.Assert(count, Equals, int64(1))
 }
 
-func (r *BackendSuite) TestExplicitlyDeletesOlderStats(c *C) {
-	ts := time.Now().Add(-scavengeTimeout)
+func (r *BackendSuite) TestExplicitlyRecycles(c *C) {
+	ts := time.Now().Add(-valueTTL)
 	status := newStatus(nodes, ts)
 	err := r.backend.UpdateStatus(status)
 	c.Assert(err, IsNil)
@@ -120,20 +120,6 @@ func (r *BackendSuite) TestObtainsRecentStatus(c *C) {
 	c.Assert(err, IsNil)
 
 	c.Assert(actualStatus, DeepEquals, status)
-}
-
-func (r *BackendWithClockSuite) TestScavengesOlderStats(c *C) {
-	c.Assert(updateStatus(r.backend, nodes, r.clock), IsNil)
-
-	emptyStatus := &pb.SystemStatus{Status: pb.SystemStatus_Unknown}
-	r.clock.BlockUntil(1)
-	r.clock.Advance(scavengeTimeout + time.Second)
-	// block until the scavenge loop goes on another wait round
-	r.clock.BlockUntil(1)
-	status, err := r.backend.RecentStatus()
-	c.Assert(err, IsNil)
-
-	c.Assert(status, DeepEquals, emptyStatus)
 }
 
 func (r *BackendWithClockSuite) TestUpdatesNodeEvenWithNoProbes(c *C) {

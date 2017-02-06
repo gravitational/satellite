@@ -34,18 +34,18 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-func init() {
-	if testing.Verbose() {
-		log.SetOutput(os.Stderr)
-		log.SetLevel(log.InfoLevel)
-	}
-}
-
 func TestAgent(t *testing.T) { TestingT(t) }
 
 type AgentSuite struct{}
 
 var _ = Suite(&AgentSuite{})
+
+func (_ *AgentSuite) SetUpSuite(_ *C) {
+	if testing.Verbose() {
+		log.SetOutput(os.Stderr)
+		log.SetLevel(log.DebugLevel)
+	}
+}
 
 func (_ *AgentSuite) TestSetsSystemStatusFromMemberStatuses(c *C) {
 	resp := &pb.StatusResponse{Status: &pb.SystemStatus{}}
@@ -160,16 +160,18 @@ func (_ *AgentSuite) TestSetsOkSystemStatus(c *C) {
 // to exchange health status information.
 func (_ *AgentSuite) TestAgentProvidesStatus(c *C) {
 	for _, testCase := range agentTestCases {
-		c.Logf("running test %s", testCase.comment)
-
+		comment := Commentf(testCase.comment)
 		clock := clockwork.NewFakeClock()
 		localNode := testCase.members[0].Name
 		remoteNode := testCase.members[1].Name
-		localAgent := newLocalNode(localNode, remoteNode, testCase.rpcPort,
+		localAgent := newLocalNode(localNode, testCase.rpcPort,
 			testCase.members[:], testCase.checkers[0], clock, c)
-		remoteAgent, err := newRemoteNode(remoteNode, localNode, testCase.rpcPort,
+		remoteAgent := newRemoteNode(remoteNode, testCase.rpcPort,
 			testCase.members[:], testCase.checkers[1], clock, c)
-		c.Assert(err, IsNil)
+		defer func() {
+			localAgent.Close()
+			remoteAgent.Close()
+		}()
 
 		// Wait until both agents have started waiting to collect statuses
 		clock.BlockUntil(2)
@@ -179,20 +181,49 @@ func (_ *AgentSuite) TestAgentProvidesStatus(c *C) {
 
 		req := &pb.StatusRequest{}
 		resp, err := localAgent.rpc.Status(context.TODO(), req)
-		c.Assert(err, IsNil)
+		c.Assert(err, IsNil, comment)
 
-		c.Assert(resp.Status.Status, Equals, testCase.status)
-		c.Assert(resp.Status.Nodes, HasLen, len(testCase.members))
-		localAgent.Close()
-		remoteAgent.Close()
+		c.Assert(resp.Status.Status, Equals, testCase.status, comment)
+		c.Assert(resp.Status.Nodes, HasLen, len(testCase.members), comment)
 	}
 }
 
-var healthyTest = &fakeChecker{
+func (r *AgentSuite) TestRecyclesCache(c *C) {
+	node := "node"
+	at := time.Date(1984, time.April, 4, 0, 0, 0, 0, time.UTC)
+	statusClock := clockwork.NewFakeClockAt(at)
+	recycleClock := clockwork.NewFakeClockAt(at.Add(recycleTimeout + time.Second))
+	cache := &testCache{c: c, SystemStatus: &pb.SystemStatus{Status: pb.SystemStatus_Unknown}}
+
+	agent := newAgent(node, 7676,
+		[]serf.Member{newMember("node", "alive")},
+		[]health.Checker{healthyTest},
+		statusClock, recycleClock, c)
+	agent.rpc = &testServer{&server{agent: agent}}
+	agent.cache = cache
+
+	err := agent.Start()
+	c.Assert(err, IsNil)
+
+	statusClock.BlockUntil(1)
+	// Run the status update loop once to update the status
+	statusClock.Advance(statusUpdateTimeout + time.Second)
+	statusClock.BlockUntil(1)
+
+	// Run the status update loop to recycle the stats
+	recycleClock.Advance(recycleTimeout + time.Second)
+	recycleClock.BlockUntil(1)
+
+	status, err := cache.RecentStatus()
+	c.Assert(err, IsNil)
+	c.Assert(*status, DeepEquals, *emptyStatus())
+}
+
+var healthyTest = &testChecker{
 	name: "healthy service",
 }
 
-var failedTest = &fakeChecker{
+var failedTest = &testChecker{
 	name: "failing service",
 	err:  errInvalidState,
 }
@@ -237,10 +268,10 @@ var agentTestCases = []struct {
 }
 
 // newLocalNode creates a new instance of the local agent - agent used to make status queries.
-func newLocalNode(node, peerNode string, rpcPort int, members []serf.Member,
+func newLocalNode(node string, rpcPort int, members []serf.Member,
 	checkers []health.Checker, clock clockwork.Clock, c *C) *agent {
-	agent := newAgent(node, peerNode, rpcPort, members, checkers, clock, c)
-	agent.rpc = &fakeServer{&server{agent: agent}}
+	agent := newAgent(node, rpcPort, members, checkers, clock, nil, c)
+	agent.rpc = &testServer{&server{agent: agent}}
 	err := agent.Start()
 	c.Assert(err, IsNil)
 	return agent
@@ -248,22 +279,19 @@ func newLocalNode(node, peerNode string, rpcPort int, members []serf.Member,
 
 // newRemoteNode creates a new instance of a remote agent - agent used to answer
 // status query requests via a running RPC endpoint.
-func newRemoteNode(node, peerNode string, rpcPort int, members []serf.Member,
-	checkers []health.Checker, clock clockwork.Clock, c *C) (*agent, error) {
-	network := "tcp"
-	addr := fmt.Sprintf(":%d", rpcPort)
-	listener, err := net.Listen(network, addr)
-	if err != nil {
-		return nil, err
-	}
+func newRemoteNode(node string, rpcPort int, members []serf.Member,
+	checkers []health.Checker, clock clockwork.Clock, c *C) *agent {
+	addr := fmt.Sprintf("127.0.0.1:%v", rpcPort)
+	listener, err := net.Listen("tcp", addr)
+	c.Assert(err, IsNil)
 
-	agent := newAgent(node, peerNode, rpcPort, members, checkers, clock, c)
+	agent := newAgent(node, rpcPort, members, checkers, clock, nil, c)
 	err = agent.Start()
 	c.Assert(err, IsNil)
 	server := newRPCServer(agent, []net.Listener{listener})
 	agent.rpc = server
 
-	return agent, nil
+	return agent
 }
 
 // newMember creates a new value describing a member of a serf cluster.
@@ -279,60 +307,77 @@ func newMember(name string, status string) serf.Member {
 	return result
 }
 
-// fakeSerfClient implements serfClient
-type fakeSerfClient struct {
+// testSerfClient implements serfClient
+type testSerfClient struct {
 	members []serf.Member
 }
 
-func (r *fakeSerfClient) Members() ([]serf.Member, error) {
+func (r *testSerfClient) Members() ([]serf.Member, error) {
 	return r.members, nil
 }
 
 // Stream returns a dummy stream handle.
-func (r *fakeSerfClient) Stream(filter string, eventc chan<- map[string]interface{}) (serf.StreamHandle, error) {
+func (r *testSerfClient) Stream(filter string, eventc chan<- map[string]interface{}) (serf.StreamHandle, error) {
 	return serf.StreamHandle(0), nil
 }
 
-func (r *fakeSerfClient) Stop(handle serf.StreamHandle) error {
+func (r *testSerfClient) Stop(handle serf.StreamHandle) error {
 	return nil
 }
 
-func (r *fakeSerfClient) Close() error {
+func (r *testSerfClient) Close() error {
 	return nil
 }
 
-func (r *fakeSerfClient) Join(peers []string, replay bool) (int, error) {
+func (r *testSerfClient) Join(peers []string, replay bool) (int, error) {
 	return 0, nil
 }
 
-// fakeCache implements cache.Cache.
-type fakeCache struct {
-	*pb.SystemStatus
-	c *C
+func newTestCache(c *C, clock clockwork.Clock) *testCache {
+	if clock == nil {
+		clock = clockwork.NewFakeClock()
+	}
+	return &testCache{
+		c:            c,
+		clock:        clock,
+		SystemStatus: &pb.SystemStatus{Status: pb.SystemStatus_Unknown},
+	}
 }
 
-func (r *fakeCache) UpdateStatus(status *pb.SystemStatus) error {
+// testCache implements cache.Cache.
+type testCache struct {
+	*pb.SystemStatus
+	c     *C
+	clock clockwork.Clock
+}
+
+func (r *testCache) UpdateStatus(status *pb.SystemStatus) error {
 	r.SystemStatus = status
 	return nil
 }
 
-func (r fakeCache) RecentStatus() (*pb.SystemStatus, error) {
+func (r *testCache) RecentStatus() (*pb.SystemStatus, error) {
 	return r.SystemStatus, nil
 }
 
-func (r *fakeCache) Close() error {
+func (r *testCache) Recycle() error {
+	r.SystemStatus = emptyStatus()
 	return nil
 }
 
-// fakeServer implements RPCServer.
+func (r *testCache) Close() error {
+	return nil
+}
+
+// testServer implements RPCServer.
 // It is used to mock parts of an RPCServer that are not functional
 // during the test.
-type fakeServer struct {
+type testServer struct {
 	*server
 }
 
 // Stop is a no-op.
-func (_ *fakeServer) Stop() {}
+func (_ *testServer) Stop() {}
 
 // testDialRPC is a test implementation of the dialRPC interface,
 // that creates an RPC client bound to localhost.
@@ -348,30 +393,38 @@ func testDialRPC(port int) dialRPC {
 }
 
 // newAgent creates a new agent instance.
-func newAgent(node, peerNode string, rpcPort int, members []serf.Member,
-	checkers []health.Checker, clock clockwork.Clock, c *C) *agent {
+func newAgent(node string, rpcPort int, members []serf.Member,
+	checkers []health.Checker, statusClock, recycleClock clockwork.Clock, c *C) *agent {
+	if recycleClock == nil {
+		recycleClock = clockwork.NewFakeClock()
+	}
 	return &agent{
-		name:        node,
-		serfClient:  &fakeSerfClient{members: members},
-		dialRPC:     testDialRPC(rpcPort),
-		cache:       &fakeCache{c: c, SystemStatus: &pb.SystemStatus{Status: pb.SystemStatus_Unknown}},
-		Checkers:    checkers,
-		clock:       clock,
-		localStatus: emptyNodeStatus(node),
+		name:         node,
+		serfClient:   &testSerfClient{members: members},
+		dialRPC:      testDialRPC(rpcPort),
+		cache:        &testCache{c: c, SystemStatus: &pb.SystemStatus{Status: pb.SystemStatus_Unknown}},
+		Checkers:     checkers,
+		statusClock:  statusClock,
+		recycleClock: recycleClock,
+		localStatus:  emptyNodeStatus(node),
 	}
 }
 
 var errInvalidState = errors.New("invalid state")
 
-// fakeChecker implements a health.Checker interface for the tests.
-type fakeChecker struct {
+func emptyStatus() *pb.SystemStatus {
+	return &pb.SystemStatus{Status: pb.SystemStatus_Unknown}
+}
+
+// testChecker implements a health.Checker interface for the tests.
+type testChecker struct {
 	err  error
 	name string
 }
 
-func (r fakeChecker) Name() string { return r.name }
+func (r testChecker) Name() string { return r.name }
 
-func (r *fakeChecker) Check(reporter health.Reporter) {
+func (r *testChecker) Check(reporter health.Reporter) {
 	if r.err != nil {
 		reporter.Add(&pb.Probe{
 			Checker: r.name,
