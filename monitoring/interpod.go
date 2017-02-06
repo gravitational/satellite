@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/gravitational/satellite/agent/health"
 	"github.com/gravitational/trace"
@@ -35,7 +36,6 @@ import (
 	"k8s.io/kubernetes/pkg/labels"
 	"k8s.io/kubernetes/pkg/util/intstr"
 	"k8s.io/kubernetes/pkg/util/wait"
-	"k8s.io/kubernetes/pkg/version"
 )
 
 // This file implements a functional pod communication test.
@@ -337,7 +337,7 @@ func getServiceAccount(c *kube.Client, ns, name string, shouldWait bool) (*api.S
 	return user, nil
 }
 
-var subResourceServiceAndNodeProxyVersion = version.MustParse("v1.2.0")
+var subResourceServiceAndNodeProxyVersion = mustParseVersion("v1.2.0")
 
 // getServicesProxyRequest returns the service request based on the server version
 func getServicesProxyRequest(c *kube.Client, request *restclient.Request) (*restclient.Request, error) {
@@ -358,9 +358,34 @@ func serverVersionGTE(v semver.Version, c discovery.ServerVersionInterface) (boo
 	if err != nil {
 		return false, trace.Wrap(err, "unable to get server version")
 	}
-	parsedVersion, err := version.Parse(serverVersion.GitVersion)
+	parsedVersion, err := parseVersion(serverVersion.GitVersion)
 	if err != nil {
 		return false, trace.Wrap(err, "unable to parse server version %q", serverVersion.GitVersion)
 	}
 	return parsedVersion.GTE(v), nil
+}
+
+func mustParseVersion(gitversion string) semver.Version {
+	v, err := parseVersion(gitversion)
+	if err != nil {
+		log.Fatalf("failed to parse semver from gitversion %q: %v", gitversion, err)
+	}
+	return v
+}
+
+func parseVersion(gitversion string) (semver.Version, error) {
+	// optionally trim leading spaces then one v
+	var seen bool
+	gitversion = strings.TrimLeftFunc(gitversion, func(ch rune) bool {
+		if seen {
+			return false
+		}
+		if ch == 'v' {
+			seen = true
+			return true
+		}
+		return unicode.IsSpace(ch)
+	})
+
+	return semver.Make(gitversion)
 }
