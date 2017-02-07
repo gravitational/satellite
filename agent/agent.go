@@ -19,6 +19,7 @@ package agent
 import (
 	"fmt"
 	"net"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -195,7 +196,7 @@ func (r *agent) LocalStatus() *pb.NodeStatus {
 
 type dialRPC func(*serf.Member) (*client, error)
 
-// runChecks executes the monitoring tests configured for this agent.
+// runChecks executes the monitoring tests configured for this agent in parallel.
 func (r *agent) runChecks(ctx context.Context) (*pb.NodeStatus, error) {
 	// semaphoreCh limits the number of concurrent checkers
 	semaphoreCh := make(chan struct{}, maxConcurrentCheckers)
@@ -205,16 +206,9 @@ func (r *agent) runChecks(ctx context.Context) (*pb.NodeStatus, error) {
 	for _, c := range r.Checkers {
 		select {
 		case semaphoreCh <- struct{}{}:
-			go func(c health.Checker) {
-				var probes health.Probes
-				log.Debugf("running checker %v", c.Name())
-				c.Check(&probes)
-				probeCh <- probes
-				// release checker slot
-				<-semaphoreCh
-			}(c)
+			go runChecker(c, probeCh, semaphoreCh)
 		case <-ctx.Done():
-			return nil, trace.Errorf("timed out")
+			return nil, trace.ConnectionProblem(nil, "timed out running tests")
 		}
 	}
 
@@ -229,6 +223,31 @@ func (r *agent) runChecks(ctx context.Context) (*pb.NodeStatus, error) {
 		Status: probes.Status(),
 		Probes: probes.GetProbes(),
 	}, nil
+}
+
+// runChecker executes the specified checker and reports results on probeCh.
+// If the checker panics, the resulting probe will describe the checker failure.
+// Semaphore channel is guaranteed to receive a value upon completion.
+func runChecker(checker health.Checker, probeCh chan<- health.Probes, semaphoreCh <-chan struct{}) {
+	defer func() {
+		if err := recover(); err != nil {
+			var probes health.Probes
+			probes.Add(&pb.Probe{
+				Checker: checker.Name(),
+				Status:  pb.Probe_Failed,
+				Error:   trace.Errorf("checker panicked: %v\n%s", err, debug.Stack()).Error(),
+			})
+			probeCh <- probes
+		}
+		// release checker slot
+		<-semaphoreCh
+	}()
+
+	log.Debugf("running checker %q", checker.Name())
+
+	var probes health.Probes
+	checker.Check(&probes)
+	probeCh <- probes
 }
 
 // statusUpdateTimeout is the amount of time to wait between status update collections.
@@ -302,14 +321,18 @@ func (r *agent) collectStatus(ctx context.Context) (systemStatus *pb.SystemStatu
 	}
 
 	for i := 0; i < len(members); i++ {
-		status := <-statusCh
-		log.Debugf("retrieved status from %v: %v", status.member, status.NodeStatus)
-		nodeStatus := status.NodeStatus
-		if status.err != nil {
-			log.Warningf("failed to query node %s(%v) status: %v", status.member.Name, status.member.Addr, status.err)
-			nodeStatus = unknownNodeStatus(&status.member)
+		select {
+		case status := <-statusCh:
+			log.Debugf("retrieved status from %v: %v", status.member, status.NodeStatus)
+			nodeStatus := status.NodeStatus
+			if status.err != nil {
+				log.Warningf("failed to query node %s(%v) status: %v", status.member.Name, status.member.Addr, status.err)
+				nodeStatus = unknownNodeStatus(&status.member)
+			}
+			systemStatus.Nodes = append(systemStatus.Nodes, nodeStatus)
+		case <-ctx.Done():
+			return nil, trace.ConnectionProblem(nil, "timed out collecting node statuses")
 		}
-		systemStatus.Nodes = append(systemStatus.Nodes, nodeStatus)
 	}
 	setSystemStatus(systemStatus)
 
