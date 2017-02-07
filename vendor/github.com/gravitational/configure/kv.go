@@ -56,12 +56,11 @@ func (kv *KeyVal) SetEnv(v string) error {
 
 // String returns a string with comma separated key-values: "key:val,key2:val2"
 func (kv *KeyVal) String() string {
-	b := &bytes.Buffer{}
+	out := make([]string, 0, len(*kv))
 	for k, v := range *kv {
-		fmt.Fprintf(b, "%v:%v", k, v)
-		fmt.Fprintf(b, " ")
+		out = append(out, fmt.Sprintf("%v:%v", k, v))
 	}
-	return b.String()
+	return strings.Join(out, ",")
 }
 
 // KeyValParam accepts a kingpin setting parameter and returns

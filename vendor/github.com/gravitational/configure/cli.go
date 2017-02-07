@@ -143,6 +143,10 @@ type cliMapValue struct {
 	v *map[string]string
 }
 
+func (c *cliMapValue) IsCumulative() bool {
+	return true
+}
+
 func (c *cliMapValue) String() string {
 	return ""
 }
@@ -171,6 +175,10 @@ type cliSliceMapValue struct {
 
 func (c *cliSliceMapValue) String() string {
 	return ""
+}
+
+func (c *cliSliceMapValue) IsCumulative() bool {
+	return true
 }
 
 func (c *cliSliceMapValue) Set(v string) error {

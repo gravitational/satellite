@@ -1,16 +1,16 @@
 # Configure
 
-`configure` is a golang library that populates a struct from environment variables, command line arugments and YAML files.
+`configure` is a golang library that populates a struct from environment variables, command line arguments and YAML files.
 It works by reading a struct definition with special tags. 
 
 ### Usage 
 
-The latest can be seen if you run 
+The latest can be seen if you run:
 ```
 godoc github.com/gravitational/configure
 ```
 
-But here's a quickstart: Define a sample structure, for examlpe:
+But here's a quickstart: Define a sample structure, for example:
 ```go
 
 	 type Config struct {
@@ -38,6 +38,6 @@ Then you can query the environment and populate that structure from environment 
 	   // parse YAML
 	   err = configure.ParseYAML(&cfg)
 	   // parse command line arguments
-	   err = configure.ParseCommandLine(&cfg, os.Ars[1:])
+	   err = configure.ParseCommandLine(&cfg, os.Args[1:])
 	}
 ```
