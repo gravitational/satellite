@@ -4,7 +4,7 @@
 
 healthz:
   name: healthz
-  accesskey: ""
+  accesskey: "akey"
   debug: true
   checkInterval: 1m
   kube:

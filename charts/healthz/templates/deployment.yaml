@@ -1,5 +1,5 @@
 apiVersion: extensions/v1beta1
-kind: DaemonSet
+kind: Deployment
 metadata:
   name: {{.Values.healthz.name | default "healthz"}}
   labels:
@@ -10,7 +10,7 @@ metadata:
     # This makes it easy to audit chart usage.
     chart: "{{.Chart.Name}}-{{.Chart.Version}}"
 spec:
-spec:
+  replicas: 1
   template:
     metadata:
       labels:
