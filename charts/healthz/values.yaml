@@ -14,7 +14,8 @@ healthz:
     repo: "quay.io/gravitational/satellite"
     tag: "stable"
     pullPolicy: "IfNotPresent"
-  port: "8080"
+  servicePort: "8080"
+  nodePort: "8080"
   ssl:
     enabled: false
     cert: ""
@@ -25,3 +26,4 @@ healthz:
     cert: ""
     key: ""
     ca: ""
+    skipVerify: false

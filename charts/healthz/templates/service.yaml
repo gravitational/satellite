@@ -9,10 +9,10 @@ metadata:
 spec:
   type: LoadBalancer
   ports:
-  - port: {{.Values.healthz.port | default 8080}}
+  - name: healthz
+    port: {{.Values.healthz.servicePort | default 8080}}
     protocol: TCP
-    name: healthz
-    targetPort: 8080
+    targetPort: {{.Values.healthz.nodePort | default 8080}}
   selector:
     app: {{.Values.healthz.name | default "healthz"}}
 

@@ -41,6 +41,7 @@ func ParseCLIFlags(cfg *Config) {
 	kingpin.Flag("etcd-cert-file", "Path to etcd TLS cert file.").Envar("ETCDCTL_CERT_FILE").StringVar(&cfg.ETCDConfig.CertFile)
 	kingpin.Flag("etcd-key-file", "Path to etcd TLS key file.").Envar("ETCDCTL_KEY_FILE").StringVar(&cfg.ETCDConfig.KeyFile)
 	kingpin.Flag("etcd-ca-file", "Path to etcd TLS CA file.").Envar("ETCDCTL_CA_FILE").StringVar(&cfg.ETCDConfig.CAFile)
+	kingpin.Flag("etcd-skip-verify", "Skip etcd keys verification.").Envar("ETCDCTL_SKIP_VERIFY").BoolVar(&cfg.ETCDConfig.InsecureSkipVerify)
 	kingpin.Parse()
 
 	cfg.ETCDConfig.Endpoints = strings.Split(*etcdEndpoints, ",")

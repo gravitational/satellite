@@ -31,7 +31,8 @@ The following tables lists the configurable parameters of the Healthz chart and 
 | `healthz.image.repo`          | Image repo                                                | `quay.io/gravitational/satellite`             |
 | `healthz.image.tag`           | Image tag                                                 | `stable`                                      |
 | `healthz.image.pullPolicy`    | Image pull policy                                         | `IfNotPresent`                                |
-| `healthz.port`                | External service port                                     | `8080`                                        |
+| `healthz.servicePort`         | External service port                                     | `8080`                                        |
+| `healthz.nodePort`            | Port to allocate on node for healthz container            | `8080`                                        |
 | `healthz.ssl.enabled`         | Enable/disable SSL on service port                        | `false`                                       |
 | `healthz.ssl.cert`            | External service SSL certificate                          | ``                                            |
 | `healthz.ssl.key`             | External service SSL key                                  | ``                                            |
@@ -40,6 +41,7 @@ The following tables lists the configurable parameters of the Healthz chart and 
 | `healthz.etcd.cert`           | ETCD service SSL certificate                              | ``                                            |
 | `healthz.etcd.key`            | ETCD service SSL key                                      | ``                                            |
 | `healthz.etcd.ca`             | ETCD service SSL CA                                       | ``                                            |
+| `healthz.etcd.skipVerify`     | Skip ETCD service SSL certificate verification            | `false`                                       |
 
 Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`.
 
