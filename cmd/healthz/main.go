@@ -28,13 +28,13 @@ import (
 	"syscall"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
-	"github.com/gravitational/trace"
-
 	"github.com/gravitational/satellite/healthz/checks"
 	"github.com/gravitational/satellite/healthz/config"
 	"github.com/gravitational/satellite/healthz/handlers"
 	"github.com/gravitational/satellite/healthz/utils"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/gravitational/trace"
 )
 
 func main() {
@@ -78,7 +78,7 @@ func run() error {
 		return trace.Wrap(err)
 	}
 
-	clusterHealth := runner.Run()
+	clusterHealth := runner.Run(context.TODO())
 	clusterHealthMu := sync.Mutex{}
 
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, req *http.Request) {
@@ -118,7 +118,7 @@ func run() error {
 			defer ticker.Stop()
 			select {
 			case <-ticker.C:
-				status := runner.Run()
+				status := runner.Run(context.TODO())
 				clusterHealthMu.Lock()
 				clusterHealth = status
 				clusterHealthMu.Unlock()
