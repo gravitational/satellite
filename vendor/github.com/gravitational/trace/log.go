@@ -46,8 +46,12 @@ type TextFormatter struct {
 // Format implements logrus.Formatter interface and adds file and line
 func (tf *TextFormatter) Format(e *log.Entry) ([]byte, error) {
 	if frameNo := findFrame(); frameNo != -1 {
-		t := newTrace(runtime.Caller(frameNo - 1))
-		e.Data[FileField] = t.String()
+		t := newTrace(frameNo, nil)
+		new := e.WithFields(log.Fields{FileField: t.Loc(), FunctionField: t.FuncName()})
+		new.Time = e.Time
+		new.Level = e.Level
+		new.Message = e.Message
+		e = new
 	}
 	return (&tf.TextFormatter).Format(e)
 }
@@ -61,9 +65,14 @@ type JSONFormatter struct {
 // Format implements logrus.Formatter interface
 func (j *JSONFormatter) Format(e *log.Entry) ([]byte, error) {
 	if frameNo := findFrame(); frameNo != -1 {
-		t := newTrace(runtime.Caller(frameNo - 1))
-		e.Data[FileField] = t.String()
-		e.Data[FunctionField] = t.Func
+		t := newTrace(frameNo, nil)
+		new := e.WithFields(log.Fields{
+			FileField:     t.Loc(),
+			FunctionField: t.FuncName(),
+		})
+		new.Level = e.Level
+		new.Message = e.Message
+		e = new
 	}
 	return (&j.JSONFormatter).Format(e)
 }

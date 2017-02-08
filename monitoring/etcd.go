@@ -13,6 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package monitoring
 
 import (
@@ -42,6 +43,9 @@ type ETCDConfig struct {
 	CertFile string
 	// KeyFile is an SSL key file used to secure communication with etcd
 	KeyFile string
+	// InsecureSkipVerify controls whether a client verifies the
+	// server's certificate chain and host name.
+	InsecureSkipVerify bool
 }
 
 // defaultTLSHandshakeTimeout specifies the default maximum amount of time
@@ -133,8 +137,9 @@ func (r *ETCDConfig) clientConfig() (*tls.Config, error) {
 	}
 
 	config := &tls.Config{
-		Certificates: []tls.Certificate{tlsCert},
-		MinVersion:   tls.VersionTLS10,
+		Certificates:       []tls.Certificate{tlsCert},
+		MinVersion:         tls.VersionTLS10,
+		InsecureSkipVerify: r.InsecureSkipVerify,
 	}
 	config.RootCAs, err = newCertPool([]string{r.CAFile})
 	if err != nil {

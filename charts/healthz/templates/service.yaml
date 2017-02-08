@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{.Values.healthz.name | default "healthz"}}
+  labels:
+    heritage: {{ .Release.Service | quote }}
+    release: {{ .Release.Name | quote }}
+    chart: "{{.Chart.Name}}-{{.Chart.Version}}"
+spec:
+  type: LoadBalancer
+  ports:
+  - name: healthz
+    port: {{.Values.healthz.servicePort | default 8080}}
+    protocol: TCP
+    targetPort: {{.Values.healthz.nodePort | default 8080}}
+  selector:
+    app: {{.Values.healthz.name | default "healthz"}}
+

@@ -1,0 +1,29 @@
+# Default values for tube.
+# This is a YAML-formatted file.
+# Declare name/value pairs to be passed into your templates.
+
+healthz:
+  name: healthz
+  accesskey: "akey"
+  debug: true
+  checkInterval: 1m
+  kube:
+    addr: "http://localhost:8080"
+    nodesThreshold: "3"
+  image:
+    repo: "quay.io/gravitational/satellite"
+    tag: "stable"
+    pullPolicy: "IfNotPresent"
+  servicePort: "8080"
+  nodePort: "8080"
+  ssl:
+    enabled: false
+    cert: ""
+    key: ""
+    ca: ""
+  etcd:
+    peers: "http://localhost:4001,http://localhost:2380"
+    cert: ""
+    key: ""
+    ca: ""
+    skipVerify: false

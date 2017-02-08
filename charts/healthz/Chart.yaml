@@ -1,0 +1,9 @@
+name: healthz
+version: 0.0.1
+description: Simple monitoring agent for K8S cluster
+keywords:
+  - monitoring
+home: "https://github.com/gravitational/satellite"
+sources:
+  - "https://github.com/gravitational/satellite"
+engine: gotpl
