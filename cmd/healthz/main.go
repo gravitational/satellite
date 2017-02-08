@@ -62,7 +62,7 @@ func run() error {
 	defer cancel()
 	go func() {
 		exitSignals := make(chan os.Signal, 1)
-		signal.Ignore()
+		signal.Ignore(syscall.SIGHUP)
 		signal.Notify(exitSignals, syscall.SIGTERM, syscall.SIGINT)
 
 		select {
