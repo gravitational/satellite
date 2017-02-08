@@ -17,15 +17,17 @@ limitations under the License.
 package monitoring
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/trace"
 
-	"k8s.io/kubernetes/pkg/api"
-	"k8s.io/kubernetes/pkg/fields"
-	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/client-go/1.4/pkg/api"
+	"k8s.io/client-go/1.4/pkg/api/v1"
+	"k8s.io/client-go/1.4/pkg/fields"
+	"k8s.io/client-go/1.4/pkg/labels"
 )
 
 // NewNodesStatusChecker returns a Checker that tests kubernetes nodes availability
@@ -48,7 +50,7 @@ type nodesStatusChecker struct {
 func (r *nodesStatusChecker) Name() string { return "nodesstatuses" }
 
 // Check validates the status of kubernetes components
-func (r *nodesStatusChecker) Check(reporter health.Reporter) {
+func (r *nodesStatusChecker) Check(ctx context.Context, reporter health.Reporter) {
 	client, err := ConnectToKube(r.hostPort)
 	if err != nil {
 		reporter.Add(NewProbeFromErr(r.Name(), trace.Errorf("failed to connect to kube: %v", err)))
@@ -66,10 +68,10 @@ func (r *nodesStatusChecker) Check(reporter health.Reporter) {
 	var nodesReady int
 	for _, item := range statuses.Items {
 		for _, condition := range item.Status.Conditions {
-			if condition.Type != api.NodeReady {
+			if condition.Type != v1.NodeReady {
 				continue
 			}
-			if condition.Status == api.ConditionTrue {
+			if condition.Status == v1.ConditionTrue {
 				nodesReady++
 				continue
 			}

@@ -52,6 +52,11 @@ func (r *multiplexer) RecentStatus() (*pb.SystemStatus, error) {
 	return r.cache.RecentStatus()
 }
 
+// Recycle releases resources or cleans up stale health probes
+func (r *multiplexer) Recycle() error {
+	return r.cache.Recycle()
+}
+
 // Close resets the cache and closes any resources
 func (r *multiplexer) Close() (err error) {
 	err = r.cache.Close()

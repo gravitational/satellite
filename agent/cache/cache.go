@@ -28,6 +28,11 @@ type Cache interface {
 	// Read obtains last known system status.
 	RecentStatus() (*pb.SystemStatus, error)
 
+	// Recycle is a periodic request to recycle any resources
+	// cache might be holding on to. The request can also be used
+	// to clean up stale state.
+	Recycle() error
+
 	// Close resets the cache and closes any resources.
 	Close() error
 }

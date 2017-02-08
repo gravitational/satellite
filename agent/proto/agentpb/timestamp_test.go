@@ -17,13 +17,10 @@ limitations under the License.
 package agentpb
 
 import (
-	"testing"
 	"time"
 
 	. "gopkg.in/check.v1"
 )
-
-func TestTimestamp(t *testing.T) { TestingT(t) }
 
 type TimestampSuite struct{}
 

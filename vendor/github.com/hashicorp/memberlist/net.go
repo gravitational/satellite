@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"net"
 	"time"
@@ -24,9 +25,15 @@ const (
 	// A memberlist speaking version 2 of the protocol will attempt
 	// to TCP ping another memberlist who understands version 3 or
 	// greater.
+	//
+	// Version 4 added support for nacks as part of indirect probes.
+	// A memberlist speaking version 2 of the protocol will expect
+	// nacks from another memberlist who understands version 4 or
+	// greater, and likewise nacks will be sent to memberlists who
+	// understand version 4 or greater.
 	ProtocolVersion2Compatible = 2
 
-	ProtocolVersionMax = 3
+	ProtocolVersionMax = 5
 )
 
 // messageType is an integer ID of a type of message that can be received
@@ -46,6 +53,8 @@ const (
 	userMsg // User mesg, not handled by us
 	compressMsg
 	encryptMsg
+	nackRespMsg
+	hasCrcMsg
 )
 
 // compressionType is used to specify the compression algorithm
@@ -83,12 +92,20 @@ type indirectPingReq struct {
 	Target []byte
 	Port   uint16
 	Node   string
+	Nack   bool // true if we'd like a nack back
 }
 
 // ack response is sent for a ping
 type ackResp struct {
 	SeqNo   uint32
 	Payload []byte
+}
+
+// nack response is sent for an indirect ping when the pinger doesn't hear from
+// the ping-ee within the configured timeout. This lets the original node know
+// that the indirect ping attempt happened but didn't succeed.
+type nackResp struct {
+	SeqNo uint32
 }
 
 // suspect is broadcast when we suspect a node is dead
@@ -121,7 +138,7 @@ type dead struct {
 }
 
 // pushPullHeader is used to inform the
-// otherside how many states we are transfering
+// otherside how many states we are transferring
 type pushPullHeader struct {
 	Nodes        int
 	UserStateLen int  // Encodes the byte lengh of user state
@@ -134,7 +151,7 @@ type userMsgHeader struct {
 }
 
 // pushNodeState is used for pushPullReq when we are
-// transfering out node states
+// transferring out node states
 type pushNodeState struct {
 	Name        string
 	Addr        []byte
@@ -207,7 +224,9 @@ func (m *Memberlist) handleConn(conn *net.TCPConn) {
 	conn.SetDeadline(time.Now().Add(m.config.TCPTimeout))
 	msgType, bufConn, dec, err := m.readTCP(conn)
 	if err != nil {
-		m.logger.Printf("[ERR] memberlist: failed to receive: %s %s", err, LogConn(conn))
+		if err != io.EOF {
+			m.logger.Printf("[ERR] memberlist: failed to receive: %s %s", err, LogConn(conn))
+		}
 		return
 	}
 
@@ -321,8 +340,18 @@ func (m *Memberlist) ingestPacket(buf []byte, from net.Addr, timestamp time.Time
 		buf = plain
 	}
 
-	// Handle the command
-	m.handleCommand(buf, from, timestamp)
+	// See if there's a checksum included to verify the contents of the message
+	if len(buf) >= 5 && messageType(buf[0]) == hasCrcMsg {
+		crc := crc32.ChecksumIEEE(buf[5:])
+		expected := binary.BigEndian.Uint32(buf[1:5])
+		if crc != expected {
+			m.logger.Printf("[WARN] memberlist: Got invalid checksum for UDP packet: %x, %x", crc, expected)
+			return
+		}
+		m.handleCommand(buf[5:], from, timestamp)
+	} else {
+		m.handleCommand(buf, from, timestamp)
+	}
 }
 
 func (m *Memberlist) handleCommand(buf []byte, from net.Addr, timestamp time.Time) {
@@ -343,6 +372,8 @@ func (m *Memberlist) handleCommand(buf []byte, from net.Addr, timestamp time.Tim
 		m.handleIndirectPing(buf, from)
 	case ackRespMsg:
 		m.handleAck(buf, from, timestamp)
+	case nackRespMsg:
+		m.handleNack(buf, from)
 
 	case suspectMsg:
 		fallthrough
@@ -440,18 +471,23 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 	}
 
 	// For proto versions < 2, there is no port provided. Mask old
-	// behavior by using the configured port
+	// behavior by using the configured port.
 	if m.ProtocolVersion() < 2 || ind.Port == 0 {
 		ind.Port = uint16(m.config.BindPort)
 	}
 
-	// Send a ping to the correct host
+	// Send a ping to the correct host.
 	localSeqNo := m.nextSeqNo()
 	ping := ping{SeqNo: localSeqNo, Node: ind.Node}
 	destAddr := &net.UDPAddr{IP: ind.Target, Port: int(ind.Port)}
 
 	// Setup a response handler to relay the ack
+	cancelCh := make(chan struct{})
 	respHandler := func(payload []byte, timestamp time.Time) {
+		// Try to prevent the nack if we've caught it in time.
+		close(cancelCh)
+
+		// Forward the ack back to the requestor.
 		ack := ackResp{ind.SeqNo, nil}
 		if err := m.encodeAndSendMsg(from, ackRespMsg, &ack); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to forward ack: %s %s", err, LogAddress(from))
@@ -459,9 +495,24 @@ func (m *Memberlist) handleIndirectPing(buf []byte, from net.Addr) {
 	}
 	m.setAckHandler(localSeqNo, respHandler, m.config.ProbeTimeout)
 
-	// Send the ping
+	// Send the ping.
 	if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
 		m.logger.Printf("[ERR] memberlist: Failed to send ping: %s %s", err, LogAddress(from))
+	}
+
+	// Setup a timer to fire off a nack if no ack is seen in time.
+	if ind.Nack {
+		go func() {
+			select {
+			case <-cancelCh:
+				return
+			case <-time.After(m.config.ProbeTimeout):
+				nack := nackResp{ind.SeqNo}
+				if err := m.encodeAndSendMsg(from, nackRespMsg, &nack); err != nil {
+					m.logger.Printf("[ERR] memberlist: Failed to send nack: %s %s", err, LogAddress(from))
+				}
+			}
+		}()
 	}
 }
 
@@ -472,6 +523,15 @@ func (m *Memberlist) handleAck(buf []byte, from net.Addr, timestamp time.Time) {
 		return
 	}
 	m.invokeAckHandler(ack, timestamp)
+}
+
+func (m *Memberlist) handleNack(buf []byte, from net.Addr) {
+	var nack nackResp
+	if err := decode(buf, &nack); err != nil {
+		m.logger.Printf("[ERR] memberlist: Failed to decode nack response: %s %s", err, LogAddress(from))
+		return
+	}
+	m.invokeNackHandler(nack)
 }
 
 func (m *Memberlist) handleSuspect(buf []byte, from net.Addr) {
@@ -553,7 +613,7 @@ func (m *Memberlist) sendMsg(to net.Addr, msg []byte) error {
 
 	// Fast path if nothing to piggypack
 	if len(extra) == 0 {
-		return m.rawSendMsgUDP(to, msg)
+		return m.rawSendMsgUDP(to, nil, msg)
 	}
 
 	// Join all the messages
@@ -565,11 +625,11 @@ func (m *Memberlist) sendMsg(to net.Addr, msg []byte) error {
 	compound := makeCompoundMessage(msgs)
 
 	// Send the message
-	return m.rawSendMsgUDP(to, compound.Bytes())
+	return m.rawSendMsgUDP(to, nil, compound.Bytes())
 }
 
 // rawSendMsgUDP is used to send a UDP message to another host without modification
-func (m *Memberlist) rawSendMsgUDP(to net.Addr, msg []byte) error {
+func (m *Memberlist) rawSendMsgUDP(addr net.Addr, node *Node, msg []byte) error {
 	// Check if we have compression enabled
 	if m.config.EnableCompression {
 		buf, err := compressPayload(msg)
@@ -581,6 +641,31 @@ func (m *Memberlist) rawSendMsgUDP(to net.Addr, msg []byte) error {
 				msg = buf.Bytes()
 			}
 		}
+	}
+
+	// Try to look up the destination node
+	if node == nil {
+		toAddr, _, err := net.SplitHostPort(addr.String())
+		if err != nil {
+			m.logger.Printf("[ERR] memberlist: Failed to parse address %q: %v", addr.String(), err)
+			return err
+		}
+		m.nodeLock.RLock()
+		nodeState, ok := m.nodeMap[toAddr]
+		m.nodeLock.RUnlock()
+		if ok {
+			node = &nodeState.Node
+		}
+	}
+
+	// Add a CRC to the end of the payload if the recipient understands
+	// ProtocolVersion >= 5
+	if node != nil && node.PMax >= 5 {
+		crc := crc32.ChecksumIEEE(msg)
+		header := make([]byte, 5, 5+len(msg))
+		header[0] = byte(hasCrcMsg)
+		binary.BigEndian.PutUint32(header[1:], crc)
+		msg = append(header, msg...)
 	}
 
 	// Check if we have encryption enabled
@@ -597,7 +682,7 @@ func (m *Memberlist) rawSendMsgUDP(to net.Addr, msg []byte) error {
 	}
 
 	metrics.IncrCounter([]string{"memberlist", "udp", "sent"}, float32(len(msg)))
-	_, err := m.udpListener.WriteTo(msg, to)
+	_, err := m.udpListener.WriteTo(msg, addr)
 	return err
 }
 

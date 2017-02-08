@@ -18,6 +18,7 @@ package monitoring
 
 import (
 	"bytes"
+	"context"
 	"os/exec"
 
 	"github.com/gravitational/satellite/agent/health"
@@ -74,7 +75,7 @@ const (
 
 func (r systemdChecker) Name() string { return "systemd" }
 
-func (r systemdChecker) Check(reporter health.Reporter) {
+func (r systemdChecker) Check(ctx context.Context, reporter health.Reporter) {
 	systemStatus, err := isSystemRunning()
 	if err != nil {
 		reporter.Add(NewProbeFromErr(r.Name(), trace.Errorf("failed to check system health: %v", err)))

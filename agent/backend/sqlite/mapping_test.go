@@ -17,14 +17,10 @@ limitations under the License.
 package sqlite
 
 import (
-	"testing"
-
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
 	. "gopkg.in/check.v1"
 )
-
-func TestMapping(t *testing.T) { TestingT(t) }
 
 type Mapping struct{}
 

@@ -17,6 +17,7 @@ limitations under the License.
 package checks
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -49,12 +50,12 @@ func NewRunner(kubeAddr string, kubeNodesReadyThreshold int, etcdConfig monitori
 }
 
 // Run runs all checks successively and reports general cluster status
-func (c *Runner) Run() *pb.Probe {
+func (c *Runner) Run(ctx context.Context) *pb.Probe {
 	var probes health.Probes
 
 	for _, c := range c.Checkers {
 		log.Infof("running checker %s", c.Name())
-		c.Check(&probes)
+		c.Check(ctx, &probes)
 	}
 
 	return finalHealth(probes)

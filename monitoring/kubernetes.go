@@ -18,16 +18,17 @@ package monitoring
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"io/ioutil"
-	"net/url"
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/trace"
 
-	"k8s.io/kubernetes/pkg/client/restclient"
-	kube "k8s.io/kubernetes/pkg/client/unversioned"
+	kube "k8s.io/client-go/1.4/kubernetes"
+	"k8s.io/client-go/1.4/rest"
+	"k8s.io/client-go/1.4/tools/clientcmd"
 )
 
 const systemNamespace = "kube-system"
@@ -45,32 +46,27 @@ func kubeHealthz(response io.Reader) error {
 }
 
 // KubeStatusChecker is a function that can check status of kubernetes services.
-type KubeStatusChecker func(client *kube.Client) error
+type KubeStatusChecker func(ctx context.Context, client *kube.Clientset) error
 
 // KubeChecker implements Checker that can check and report problems
 // with kubernetes services.
 type KubeChecker struct {
-	name     string
-	hostPort string
-	checker  KubeStatusChecker
+	name      string
+	masterURL string
+	checker   KubeStatusChecker
 }
 
 // ConnectToKube establishes a connection to kubernetes on the specified address
 // and returns an API client.
-func ConnectToKube(hostPort string) (*kube.Client, error) {
-	var baseURL *url.URL
-	var err error
-	if hostPort == "" {
-		return nil, trace.Errorf("hostPort cannot be empty")
-	}
-	baseURL, err = url.Parse(hostPort)
+func ConnectToKube(masterURL string) (*kube.Clientset, error) {
+	config, err := rest.InClusterConfig()
 	if err != nil {
-		return nil, trace.Wrap(err)
+		config, err = clientcmd.BuildConfigFromFlags(masterURL, "")
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
 	}
-	config := &restclient.Config{
-		Host: baseURL.String(),
-	}
-	client, err := kube.New(config)
+	client, err := kube.NewForConfig(config)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -82,13 +78,13 @@ func (r *KubeChecker) Name() string { return r.name }
 
 // Check runs the wrapped kubernetes service checker function and reports
 // status to the specified reporter
-func (r *KubeChecker) Check(reporter health.Reporter) {
+func (r *KubeChecker) Check(ctx context.Context, reporter health.Reporter) {
 	client, err := r.connect()
 	if err != nil {
 		reporter.Add(NewProbeFromErr(r.name, err))
 		return
 	}
-	err = r.checker(client)
+	err = r.checker(ctx, client)
 	if err != nil {
 		reporter.Add(NewProbeFromErr(r.name, err))
 		return
@@ -98,6 +94,6 @@ func (r *KubeChecker) Check(reporter health.Reporter) {
 	})
 }
 
-func (r *KubeChecker) connect() (*kube.Client, error) {
-	return ConnectToKube(r.hostPort)
+func (r *KubeChecker) connect() (*kube.Clientset, error) {
+	return ConnectToKube(r.masterURL)
 }

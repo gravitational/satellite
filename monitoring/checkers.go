@@ -33,11 +33,6 @@ func KubeletHealth(addr string) health.Checker {
 	return NewHTTPHealthzChecker("kubelet", fmt.Sprintf("%v/healthz", addr), kubeHealthz)
 }
 
-// ComponentStatusHealth creates a checker of the kubernetes component statuses
-func ComponentStatusHealth(kubeAddr string) health.Checker {
-	return NewComponentStatusChecker(kubeAddr)
-}
-
 // NodesStatusHealth creates a checker that reports a number of ready kubernetes nodes
 func NodesStatusHealth(kubeAddr string, nodesReadyThreshold int) health.Checker {
 	return NewNodesStatusChecker(kubeAddr, nodesReadyThreshold)
