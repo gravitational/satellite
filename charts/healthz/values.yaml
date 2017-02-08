@@ -9,7 +9,7 @@ healthz:
   checkInterval: 1m
   kube:
     addr: "http://localhost:8080"
-    nodesThreshold: "75"
+    nodesThreshold: "3"
   image:
     repo: "quay.io/gravitational/satellite"
     tag: "stable"

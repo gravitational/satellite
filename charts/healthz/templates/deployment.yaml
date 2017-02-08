@@ -24,6 +24,10 @@ spec:
           command:
             - healthz
           env:
+{{if .Values.healthz.debug}}
+            - name: DEBUG
+              value: "true"
+{{end}}
             - name: HEALTH_LISTEN_ADDR
               value: 0.0.0.0:{{.Values.healthz.nodePort | default 8080}}
             - name: ETCDCTL_PEERS
@@ -51,7 +55,7 @@ spec:
             - name: HEALTH_KUBE_ADDR
               value: {{.Values.healthz.kube.addr | default ""}}
             - name: HEALTH_KUBE_NODES_THRESHOLD
-              value: {{.Values.healthz.kube.nodesThreshold | default "75" | quote}}
+              value: {{.Values.healthz.kube.nodesThreshold | default "3" | quote}}
             - name: HEALTH_ACCESS_KEY
               valueFrom:
                 secretKeyRef:

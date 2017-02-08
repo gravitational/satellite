@@ -63,31 +63,25 @@ func (r *nodesStatusChecker) Check(reporter health.Reporter) {
 		reporter.Add(NewProbeFromErr(r.Name(), trace.Errorf("failed to query nodes: %v", err)))
 		return
 	}
-	var nodesCount int
 	var nodesReady int
 	for _, item := range statuses.Items {
-		nodesCount++
 		for _, condition := range item.Status.Conditions {
 			if condition.Type != api.NodeReady {
 				continue
 			}
 			if condition.Status == api.ConditionTrue {
 				nodesReady++
+				continue
 			}
 		}
 	}
 
-	percentNodesReady := 0
-	if nodesCount > 0 {
-		percentNodesReady = int(100. * float32(nodesReady) / float32(nodesCount))
-	}
-
-	if percentNodesReady < r.nodesReadyThreshold {
+	if nodesReady < r.nodesReadyThreshold {
 		reporter.Add(&pb.Probe{
 			Checker: r.Name(),
 			Status:  pb.Probe_Failed,
-			Error: fmt.Sprintf("Not enough ready nodes: %v%% (threshold %v%%)",
-				percentNodesReady, r.nodesReadyThreshold),
+			Error: fmt.Sprintf("Not enough ready nodes: %v (threshold %v)",
+				nodesReady, r.nodesReadyThreshold),
 		})
 	} else {
 		reporter.Add(&pb.Probe{

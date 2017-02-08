@@ -23,11 +23,11 @@ The following tables lists the configurable parameters of the Healthz chart and 
 | Parameter                     | Description                                               | Default                                       |
 | ----------------------------- | --------------------------------------------------------- | --------------------------------------------- |
 | `healthz.name`                | Base chart resources name                                 | `healthz`                                     |
-| `healthz.accesskey`           | Access key to fetch status from healthz                   | `akey`                                            |
+| `healthz.accesskey`           | Access key to fetch status from healthz                   | `akey`                                        |
 | `healthz.debug`               | Enable/disable debug log level                            | `true`                                        |
 | `healthz.checkinterval`       | K8S and ETCD services check interval (Go duration format) | `1m`                                          |
 | `healthz.kube.addr`           | K8S API endpoint                                          | `http://localhost:8080`                       |
-| `healthz.kube.nodesThreshold` | Lower limit of K8S nodes available                        | `75`                                          |
+| `healthz.kube.nodesThreshold` | Lower limit of number of K8S nodes available              | `3`                                           |
 | `healthz.image.repo`          | Image repo                                                | `quay.io/gravitational/satellite`             |
 | `healthz.image.tag`           | Image tag                                                 | `stable`                                      |
 | `healthz.image.pullPolicy`    | Image pull policy                                         | `IfNotPresent`                                |
