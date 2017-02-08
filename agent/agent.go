@@ -269,9 +269,11 @@ const statusQueryReplyTimeout = 30 * time.Second
 // updates the health status of the cluster by querying status of other active
 // cluster members.
 func (r *agent) statusUpdateLoop() {
+	statusUpdateCh := r.statusClock.After(statusUpdateTimeout)
+	recycleCh := r.recycleClock.After(recycleTimeout)
 	for {
 		select {
-		case <-r.statusClock.After(statusUpdateTimeout):
+		case <-statusUpdateCh:
 			ctx, cancel := context.WithTimeout(context.TODO(), statusQueryReplyTimeout)
 			go func() {
 				defer cancel() // close context if collection finishes before the deadline
@@ -293,11 +295,13 @@ func (r *agent) statusUpdateLoop() {
 				cancel()
 				return
 			}
-		case <-r.recycleClock.After(recycleTimeout):
+			statusUpdateCh = r.statusClock.After(statusUpdateTimeout)
+		case <-recycleCh:
 			err := r.cache.Recycle()
 			if err != nil {
 				log.Warningf("error recycling stats: %v", err)
 			}
+			recycleCh = r.recycleClock.After(recycleTimeout)
 		case <-r.done:
 			return
 		}
