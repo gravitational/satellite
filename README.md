@@ -25,7 +25,7 @@ There are currently no binary distributions available.
 ### Building from source
 
 Satellite manages dependencies via [godep] which is also a prerequisite for building.
-Another prerequisite is Go version 1.5+.
+Another prerequisite is Go version 1.7+.
 
  1. Install [Go]
  1. Install [godep]

@@ -38,7 +38,7 @@ func init() {
 
 var nodes = [2]string{"node-1", "node-2"}
 
-func TestBackend(t *testing.T) { TestingT(t) }
+func TestSuite(t *testing.T) { TestingT(t) }
 
 type BackendSuite struct {
 	backend *backend

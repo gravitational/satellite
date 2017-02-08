@@ -17,6 +17,7 @@ limitations under the License.
 package monitoring
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -46,7 +47,7 @@ func (_ *HealthzSuite) TestSetsCode(c *C) {
 		return nil
 	})
 	var reporter health.Probes
-	checker.Check(&reporter)
+	checker.Check(context.TODO(), &reporter)
 
 	c.Assert(reporter, HasLen, 1)
 	c.Assert(reporter[0].Code, Equals, "500")
@@ -62,7 +63,7 @@ func (_ *HealthzSuite) TestObtainsSuccessProbe(c *C) {
 		return nil
 	})
 	var reporter health.Probes
-	checker.Check(&reporter)
+	checker.Check(context.TODO(), &reporter)
 
 	expectedProbes := health.Probes{
 		{
@@ -83,7 +84,7 @@ func (_ *HealthzSuite) TestUsesClientTimeout(c *C) {
 		return nil
 	})
 	var reporter health.Probes
-	checker.Check(&reporter)
+	checker.Check(context.TODO(), &reporter)
 
 	c.Assert(reporter, HasLen, 1)
 	c.Assert(reporter[0].Error, Matches, `.*Client\.Timeout.*`)

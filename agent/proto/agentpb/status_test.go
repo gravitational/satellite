@@ -32,7 +32,7 @@ func init() {
 	}
 }
 
-func TestProtoStatus(t *testing.T) { TestingT(t) }
+func TestSuite(t *testing.T) { TestingT(t) }
 
 type ProtoStatus struct{}
 

@@ -17,6 +17,7 @@ limitations under the License.
 package agent
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -30,7 +31,6 @@ import (
 	log "github.com/Sirupsen/logrus"
 	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
-	"golang.org/x/net/context"
 	. "gopkg.in/check.v1"
 )
 
@@ -424,7 +424,7 @@ type testChecker struct {
 
 func (r testChecker) Name() string { return r.name }
 
-func (r *testChecker) Check(reporter health.Reporter) {
+func (r *testChecker) Check(ctx context.Context, reporter health.Reporter) {
 	if r.err != nil {
 		reporter.Add(&pb.Probe{
 			Checker: r.name,
