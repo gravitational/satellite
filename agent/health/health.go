@@ -17,13 +17,17 @@ limitations under the License.
 // package health defines health checking primitives.
 package health
 
-import pb "github.com/gravitational/satellite/agent/proto/agentpb"
+import (
+	"context"
+
+	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+)
 
 // Checker is an interface for executing a health check.
 type Checker interface {
 	Name() string
 	// Check runs a health check and records any errors into the specified reporter.
-	Check(Reporter)
+	Check(context.Context, Reporter)
 }
 
 // Checkers is a collection of checkers.

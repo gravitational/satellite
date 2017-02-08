@@ -18,6 +18,7 @@ package monitoring
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"io/ioutil"
 
@@ -45,7 +46,7 @@ func kubeHealthz(response io.Reader) error {
 }
 
 // KubeStatusChecker is a function that can check status of kubernetes services.
-type KubeStatusChecker func(client *kube.Clientset) error
+type KubeStatusChecker func(ctx context.Context, client *kube.Clientset) error
 
 // KubeChecker implements Checker that can check and report problems
 // with kubernetes services.
@@ -77,13 +78,13 @@ func (r *KubeChecker) Name() string { return r.name }
 
 // Check runs the wrapped kubernetes service checker function and reports
 // status to the specified reporter
-func (r *KubeChecker) Check(reporter health.Reporter) {
+func (r *KubeChecker) Check(ctx context.Context, reporter health.Reporter) {
 	client, err := r.connect()
 	if err != nil {
 		reporter.Add(NewProbeFromErr(r.name, err))
 		return
 	}
-	err = r.checker(client)
+	err = r.checker(ctx, client)
 	if err != nil {
 		reporter.Add(NewProbeFromErr(r.name, err))
 		return

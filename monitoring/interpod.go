@@ -17,6 +17,7 @@ limitations under the License.
 package monitoring
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -69,7 +70,7 @@ func NewInterPodChecker(masterURL, nettestContainerImage string) health.Checker 
 }
 
 // testInterPodCommunication implements the inter-pod communication test.
-func (r *interPodChecker) testInterPodCommunication(client *kube.Clientset) error {
+func (r *interPodChecker) testInterPodCommunication(ctx context.Context, client *kube.Clientset) error {
 	serviceName := generateName(serviceNamePrefix)
 	if err := createNamespaceIfNeeded(client, testNamespace); err != nil {
 		return trace.Wrap(err, "failed to create namespace `%v`", testNamespace)
@@ -111,7 +112,7 @@ func (r *interPodChecker) testInterPodCommunication(client *kube.Clientset) erro
 	}
 	defer cleanupService()
 
-	nodes, err := waitForAllNodesSchedulable(client)
+	nodes, err := waitForAllNodesSchedulable(ctx, client)
 	if err != nil {
 		return trace.Wrap(err, "failed to wait for all nodes to become schedulable")
 	}
@@ -182,6 +183,12 @@ func (r *interPodChecker) testInterPodCommunication(client *kube.Clientset) erro
 			log.Debugf("attempt %v: waiting on service/endpoints", i)
 		default:
 			return trace.Errorf("unexpected response: [%s]", body)
+		}
+
+		select {
+		case <-ctx.Done():
+			return trace.ConnectionProblem(nil, "test timed out")
+		default:
 		}
 	}
 
@@ -341,7 +348,7 @@ func getServiceAccount(c *kube.Clientset, ns, name string, shouldWait bool) (*v1
 	return user, nil
 }
 
-func waitForAllNodesSchedulable(c *kube.Clientset) (nodes *v1.NodeList, err error) {
+func waitForAllNodesSchedulable(ctx context.Context, c *kube.Clientset) (nodes *v1.NodeList, err error) {
 	const (
 		interval = 30 * time.Second
 		timeout  = 4 * time.Minute
@@ -367,6 +374,13 @@ func waitForAllNodesSchedulable(c *kube.Clientset) (nodes *v1.NodeList, err erro
 			log.Infof("%v/%v nodes schedulable (polling after 30s)", schedulable, len(nodes.Items))
 			return false, nil
 		}
+
+		select {
+		case <-ctx.Done():
+			return false, trace.ConnectionProblem(nil, "timed out waiting for nodes to become schedulable")
+		default:
+		}
+
 		return true, nil
 	})
 	return nodes, trace.Wrap(err)

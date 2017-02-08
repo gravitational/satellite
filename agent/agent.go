@@ -206,7 +206,7 @@ func (r *agent) runChecks(ctx context.Context) (*pb.NodeStatus, error) {
 	for _, c := range r.Checkers {
 		select {
 		case semaphoreCh <- struct{}{}:
-			go runChecker(c, probeCh, semaphoreCh)
+			go runChecker(ctx, c, probeCh, semaphoreCh)
 		case <-ctx.Done():
 			return nil, trace.ConnectionProblem(nil, "timed out running tests")
 		}
@@ -214,8 +214,12 @@ func (r *agent) runChecks(ctx context.Context) (*pb.NodeStatus, error) {
 
 	var probes health.Probes
 	for i := 0; i < len(r.Checkers); i++ {
-		probe := <-probeCh
-		probes = append(probes, probe...)
+		select {
+		case probe := <-probeCh:
+			probes = append(probes, probe...)
+		case <-ctx.Done():
+			return nil, trace.ConnectionProblem(nil, "timed out collecting test results")
+		}
 	}
 
 	return &pb.NodeStatus{
@@ -228,7 +232,7 @@ func (r *agent) runChecks(ctx context.Context) (*pb.NodeStatus, error) {
 // runChecker executes the specified checker and reports results on probeCh.
 // If the checker panics, the resulting probe will describe the checker failure.
 // Semaphore channel is guaranteed to receive a value upon completion.
-func runChecker(checker health.Checker, probeCh chan<- health.Probes, semaphoreCh <-chan struct{}) {
+func runChecker(ctx context.Context, checker health.Checker, probeCh chan<- health.Probes, semaphoreCh <-chan struct{}) {
 	defer func() {
 		if err := recover(); err != nil {
 			var probes health.Probes
@@ -246,7 +250,7 @@ func runChecker(checker health.Checker, probeCh chan<- health.Probes, semaphoreC
 	log.Debugf("running checker %q", checker.Name())
 
 	var probes health.Probes
-	checker.Check(&probes)
+	checker.Check(ctx, &probes)
 	probeCh <- probes
 }
 
@@ -258,8 +262,8 @@ const statusUpdateTimeout = 30 * time.Second
 // implement.
 const recycleTimeout = 10 * time.Minute
 
-// statusQueryWaitTimeout is the amount of time to wait for status query reply.
-const statusQueryWaitTimeout = 10 * time.Second
+// statusQueryReplyTimeout is the amount of time to wait for status query reply.
+const statusQueryReplyTimeout = 30 * time.Second
 
 // statusUpdateLoop is a long running background process that periodically
 // updates the health status of the cluster by querying status of other active
@@ -268,7 +272,7 @@ func (r *agent) statusUpdateLoop() {
 	for {
 		select {
 		case <-r.statusClock.After(statusUpdateTimeout):
-			ctx, cancel := context.WithTimeout(context.TODO(), statusQueryWaitTimeout)
+			ctx, cancel := context.WithTimeout(context.TODO(), statusQueryReplyTimeout)
 			go func() {
 				defer cancel() // close context if collection finishes before the deadline
 				status, err := r.collectStatus(ctx)
