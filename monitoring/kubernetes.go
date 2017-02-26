@@ -51,9 +51,10 @@ type KubeStatusChecker func(ctx context.Context, client *kube.Clientset) error
 // KubeChecker implements Checker that can check and report problems
 // with kubernetes services.
 type KubeChecker struct {
-	name      string
-	masterURL string
-	checker   KubeStatusChecker
+	name       string
+	masterURL  string
+	configPath string
+	checker    KubeStatusChecker
 }
 
 // ConnectToKube establishes a connection to kubernetes on the specified address
@@ -95,5 +96,5 @@ func (r *KubeChecker) Check(ctx context.Context, reporter health.Reporter) {
 }
 
 func (r *KubeChecker) connect() (*kube.Clientset, error) {
-	return ConnectToKube(r.masterURL, "")
+	return ConnectToKube(r.masterURL, r.configPath)
 }
