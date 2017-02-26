@@ -58,10 +58,10 @@ type KubeChecker struct {
 
 // ConnectToKube establishes a connection to kubernetes on the specified address
 // and returns an API client.
-func ConnectToKube(masterURL string) (*kube.Clientset, error) {
+func ConnectToKube(masterURL string, configPath string) (*kube.Clientset, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		config, err = clientcmd.BuildConfigFromFlags(masterURL, "")
+		config, err = clientcmd.BuildConfigFromFlags(masterURL, configPath)
 		if err != nil {
 			return nil, trace.Wrap(err)
 		}
@@ -95,5 +95,5 @@ func (r *KubeChecker) Check(ctx context.Context, reporter health.Reporter) {
 }
 
 func (r *KubeChecker) connect() (*kube.Clientset, error) {
-	return ConnectToKube(r.masterURL)
+	return ConnectToKube(r.masterURL, "")
 }
