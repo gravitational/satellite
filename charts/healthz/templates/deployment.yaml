@@ -76,28 +76,28 @@ spec:
               mountPath: /healthz-secret
               readOnly: true
 {{if ne .Values.healthz.etcd.caPath ""}}
-          - name: etcd-ca
-            mountPath: /healthz-host-secret/etcd-ca.pem
+            - name: etcd-ca
+              mountPath: /healthz-host-secret/etcd-ca.pem
 {{end}}
 {{if ne .Values.healthz.etcd.certPath ""}}
-          - name: etcd-cert
-            mountPath: /healthz-host-secret/etcd-cert.pem
+            - name: etcd-cert
+              mountPath: /healthz-host-secret/etcd-cert.pem
 {{end}}
 {{if ne .Values.healthz.etcd.keyPath ""}}
-          - name: etcd-key
-            mountPath: /healthz-host-secret/etcd-key.pem
+            - name: etcd-key
+              mountPath: /healthz-host-secret/etcd-key.pem
 {{end}}
 {{if ne .Values.healthz.ssl.caPath ""}}
-          - name: ssl-ca
-            mountPath: /healthz-host-secret/ssl-ca.pem
+            - name: ssl-ca
+              mountPath: /healthz-host-secret/ssl-ca.pem
 {{end}}
 {{if ne .Values.healthz.ssl.certPath ""}}
-          - name: ssl-cert
-            mountPath: /healthz-host-secret/ssl-cert.pem
+            - name: ssl-cert
+              mountPath: /healthz-host-secret/ssl-cert.pem
 {{end}}
 {{if ne .Values.healthz.ssl.keyPath ""}}
-          - name: ssl-key
-            mountPath: /healthz-host-secret/ssl-key.pem
+            - name: ssl-key
+              mountPath: /healthz-host-secret/ssl-key.pem
 {{end}}
       volumes:
         - name: healthz-secret
