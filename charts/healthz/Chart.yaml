@@ -1,5 +1,5 @@
 name: healthz
-version: 0.0.1
+version: 0.0.2
 description: Simple monitoring agent for K8S cluster
 keywords:
   - monitoring

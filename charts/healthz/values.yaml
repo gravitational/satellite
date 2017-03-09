@@ -7,6 +7,7 @@ healthz:
   accesskey: "akey"
   debug: true
   checkInterval: 1m
+  nodeSelector: {}
   kube:
     addr: "http://localhost:8080"
     nodesThreshold: "3"
@@ -21,9 +22,15 @@ healthz:
     cert: ""
     key: ""
     ca: ""
+    certPath: ""
+    keyPath: ""
+    caPath: ""
   etcd:
     peers: "http://localhost:4001,http://localhost:2380"
     cert: ""
     key: ""
     ca: ""
+    certPath: ""
+    keyPath: ""
+    caPath: ""
     skipVerify: false

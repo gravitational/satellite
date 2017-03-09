@@ -17,6 +17,12 @@ spec:
         app: {{.Values.healthz.name | default "healthz"}}
         release: {{.Release.Name | quote }}
     spec:
+{{if .Values.healthz.nodeSelector}}
+      nodeSelector:
+        {{range $key, $val := .Values.healthz.nodeSelector}}
+        {{$key}}: {{$val}}
+        {{end}}
+{{end}}
       containers:
         - name: healthz
           image: {{.Values.healthz.image.repo | default "healthz"}}:{{.Values.healthz.image.tag | default "stable"}}
@@ -33,22 +39,22 @@ spec:
             - name: ETCDCTL_PEERS
               value: {{.Values.healthz.etcd.peers | default "http://localhost:4001,http://localhost:2380"}}
             - name: ETCDCTL_CERT_FILE
-              value: /healthz-secret/etcdctl-cert.pem
+              value: /healthz-{{if ne .Values.healthz.etcd.certPath ""}}host-{{end}}secret/etcd-cert.pem
             - name: ETCDCTL_KEY_FILE
-              value: /healthz-secret/etcdctl-key.pem
+              value: /healthz-{{if ne .Values.healthz.etcd.keyPath ""}}host-{{end}}secret/etcd-key.pem
             - name: ETCDCTL_CA_FILE
-              value: /healthz-secret/etcdctl-ca.pem
+              value: /healthz-{{if ne .Values.healthz.etcd.caPath ""}}host-{{end}}secret/etcd-ca.pem
 {{if .Values.healthz.etcd.skipVerify}}
             - name: ETCDCTL_SKIP_VERIFY
               value: "true"
 {{end}}
 {{if .Values.healthz.ssl.enabled}}
             - name: HEALTH_CERT_FILE
-              value: /healthz-secret/cert.pem
+              value: /healthz-{{if ne .Values.healthz.ssl.certPath ""}}host-{{end}}secret/ssl-cert.pem
             - name: HEALTH_KEY_FILE
-              value: /healthz-secret/key.pem
+              value: /healthz-{{if ne .Values.healthz.ssl.keyPath ""}}host-{{end}}secret/ssl-key.pem
             - name: HEALTH_CA_FILE
-              value: /healthz-secret/ca.pem
+              value: /healthz-{{if ne .Values.healthz.ssl.caPath ""}}host-{{end}}secret/ssl-ca.pem
 {{end}}
             - name: HEALTH_CHECK_INTERVAL
               value: {{.Values.healthz.checkInterval | default "1m"}}
@@ -69,8 +75,62 @@ spec:
             - name: healthz-secret
               mountPath: /healthz-secret
               readOnly: true
+{{if ne .Values.healthz.etcd.caPath ""}}
+          - name: etcd-ca
+            mountPath: /healthz-host-secret/etcd-ca.pem
+{{end}}
+{{if ne .Values.healthz.etcd.certPath ""}}
+          - name: etcd-cert
+            mountPath: /healthz-host-secret/etcd-cert.pem
+{{end}}
+{{if ne .Values.healthz.etcd.keyPath ""}}
+          - name: etcd-key
+            mountPath: /healthz-host-secret/etcd-key.pem
+{{end}}
+{{if ne .Values.healthz.ssl.caPath ""}}
+          - name: ssl-ca
+            mountPath: /healthz-host-secret/ssl-ca.pem
+{{end}}
+{{if ne .Values.healthz.ssl.certPath ""}}
+          - name: ssl-cert
+            mountPath: /healthz-host-secret/ssl-cert.pem
+{{end}}
+{{if ne .Values.healthz.ssl.keyPath ""}}
+          - name: ssl-key
+            mountPath: /healthz-host-secret/ssl-key.pem
+{{end}}
       volumes:
         - name: healthz-secret
           secret:
             secretName: {{.Values.healthz.name | default "healthz"}}
+{{if ne .Values.healthz.etcd.caPath ""}}
+        - name: etcd-ca
+          hostPath:
+            path: {{.Values.healthz.etcd.caPath | quote}}
+{{end}}
+{{if ne .Values.healthz.etcd.certPath ""}}
+        - name: etcd-cert
+          hostPath:
+            path: {{.Values.healthz.etcd.certPath | quote}}
+{{end}}
+{{if ne .Values.healthz.etcd.keyPath ""}}
+        - name: etcd-key
+          hostPath:
+            path: {{.Values.healthz.etcd.keyPath | quote}}
+{{end}}
+{{if ne .Values.healthz.ssl.caPath ""}}
+        - name: ssl-ca
+          hostPath:
+            path: {{.Values.healthz.ssl.caPath | quote}}
+{{end}}
+{{if ne .Values.healthz.ssl.certPath ""}}
+        - name: ssl-cert
+          hostPath:
+            path: {{.Values.healthz.ssl.certPath | quote}}
+{{end}}
+{{if ne .Values.healthz.ssl.keyPath ""}}
+        - name: ssl-key
+          hostPath:
+            path: {{.Values.healthz.ssl.keyPath | quote}}
+{{end}}
       hostNetwork: true
