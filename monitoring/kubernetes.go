@@ -91,7 +91,8 @@ func (r *KubeChecker) Check(ctx context.Context, reporter health.Reporter) {
 		return
 	}
 	reporter.Add(&pb.Probe{
-		Status: pb.Probe_Running,
+		Checker: r.name,
+		Status:  pb.Probe_Running,
 	})
 }
 

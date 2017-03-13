@@ -43,7 +43,7 @@ func KubeAPIServerHealth(kubeAddr string, config string) health.Checker {
 	return kubeChecker
 }
 
-// testInterPodCommunication implements the inter-pod communication test.
+// testHealthz executes a test by using k8s API
 func (h *healthzChecker) testHealthz(ctx context.Context, client *kube.Clientset) error {
 	_, err := client.Core().ComponentStatuses().Get("scheduler")
 	return err
