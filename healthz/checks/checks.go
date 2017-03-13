@@ -44,7 +44,7 @@ func NewRunner(kubeAddr string, kubeNodesReadyThreshold int, etcdConfig monitori
 	}
 	runner := &Runner{}
 	runner.AddChecker(etcdChecker)
-	runner.AddChecker(monitoring.KubeAPIServerHealth(kubeAddr))
+	runner.AddChecker(monitoring.KubeAPIServerHealth(kubeAddr, ""))
 	runner.AddChecker(monitoring.NodesStatusHealth(kubeAddr, kubeNodesReadyThreshold))
 	return runner, nil
 }

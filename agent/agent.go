@@ -44,7 +44,8 @@ type Agent interface {
 	Join(peers []string) error
 	// LocalStatus reports the health status of the local agent node.
 	LocalStatus() *pb.NodeStatus
-
+	// IsMember returns whether this agent is already a member of serf cluster
+	IsMember() bool
 	health.CheckerRepository
 }
 
@@ -165,6 +166,16 @@ func (r *agent) Start() error {
 
 	go r.statusUpdateLoop()
 	return nil
+}
+
+// IsMember returns true if this agent is member of the serf cluster
+func (r *agent) IsMember() bool {
+	_, err := r.serfClient.Members()
+	if err != nil {
+		log.Debugf("failed to retrieve members: %v", err)
+		return false
+	}
+	return true
 }
 
 // Join attempts to join a serf cluster identified by peers.

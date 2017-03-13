@@ -17,15 +17,36 @@ limitations under the License.
 package monitoring
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/gravitational/satellite/agent/health"
 	"github.com/gravitational/trace"
+	kube "k8s.io/client-go/1.4/kubernetes"
 )
 
+// healthzChecker is secure healthz checker
+type healthzChecker struct {
+	*KubeChecker
+}
+
 // KubeAPIServerHealth creates a checker for the kubernetes API server
-func KubeAPIServerHealth(kubeAddr string) health.Checker {
-	return NewHTTPHealthzChecker("kube-apiserver", fmt.Sprintf("%v/healthz", kubeAddr), kubeHealthz)
+func KubeAPIServerHealth(kubeAddr string, config string) health.Checker {
+	checker := &healthzChecker{}
+	kubeChecker := &KubeChecker{
+		name:       "kube-apiserver",
+		masterURL:  kubeAddr,
+		checker:    checker.testHealthz,
+		configPath: config,
+	}
+	checker.KubeChecker = kubeChecker
+	return kubeChecker
+}
+
+// testHealthz executes a test by using k8s API
+func (h *healthzChecker) testHealthz(ctx context.Context, client *kube.Clientset) error {
+	_, err := client.Core().ComponentStatuses().Get("scheduler")
+	return err
 }
 
 // KubeletHealth creates a checker for the kubernetes kubelet component

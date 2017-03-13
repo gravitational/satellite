@@ -51,17 +51,18 @@ type KubeStatusChecker func(ctx context.Context, client *kube.Clientset) error
 // KubeChecker implements Checker that can check and report problems
 // with kubernetes services.
 type KubeChecker struct {
-	name      string
-	masterURL string
-	checker   KubeStatusChecker
+	name       string
+	masterURL  string
+	configPath string
+	checker    KubeStatusChecker
 }
 
 // ConnectToKube establishes a connection to kubernetes on the specified address
 // and returns an API client.
-func ConnectToKube(masterURL string) (*kube.Clientset, error) {
+func ConnectToKube(masterURL string, configPath string) (*kube.Clientset, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		config, err = clientcmd.BuildConfigFromFlags(masterURL, "")
+		config, err = clientcmd.BuildConfigFromFlags(masterURL, configPath)
 		if err != nil {
 			return nil, trace.Wrap(err)
 		}
@@ -90,10 +91,11 @@ func (r *KubeChecker) Check(ctx context.Context, reporter health.Reporter) {
 		return
 	}
 	reporter.Add(&pb.Probe{
-		Status: pb.Probe_Running,
+		Checker: r.name,
+		Status:  pb.Probe_Running,
 	})
 }
 
 func (r *KubeChecker) connect() (*kube.Clientset, error) {
-	return ConnectToKube(r.masterURL)
+	return ConnectToKube(r.masterURL, r.configPath)
 }
