@@ -168,14 +168,24 @@ func (r *agent) Start() error {
 	return nil
 }
 
-// IsMember returns true if this agent is member of the serf cluster
+// IsMember returns true if this agent is a member of the serf cluster
 func (r *agent) IsMember() bool {
-	_, err := r.serfClient.Members()
+	members, err := r.serfClient.Members()
 	if err != nil {
-		log.Debugf("failed to retrieve members: %v", err)
+		log.Errorf("failed to retrieve members: %v", trace.DebugReport(err))
 		return false
 	}
-	return true
+	// if we're the only one, consider that we're not in the cluster yet
+	// (cause more often than not there are more than 1 member)
+	if len(members) == 1 && members[0].Name == r.name {
+		return false
+	}
+	for _, member := range members {
+		if member.Name == r.name {
+			return true
+		}
+	}
+	return false
 }
 
 // Join attempts to join a serf cluster identified by peers.

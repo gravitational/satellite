@@ -219,6 +219,24 @@ func (r *AgentSuite) TestRecyclesCache(c *C) {
 	c.Assert(*status, DeepEquals, *emptyStatus())
 }
 
+func (r *AgentSuite) TestIsMember(c *C) {
+	at := time.Date(1984, time.April, 4, 0, 0, 0, 0, time.UTC)
+	statusClock := clockwork.NewFakeClockAt(at)
+	recycleClock := clockwork.NewFakeClockAt(at.Add(recycleTimeout + time.Second))
+
+	agent := newAgent("node1", 7676, []serf.Member{newMember("node1", "alive")},
+		[]health.Checker{healthyTest}, statusClock, recycleClock, c)
+	c.Assert(agent.IsMember(), Equals, false)
+
+	agent = newAgent("node1", 7676, []serf.Member{newMember("node2", "alive")},
+		[]health.Checker{healthyTest}, statusClock, recycleClock, c)
+	c.Assert(agent.IsMember(), Equals, false)
+
+	agent = newAgent("node1", 7676, []serf.Member{newMember("node1", "alive"), newMember("node2", "alive")},
+		[]health.Checker{healthyTest}, statusClock, recycleClock, c)
+	c.Assert(agent.IsMember(), Equals, true)
+}
+
 var healthyTest = &testChecker{
 	name: "healthy service",
 }
