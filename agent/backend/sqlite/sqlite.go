@@ -369,16 +369,29 @@ func (r *backend) Recycle() error {
 
 // deleteOlderThan removes items older than the specified time limit.
 func (r *backend) deleteOlderThan(limit time.Time) error {
-	const deleteStmt = `DELETE FROM system_snapshot WHERE datetime(captured_at) < datetime(?)`
+	var deleteStmts = []string{
+		`DELETE FROM probe
+		   WHERE snapshot_id IN (
+		   SELECT s.id FROM system_snapshot s JOIN probe p ON s.id = p.snapshot_id
+			JOIN node_snapshot ns ON s.id = ns.snapshot_id AND ns.node_id = p.node_id
+		   WHERE datetime(s.captured_at) < datetime(?))`,
+		`DELETE FROM node_snapshot
+		   WHERE snapshot_id IN (
+		   SELECT s.id FROM system_snapshot s JOIN node_snapshot ns ON s.id = ns.snapshot_id
+		   WHERE datetime(s.captured_at) < datetime(?))`,
+		`DELETE FROM system_snapshot WHERE datetime(captured_at) < datetime(?)`,
+	}
 
 	if err := inTx(r.DB, func(tx *sql.Tx) error {
 		ts, err := pb.TimeToProto(limit).MarshalText()
 		if err != nil {
 			return trace.Wrap(err)
 		}
-		_, err = tx.Exec(deleteStmt, ts)
-		if err != nil {
-			return trace.Wrap(err)
+		for _, stmt := range deleteStmts {
+			_, err = tx.Exec(stmt, ts)
+			if err != nil {
+				return trace.Wrap(err)
+			}
 		}
 		return nil
 	}); err != nil {

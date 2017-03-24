@@ -99,7 +99,11 @@ func (r *BackendSuite) TestExplicitlyRecycles(c *C) {
 
 	var count int64
 	when := timestamp(pb.TimeToProto(ts))
-	err = r.backend.QueryRow(`SELECT count(*) FROM system_snapshot WHERE captured_at = ?`, when).Scan(&count)
+	err = r.backend.QueryRow(`
+	SELECT count(*) FROM system_snapshot s
+		LEFT OUTER JOIN node_snapshot ns ON s.id = ns.snapshot_id
+		LEFT OUTER JOIN probe p ON s.id = p.snapshot_id AND ns.node_id = p.node_id
+		WHERE captured_at = ?`, when).Scan(&count)
 	c.Assert(err, IsNil)
 
 	c.Assert(count, Equals, int64(0))
