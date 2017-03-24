@@ -1,6 +1,6 @@
 package agentpb
 
-// Clones creates a deep-copy of this SystemStatus
+// Clone creates a deep-copy of this SystemStatus
 func (r *SystemStatus) Clone() (status *SystemStatus) {
 	status = new(SystemStatus)
 	*status = *r
@@ -11,7 +11,7 @@ func (r *SystemStatus) Clone() (status *SystemStatus) {
 	return status
 }
 
-// Clones creates a deep-copy of this NodeStatus
+// Clone creates a deep-copy of this NodeStatus
 func (r *NodeStatus) Clone() (status *NodeStatus) {
 	status = new(NodeStatus)
 	*status = *r
@@ -23,7 +23,7 @@ func (r *NodeStatus) Clone() (status *NodeStatus) {
 	return status
 }
 
-// Clones creates a deep-copy of this MemberStatus
+// Clone creates a deep-copy of this MemberStatus
 func (r *MemberStatus) Clone() (status *MemberStatus) {
 	status = new(MemberStatus)
 	*status = *r
