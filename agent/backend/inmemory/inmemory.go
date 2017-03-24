@@ -1,6 +1,10 @@
 package inmemory
 
-import pb "github.com/gravitational/satellite/agent/proto/agentpb"
+import (
+	"sync"
+
+	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+)
 
 // New creates a new instance of cache
 func New() *cache {
@@ -9,13 +13,18 @@ func New() *cache {
 
 // Update persists the specified cluster status.
 func (r *cache) UpdateStatus(status *pb.SystemStatus) error {
+	r.Lock()
+	defer r.Unlock()
 	r.SystemStatus = status.Clone()
 	return nil
 }
 
 // RecentStatus returns the contents of the last persisted cluster state.
-func (r *cache) RecentStatus() (*pb.SystemStatus, error) {
-	return r.SystemStatus, nil
+func (r *cache) RecentStatus() (status *pb.SystemStatus, err error) {
+	r.RLock()
+	defer r.RUnlock()
+	status = r.SystemStatus.Clone()
+	return status, nil
 }
 
 // Recycle is a no-op for inmemory cache
@@ -30,5 +39,6 @@ func (r *cache) Close() error {
 
 // cache implements agent/cache.Cache interface
 type cache struct {
+	sync.RWMutex
 	*pb.SystemStatus
 }

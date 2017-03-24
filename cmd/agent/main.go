@@ -18,13 +18,11 @@ package main
 
 import (
 	"os"
-	"path/filepath"
 
 	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/agent/backend"
 	"github.com/gravitational/satellite/agent/backend/influxdb"
-	"github.com/gravitational/satellite/agent/backend/sqlite"
-	"github.com/gravitational/satellite/agent/cache"
+	"github.com/gravitational/satellite/agent/backend/inmemory"
 	"github.com/gravitational/satellite/agent/cache/multiplex"
 	"github.com/gravitational/satellite/monitoring"
 	"github.com/gravitational/trace"
@@ -59,7 +57,6 @@ func run() error {
 		cagentName                  = cagent.Flag("name", "Agent name.  Must be the same as the name of the local serf node").OverrideDefaultFromEnvar(EnvAgentName).String()
 		cagentSerfRPCAddr           = cagent.Flag("serf-rpc-addr", "RPC address of the local serf node").Default("127.0.0.1:7373").String()
 		cagentInitialCluster        = KeyValueListFlag(cagent.Flag("initial-cluster", "Initial cluster configuration as a comma-separated list of peers").OverrideDefaultFromEnvar(EnvInitialCluster))
-		cagentStateDir              = cagent.Flag("state-dir", "Directory to store agent-specific state").OverrideDefaultFromEnvar(EnvStateDir).String()
 		cagentTags                  = KeyValueListFlag(cagent.Flag("tags", "Define a tags as comma-separated list of key:value pairs").OverrideDefaultFromEnvar(EnvTags))
 		disableInterPodCheck        = cagent.Flag("disable-interpod-check", "Disable inter-pod check for single node cluster").Bool()
 		// etcd configuration
@@ -111,14 +108,7 @@ func run() error {
 		if !ok {
 			return trace.Errorf("agent role not set")
 		}
-		path := filepath.Join(*cagentStateDir, monitoringDbFile)
-		log.Infof("saving health history to %v", path)
-		var cache cache.Cache
-		cache, err = sqlite.New(path)
-		if err != nil {
-			err = trace.Wrap(err, "failed to create cache")
-			break
-		}
+		cache := inmemory.New()
 		var backends []backend.Backend
 		if *cagentInfluxDatabase != "" {
 			log.Infof("connecting to influxdb database `%v` on %v", *cagentInfluxDatabase,
