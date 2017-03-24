@@ -10,6 +10,7 @@ func New() *cache {
 // Update persists the specified cluster status.
 func (r *cache) UpdateStatus(status *pb.SystemStatus) error {
 	r.SystemStatus = status.Clone()
+	return nil
 }
 
 // RecentStatus returns the contents of the last persisted cluster state.
