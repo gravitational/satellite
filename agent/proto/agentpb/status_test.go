@@ -18,27 +18,11 @@ package agentpb
 
 import (
 	"bytes"
-	"os"
-	"testing"
 
-	log "github.com/Sirupsen/logrus"
 	. "gopkg.in/check.v1"
 )
 
-func init() {
-	if testing.Verbose() {
-		log.SetOutput(os.Stderr)
-		log.SetLevel(log.InfoLevel)
-	}
-}
-
-func TestSuite(t *testing.T) { TestingT(t) }
-
-type ProtoStatus struct{}
-
-var _ = Suite(&ProtoStatus{})
-
-func (r *ProtoStatus) TestMarshalsMemberStatus(c *C) {
+func (_ *ProtoSuite) TestMarshalsMemberStatus(c *C) {
 	var tests = []struct {
 		status   MemberStatus_Type
 		expected []byte
@@ -77,7 +61,7 @@ func (r *ProtoStatus) TestMarshalsMemberStatus(c *C) {
 	}
 }
 
-func (r *ProtoStatus) TestMarshalsSystemStatus(c *C) {
+func (_ *ProtoSuite) TestMarshalsSystemStatus(c *C) {
 	var tests = []struct {
 		status   SystemStatus_Type
 		expected []byte
@@ -108,7 +92,7 @@ func (r *ProtoStatus) TestMarshalsSystemStatus(c *C) {
 	}
 }
 
-func (r *ProtoStatus) TestMarshalsNodeStatus(c *C) {
+func (_ *ProtoSuite) TestMarshalsNodeStatus(c *C) {
 	var tests = []struct {
 		status   NodeStatus_Type
 		expected []byte

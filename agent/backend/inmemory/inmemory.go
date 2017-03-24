@@ -1,10 +1,6 @@
 package inmemory
 
-import (
-	"time"
-
-	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-)
+import pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
 // New creates a new instance of cache
 func New() *cache {
@@ -33,5 +29,5 @@ func (r *cache) Close() error {
 
 // cache implements agent/cache.Cache interface
 type cache struct {
-	*SystemStatus
+	*pb.SystemStatus
 }

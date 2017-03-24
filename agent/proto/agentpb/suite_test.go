@@ -17,26 +17,22 @@ limitations under the License.
 package agentpb
 
 import (
-	"time"
+	"os"
+	"testing"
 
+	log "github.com/Sirupsen/logrus"
 	. "gopkg.in/check.v1"
 )
 
-func (_ *ProtoSuite) TestWrapsTime(c *C) {
-	expected := time.Now().UTC()
-	ts := TimeToProto(expected)
-	actual := ts.ToTime()
-	c.Assert(expected, DeepEquals, actual)
+func init() {
+	if testing.Verbose() {
+		log.SetOutput(os.Stderr)
+		log.SetLevel(log.InfoLevel)
+	}
 }
 
-func (_ *ProtoSuite) TestMarshalsTime(c *C) {
-	expected := time.Now().UTC()
-	ts := TimeToProto(expected)
-	text, err := ts.MarshalText()
-	c.Assert(err, IsNil)
+func TestSuite(t *testing.T) { TestingT(t) }
 
-	ts2 := Timestamp{}
-	c.Assert(ts2.UnmarshalText(text), IsNil)
+type ProtoSuite struct{}
 
-	c.Assert(ts, DeepEquals, ts2)
-}
+var _ = Suite(&ProtoSuite{})
