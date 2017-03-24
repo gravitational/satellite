@@ -216,7 +216,7 @@ func (r *AgentSuite) TestRecyclesCache(c *C) {
 
 	status, err := cache.RecentStatus()
 	c.Assert(err, IsNil)
-	c.Assert(*status, DeepEquals, *emptyStatus())
+	c.Assert(status, DeepEquals, pb.EmptyStatus())
 }
 
 func (r *AgentSuite) TestIsMember(c *C) {
@@ -379,7 +379,7 @@ func (r *testCache) RecentStatus() (*pb.SystemStatus, error) {
 }
 
 func (r *testCache) Recycle() error {
-	r.SystemStatus = emptyStatus()
+	r.SystemStatus = pb.EmptyStatus()
 	return nil
 }
 
@@ -429,10 +429,6 @@ func newAgent(node string, rpcPort int, members []serf.Member,
 }
 
 var errInvalidState = errors.New("invalid state")
-
-func emptyStatus() *pb.SystemStatus {
-	return &pb.SystemStatus{Status: pb.SystemStatus_Unknown}
-}
 
 // testChecker implements a health.Checker interface for the tests.
 type testChecker struct {

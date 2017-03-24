@@ -232,8 +232,6 @@ func (r *backend) RecentStatus() (*pb.SystemStatus, error) {
 		if err := r.selector(selectTags, tagSelector(status), ts); err != nil {
 			return nil, trace.Wrap(err)
 		}
-	} else {
-		status = &pb.SystemStatus{Status: pb.SystemStatus_Unknown}
 	}
 	return status, nil
 }

@@ -428,8 +428,12 @@ type statusResponse struct {
 }
 
 // recentStatus returns the last known cluster status.
-func (r *agent) recentStatus() (*pb.SystemStatus, error) {
-	return r.cache.RecentStatus()
+func (r *agent) recentStatus() (status *pb.SystemStatus, err error) {
+	status, err = r.cache.RecentStatus()
+	if err == nil && status == nil {
+		status = pb.EmptyStatus()
+	}
+	return status, trace.Wrap(err)
 }
 
 // recentLocalStatus returns the last known local node status.
