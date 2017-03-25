@@ -23,8 +23,7 @@ func (r *cache) UpdateStatus(status *pb.SystemStatus) error {
 func (r *cache) RecentStatus() (status *pb.SystemStatus, err error) {
 	r.RLock()
 	defer r.RUnlock()
-	status = r.SystemStatus.Clone()
-	return status, nil
+	return r.SystemStatus, nil
 }
 
 // Recycle is a no-op for inmemory cache
