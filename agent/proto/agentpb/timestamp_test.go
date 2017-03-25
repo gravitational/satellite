@@ -22,18 +22,14 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-type TimestampSuite struct{}
-
-var _ = Suite(&TimestampSuite{})
-
-func (_ *TimestampSuite) TestWrapsTime(c *C) {
+func (_ *ProtoSuite) TestWrapsTime(c *C) {
 	expected := time.Now().UTC()
 	ts := TimeToProto(expected)
 	actual := ts.ToTime()
 	c.Assert(expected, DeepEquals, actual)
 }
 
-func (_ *TimestampSuite) TestMarshalsTime(c *C) {
+func (_ *ProtoSuite) TestMarshalsTime(c *C) {
 	expected := time.Now().UTC()
 	ts := TimeToProto(expected)
 	text, err := ts.MarshalText()

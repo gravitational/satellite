@@ -5,7 +5,6 @@
 	"Packages": [
 		"./cmd/...",
 		"./agent/...",
-		"./agent/backend/sqlite/...",
 		"./monitoring"
 	],
 	"Deps": [
@@ -177,11 +176,6 @@
 		{
 			"ImportPath": "github.com/juju/ratelimit",
 			"Rev": "77ed1c8a01217656d2080ad51981f6e99adaa177"
-		},
-		{
-			"ImportPath": "github.com/mattn/go-sqlite3",
-			"Comment": "v1.2.0-24-g6f8cd03",
-			"Rev": "6f8cd03789727d57d2c5906a1c2990f5ab50f8e1"
 		},
 		{
 			"ImportPath": "github.com/miekg/dns",

@@ -14,9 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// This file implements JSON encoding/decoding for status types
 package agentpb
 
-// This file implements JSON encoding/decoding for status types
+// EmptyStatus returns an empty system status
+func EmptyStatus() *SystemStatus {
+	return &SystemStatus{Status: SystemStatus_Unknown}
+}
 
 // encoding.TextMarshaler
 func (s SystemStatus_Type) MarshalText() (text []byte, err error) {

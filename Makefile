@@ -12,7 +12,6 @@ all: binaries
 binaries: $(BUILDDIR)/satellite $(BUILDDIR)/healthz
 
 $(BUILDDIR)/satellite: linkflags
-	go install github.com/gravitational/satellite/vendor/github.com/mattn/go-sqlite3
 	go build -o $@ -ldflags $(LINKFLAGS) github.com/gravitational/satellite/cmd/agent
 
 $(BUILDDIR)/healthz: linkflags
@@ -34,8 +33,8 @@ sloccount:
 	find . -path ./vendor -prune -o -name "*.go" -print0 | xargs -0 wc -l
 
 test:
-	go test -v -test.parallel=0 -race ./agent/...
-	go test -v -test.parallel=0 -race ./monitoring/...
+	go test -test.parallel=0 -race ./agent/...
+	go test -test.parallel=0 -race ./monitoring/...
 
 test-style:
 	@scripts/validate-license.sh

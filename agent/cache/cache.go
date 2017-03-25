@@ -26,6 +26,8 @@ type Cache interface {
 	UpdateStatus(status *pb.SystemStatus) error
 
 	// Read obtains last known system status.
+	// If nil status is returned, empty system status will be
+	// assumed as defined by pb.EmptyStatus.
 	RecentStatus() (*pb.SystemStatus, error)
 
 	// Recycle is a periodic request to recycle any resources
