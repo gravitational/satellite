@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"io/ioutil"
+	"net/http"
 
 	"github.com/gravitational/trace"
 )
@@ -50,6 +51,22 @@ func CertFromFilePair(certFile, keyFile string) (*tls.Certificate, error) {
 		return nil, trace.Wrap(err)
 	}
 	return &cert, err
+}
+
+// AddCertToDefaultPool adds certificate to from file to default pool
+func AddCertToDefaultPool(fpath string) error {
+	certBytes, err := ioutil.ReadFile(fpath)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	tr := http.DefaultTransport.(*http.Transport)
+	tr.TLSClientConfig = &tls.Config{
+		ClientCAs: x509.NewCertPool(),
+	}
+	if ok := tr.TLSClientConfig.ClientCAs.AppendCertsFromPEM(certBytes); !ok {
+		return trace.Wrap(trace.BadParameter("failed to load PEM %s", fpath))
+	}
+	return nil
 }
 
 // NewServerTLS constructs a TLS from the input certificate file, key

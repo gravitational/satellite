@@ -29,6 +29,7 @@ type Config struct {
 	CheckInterval      time.Duration
 	AccessKey          string
 	KubeAddr           string
+	KubeCertFile       string
 	KubeNodesThreshold int
 	ETCDConfig         monitoring.ETCDConfig
 	CertFile           string

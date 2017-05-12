@@ -10,6 +10,7 @@ healthz:
   nodeSelector: {}
   kube:
     addr: "http://localhost:8080"
+    cert: ""
     nodesThreshold: "3"
   image:
     repo: "quay.io/gravitational/satellite"

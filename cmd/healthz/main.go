@@ -105,6 +105,12 @@ func run() error {
 		listener = tls.NewListener(listener, tlsConfig)
 	}
 
+	if len(cfg.KubeCertFile) > 0 {
+		if err := utils.AddCertToDefaultPool(cfg.KubeCertFile); err != nil {
+			return trace.Wrap(err)
+		}
+	}
+
 	go func() {
 		if err := http.Serve(listener, nil); err != nil {
 			errChan <- trace.Wrap(err)
