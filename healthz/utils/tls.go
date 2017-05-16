@@ -53,7 +53,7 @@ func CertFromFilePair(certFile, keyFile string) (*tls.Certificate, error) {
 	return &cert, err
 }
 
-// AddCertToDefaultPool adds certificate to from file to default pool
+// AddCertToDefaultPool adds certificate from file to default pool
 func AddCertToDefaultPool(fpath string) error {
 	certBytes, err := ioutil.ReadFile(fpath)
 	if err != nil {
@@ -64,7 +64,7 @@ func AddCertToDefaultPool(fpath string) error {
 		ClientCAs: x509.NewCertPool(),
 	}
 	if ok := tr.TLSClientConfig.ClientCAs.AppendCertsFromPEM(certBytes); !ok {
-		return trace.Wrap(trace.BadParameter("failed to load PEM %s", fpath))
+		return trace.BadParameter("failed to load PEM %s", fpath)
 	}
 	return nil
 }
