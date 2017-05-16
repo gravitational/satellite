@@ -60,6 +60,10 @@ spec:
               value: {{.Values.healthz.checkInterval | default "1m"}}
             - name: HEALTH_KUBE_ADDR
               value: {{.Values.healthz.kube.addr | default ""}}
+{{if .Values.healthz.kube.cert}}
+            - name: HEALTH_KUBE_CERT_FILE
+              value: {{.Values.healthz.kube.cert | default ""}}
+{{end}}
             - name: HEALTH_KUBE_NODES_THRESHOLD
               value: {{.Values.healthz.kube.nodesThreshold | default "3" | quote}}
             - name: HEALTH_ACCESS_KEY
