@@ -35,6 +35,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/gravitational/trace"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func main() {
@@ -91,6 +92,8 @@ func run() error {
 		clusterHealthMu.Unlock()
 		handlers.Healthz(status, w, req)
 	})
+
+	http.Handle("/metrics", prometheus.Handler())
 
 	listener, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
