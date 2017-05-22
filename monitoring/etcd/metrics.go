@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package monitoring
+package etcd
 
 import (
 	"encoding/json"
@@ -23,39 +23,41 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gravitational/satellite/monitoring"
 	"github.com/gravitational/trace"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const collectETCDMetricsTimeout = 5 * time.Second
+const collectMetricsTimeout = 5 * time.Second
 
-// EtcdLeaderStats is used by the leader in an etcd cluster, and encapsulates
+// LeaderStats is used by the leader in an etcd cluster, and encapsulates
 // statistics about communication with its followers
-type EtcdLeaderStats struct {
+// reference documentation https://github.com/coreos/etcd/blob/master/etcdserver/stats/leader.go
+type LeaderStats struct {
 	// Leader is the ID of the leader in the etcd cluster.
-	Leader    string                        `json:"leader"`
-	Followers map[string]*EtcdFollowerStats `json:"followers"`
+	Leader    string                    `json:"leader"`
+	Followers map[string]*FollowerStats `json:"followers"`
 }
 
 // FollowerStats encapsulates various statistics about a follower in an etcd cluster
-type EtcdFollowerStats struct {
-	Latency EtcdLatencyStats `json:"latency"`
-	Counts  EtcdCountsStats  `json:"counts"`
+type FollowerStats struct {
+	Latency LatencyStats `json:"latency"`
+	Counts  RaftStats    `json:"counts"`
 }
 
 // LatencyStats encapsulates latency statistics.
-type EtcdLatencyStats struct {
+type LatencyStats struct {
 	Current float64 `json:"current"`
 }
 
-// CountsStats encapsulates raft statistics.
-type EtcdCountsStats struct {
+// RaftStats encapsulates raft statistics.
+type RaftStats struct {
 	Fail    uint64 `json:"fail"`
 	Success uint64 `json:"success"`
 }
 
 var (
-	etcdFollowersLatency = prometheus.NewHistogramVec(
+	followersLatency = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: "etcd",
 			Name:      "etcd_followers_latency",
@@ -63,39 +65,39 @@ var (
 			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 13), // buckets from 0.0001 till 4.096 sec
 		}, []string{"followerName"})
 
-	etcdFollowersCountFails = prometheus.NewGaugeVec(
+	followersRaftFail = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "etcd",
-			Name:      "etcd_followers_counts_fails",
+			Name:      "etcd_followers_raft_fail",
 			Help:      "Counter of Raft RPC failed requests between ETCD leader and follower",
 		}, []string{"followerName"})
 
-	etcdFollowersCountSuccess = prometheus.NewGaugeVec(
+	followersRaftSuccess = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "etcd",
-			Name:      "etcd_followers_counts_success",
+			Name:      "etcd_followers_raft_success",
 			Help:      "Counter of Raft RPC successful requests between ETCD leader and follower",
 		}, []string{"followerName"})
 )
 
 func init() {
-	prometheus.MustRegister(etcdFollowersLatency)
-	prometheus.MustRegister(etcdFollowersCountFails)
-	prometheus.MustRegister(etcdFollowersCountSuccess)
+	prometheus.MustRegister(followersLatency)
+	prometheus.MustRegister(followersRaftFail)
+	prometheus.MustRegister(followersRaftSuccess)
 }
 
-func collectETCDMetrics(config *ETCDConfig) error {
+func collectMetrics(config *monitoring.ETCDConfig) error {
 	transport, err := config.newHTTPTransport()
 	if err != nil {
 		return trace.Wrap(err)
 	}
 
 	for _, endpoint := range config.Endpoints {
-		var etcdLeaderStats EtcdLeaderStats
+		var leaderStats LeaderStats
 		url := fmt.Sprintf("%v/v2/stats/leader", endpoint)
 		client := &http.Client{
 			Transport: transport,
-			Timeout:   collectETCDMetricsTimeout,
+			Timeout:   collectMetricsTimeout,
 		}
 
 		resp, err := client.Get(url)
@@ -109,15 +111,15 @@ func collectETCDMetrics(config *ETCDConfig) error {
 			return trace.Wrap(err)
 		}
 
-		err = json.Unmarshal(payload, &etcdLeaderStats)
+		err = json.Unmarshal(payload, &leaderStats)
 		if err != nil {
 			return trace.Wrap(err)
 		}
 
-		for id, follower := range etcdLeaderStats.Followers {
-			etcdFollowersCountSuccess.WithLabelValues(id).Set(float64(follower.Counts.Success))
-			etcdFollowersCountFails.WithLabelValues(id).Set(float64(follower.Counts.Fail))
-			etcdFollowersLatency.WithLabelValues(id).Observe(follower.Latency.Current)
+		for id, follower := range leaderStats.Followers {
+			followersRaftSuccess.WithLabelValues(id).Set(float64(follower.RaftStats.Success))
+			followersRaftFail.WithLabelValues(id).Set(float64(follower.RaftStats.Fail))
+			followersLatency.WithLabelValues(id).Observe(follower.Latency.Current)
 		}
 	}
 
