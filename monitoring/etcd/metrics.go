@@ -41,8 +41,8 @@ type LeaderStats struct {
 
 // FollowerStats encapsulates various statistics about a follower in an etcd cluster
 type FollowerStats struct {
-	Latency LatencyStats `json:"latency"`
-	Counts  RaftStats    `json:"counts"`
+	Latency   LatencyStats `json:"latency"`
+	RaftStats RaftStats    `json:"counts"`
 }
 
 // LatencyStats encapsulates latency statistics.
