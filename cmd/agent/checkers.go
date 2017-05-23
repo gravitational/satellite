@@ -60,6 +60,8 @@ func addToMaster(node agent.Agent, config *config) error {
 	node.AddChecker(monitoring.DockerHealth(config.dockerAddr))
 	node.AddChecker(etcdChecker)
 	node.AddChecker(monitoring.SystemdHealth())
+	node.AddChecker(monitoring.KubeMasterProcessesHealth())
+	node.AddChecker(monitoring.KubeMasterSocketsHealth())
 
 	if !config.disableInterPodCheck {
 		node.AddChecker(monitoring.InterPodCommunication(config.kubeAddr, config.nettestContainerImage))
@@ -76,5 +78,7 @@ func addToNode(node agent.Agent, config *config) error {
 	node.AddChecker(monitoring.DockerHealth(config.dockerAddr))
 	node.AddChecker(etcdChecker)
 	node.AddChecker(monitoring.SystemdHealth())
+	node.AddChecker(monitoring.KubeNodeProcessesHealth())
+	node.AddChecker(monitoring.KubeNodeSocketsHealth())
 	return nil
 }

@@ -30,6 +30,84 @@ type healthzChecker struct {
 	*KubeChecker
 }
 
+func createProcessesHealth(processes []string) health.Checker {
+	checker := compositeChecker{
+		name:     "kubernetes master processes",
+		checkers: make([]health.Checker, 0, len(processes)),
+	}
+	for _, process := range processes {
+		checker.checkers = append(checker.checkers, NewProcessChecker(process))
+	}
+	return &checker
+}
+
+func KubeMasterProcessesHealth() health.Checker {
+	processes := []string{"kube-apiserver", "kube-kubelet", "kube-proxy",
+		"etcd", "serf", "flanneld", "dockerd", "dnsmasq"}
+	return createProcessesHealth(processes)
+}
+
+func KubeNodeProcessesHealth() health.Checker {
+	processes := []string{"kube-kubelet", "kube-proxy", "etcd", "serf",
+		"flanneld", "dockerd", "dnsmasq"}
+	return createProcessesHealth(processes)
+}
+
+func KubeMasterSocketsHealth() health.Checker {
+	tcpPorts := []int{
+		53,    // dnsmasq
+		2379,  // etcd
+		2380,  // etcd
+		4001,  // etcd
+		4194,  // kubelet
+		5000,  // docker registry
+		6443,  // apiserver
+		7001,  // etcd
+		7373,  // serf
+		7575,  // planet
+		7496,  // serf
+		10248, // kubelet
+		10250, // kubelet
+		10255, // kubelet
+	}
+	udpPorts := []int{
+		53,   // dnsmasq
+		7496, // serf
+	}
+	unixSocks := []string{
+		"/var/run/docker.sock", // dockerd
+		"/var/run/planet.sock", // planet
+	}
+	return NewSocketsChecker(tcpPorts, udpPorts, unixSocks)
+}
+
+func KubeNodeSocketsHealth() health.Checker {
+	tcpPorts := []int{
+		53,    // dnsmasq
+		2379,  // etcd
+		2380,  // etcd
+		4001,  // etcd
+		4194,  // kubelet
+		5000,  // docker registry
+		7001,  // etcd
+		7373,  // serf
+		7575,  // planet
+		7496,  // serf
+		10248, // kubelet
+		10250, // kubelet
+		10255, // kubelet
+	}
+	udpPorts := []int{
+		53,   // dnsmasq
+		7496, // serf
+	}
+	unixSocks := []string{
+		"/var/run/docker.sock", // dockerd
+		"/var/run/planet.sock", // planet
+	}
+	return NewSocketsChecker(tcpPorts, udpPorts, unixSocks)
+}
+
 // KubeAPIServerHealth creates a checker for the kubernetes API server
 func KubeAPIServerHealth(kubeAddr string, config string) health.Checker {
 	checker := &healthzChecker{}
@@ -85,8 +163,7 @@ func EtcdHealth(config *ETCDConfig) (health.Checker, error) {
 // DockerHealth creates a checker that checks health of the docker daemon under
 // the specified socketPath
 func DockerHealth(socketPath string) health.Checker {
-	return NewUnixSocketHealthzChecker("docker", "http://docker/version", socketPath,
-		dockerChecker)
+	return NewDockerChecker(socketPath)
 }
 
 // SystemdHealth creates a checker that reports the status of systemd units
