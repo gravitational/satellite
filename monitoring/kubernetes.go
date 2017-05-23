@@ -26,9 +26,9 @@ import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/trace"
 
-	kube "k8s.io/client-go/1.4/kubernetes"
-	"k8s.io/client-go/1.4/rest"
-	"k8s.io/client-go/1.4/tools/clientcmd"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 const systemNamespace = "kube-system"
@@ -46,7 +46,7 @@ func kubeHealthz(response io.Reader) error {
 }
 
 // KubeStatusChecker is a function that can check status of kubernetes services.
-type KubeStatusChecker func(ctx context.Context, client *kube.Clientset) error
+type KubeStatusChecker func(ctx context.Context, client *kubernetes.Clientset) error
 
 // KubeChecker implements Checker that can check and report problems
 // with kubernetes services.
@@ -59,7 +59,7 @@ type KubeChecker struct {
 
 // ConnectToKube establishes a connection to kubernetes on the specified address
 // and returns an API client.
-func ConnectToKube(masterURL string, configPath string) (*kube.Clientset, error) {
+func ConnectToKube(masterURL string, configPath string) (*kubernetes.Clientset, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		config, err = clientcmd.BuildConfigFromFlags(masterURL, configPath)
@@ -67,7 +67,7 @@ func ConnectToKube(masterURL string, configPath string) (*kube.Clientset, error)
 			return nil, trace.Wrap(err)
 		}
 	}
-	client, err := kube.NewForConfig(config)
+	client, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -96,6 +96,6 @@ func (r *KubeChecker) Check(ctx context.Context, reporter health.Reporter) {
 	})
 }
 
-func (r *KubeChecker) connect() (*kube.Clientset, error) {
+func (r *KubeChecker) connect() (*kubernetes.Clientset, error) {
 	return ConnectToKube(r.masterURL, r.configPath)
 }

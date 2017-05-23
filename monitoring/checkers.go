@@ -22,7 +22,7 @@ import (
 
 	"github.com/gravitational/satellite/agent/health"
 	"github.com/gravitational/trace"
-	kube "k8s.io/client-go/1.4/kubernetes"
+	"k8s.io/client-go/kubernetes"
 )
 
 // healthzChecker is secure healthz checker
@@ -122,7 +122,7 @@ func KubeAPIServerHealth(kubeAddr string, config string) health.Checker {
 }
 
 // testHealthz executes a test by using k8s API
-func (h *healthzChecker) testHealthz(ctx context.Context, client *kube.Clientset) error {
+func (h *healthzChecker) testHealthz(ctx context.Context, client *kubernetes.Clientset) error {
 	_, err := client.Core().ComponentStatuses().Get("scheduler")
 	return err
 }

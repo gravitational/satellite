@@ -10,6 +10,7 @@ import (
 	"log"
 	"math/rand"
 	"net"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -240,9 +241,23 @@ func Create(conf *Config) (*Serf, error) {
 			conf.ProtocolVersion, ProtocolVersionMin, ProtocolVersionMax)
 	}
 
+	if conf.LogOutput != nil && conf.Logger != nil {
+		return nil, fmt.Errorf("Cannot specify both LogOutput and Logger. Please choose a single log configuration setting.")
+	}
+
+	logDest := conf.LogOutput
+	if logDest == nil {
+		logDest = os.Stderr
+	}
+
+	logger := conf.Logger
+	if logger == nil {
+		logger = log.New(logDest, "", log.LstdFlags)
+	}
+
 	serf := &Serf{
 		config:        conf,
-		logger:        log.New(conf.LogOutput, "", log.LstdFlags),
+		logger:        logger,
 		members:       make(map[string]*memberState),
 		queryResponse: make(map[LamportTime]*QueryResponse),
 		shutdownCh:    make(chan struct{}),
@@ -328,21 +343,15 @@ func Create(conf *Config) (*Serf, error) {
 	// Setup the various broadcast queues, which we use to send our own
 	// custom broadcasts along the gossip channel.
 	serf.broadcasts = &memberlist.TransmitLimitedQueue{
-		NumNodes: func() int {
-			return len(serf.members)
-		},
+		NumNodes:       serf.NumNodes,
 		RetransmitMult: conf.MemberlistConfig.RetransmitMult,
 	}
 	serf.eventBroadcasts = &memberlist.TransmitLimitedQueue{
-		NumNodes: func() int {
-			return len(serf.members)
-		},
+		NumNodes:       serf.NumNodes,
 		RetransmitMult: conf.MemberlistConfig.RetransmitMult,
 	}
 	serf.queryBroadcasts = &memberlist.TransmitLimitedQueue{
-		NumNodes: func() int {
-			return len(serf.members)
-		},
+		NumNodes:       serf.NumNodes,
 		RetransmitMult: conf.MemberlistConfig.RetransmitMult,
 	}
 
@@ -792,13 +801,15 @@ func (s *Serf) Shutdown() error {
 		s.logger.Printf("[WARN] serf: Shutdown without a Leave")
 	}
 
+	// Wait to close the shutdown channel until after we've shut down the
+	// memberlist and its associated network resources, since the shutdown
+	// channel signals that we are cleaned up outside of Serf.
 	s.state = SerfShutdown
-	close(s.shutdownCh)
-
 	err := s.memberlist.Shutdown()
 	if err != nil {
 		return err
 	}
+	close(s.shutdownCh)
 
 	// Wait for the snapshoter to finish if we have one
 	if s.snapshotter != nil {
@@ -1308,11 +1319,9 @@ func (s *Serf) handleQueryResponse(resp *messageQueryResponse) {
 		}
 
 		metrics.IncrCounter([]string{"serf", "query_responses"}, 1)
-		select {
-		case query.respCh <- NodeResponse{From: resp.From, Payload: resp.Payload}:
-			query.responses[resp.From] = struct{}{}
-		default:
-			s.logger.Printf("[WARN] serf: Failed to deliver query response, dropping")
+		err := query.sendResponse(NodeResponse{From: resp.From, Payload: resp.Payload})
+		if err != nil {
+			s.logger.Printf("[WARN] %v", err)
 		}
 	}
 }
@@ -1372,7 +1381,7 @@ func (s *Serf) resolveNodeConflict() {
 
 		// Update the counters
 		responses++
-		if bytes.Equal(member.Addr, local.Addr) && member.Port == local.Port {
+		if member.Addr.Equal(local.Addr) && member.Port == local.Port {
 			matching++
 		}
 	}
