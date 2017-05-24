@@ -113,17 +113,17 @@ func NewExporter(config *monitoring.ETCDConfig) (*Exporter, error) {
 		config: *config,
 		followersLatency: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: namespace,
-			Name:      "etcd_followers_latency",
+			Name:      "followers_latency",
 			Help:      "Latency time (s) between ETCD leader and follower",
 		}, []string{"followerName"}),
 		followersRaftFail: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: namespace,
-			Name:      "etcd_followers_raft_fail",
+			Name:      "followers_raft_fail",
 			Help:      "Counter of Raft RPC failed requests between ETCD leader and follower",
 		}, []string{"followerName"}),
 		followersRaftSuccess: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: namespace,
-			Name:      "etcd_followers_raft_success",
+			Name:      "followers_raft_success",
 			Help:      "Counter of Raft RPC successful requests between ETCD leader and follower",
 		}, []string{"followerName"}),
 	}, nil
