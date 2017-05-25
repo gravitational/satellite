@@ -53,10 +53,10 @@ func KubeNodeProcessesHealth() health.Checker {
 
 func KubeMasterSocketsHealth() health.Checker {
 	tcpPorts := []int{
-		53, // dnsmasq
-		//2379,  // etcd -- TODO: add TCPv6 support
-		2380, // etcd
-		//4001,  // etcd -- TODO: add TCPv6 support
+		53,    // dnsmasq
+		2379,  // etcd
+		2380,  // etcd
+		4001,  // etcd
 		4194,  // kubelet
 		5000,  // docker registry
 		6443,  // apiserver
@@ -74,7 +74,6 @@ func KubeMasterSocketsHealth() health.Checker {
 	}
 	unixSocks := []string{
 		"/var/run/docker.sock", // dockerd
-		"/var/run/planet.sock", // planet
 	}
 	return NewSocketsChecker(tcpPorts, udpPorts, unixSocks)
 }

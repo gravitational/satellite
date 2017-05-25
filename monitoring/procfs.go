@@ -18,7 +18,6 @@ package monitoring
 
 import (
 	"bufio"
-	"encoding/binary"
 	"fmt"
 	"net"
 	"os"
@@ -28,7 +27,9 @@ import (
 
 const (
 	ProcNetTCP  = "/proc/net/tcp"
+	ProcNetTCP6 = "/proc/net/tcp6"
 	ProcNetUDP  = "/proc/net/udp"
+	ProcNetUDP6 = "/proc/net/udp6"
 	ProcNetUnix = "/proc/net/unix"
 )
 
@@ -84,9 +85,9 @@ type UnixSocket struct {
 	Path     string
 }
 
-func GetTCPSockets() ([]*TCPSocket, error) {
+func GetTCPSockets(fpath string) ([]*TCPSocket, error) {
 	var sockets []*TCPSocket
-	fp, err := os.Open(ProcNetTCP)
+	fp, err := os.Open(fpath)
 	defer fp.Close()
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -106,9 +107,9 @@ func GetTCPSockets() ([]*TCPSocket, error) {
 	return sockets, nil
 }
 
-func GetUDPSockets() ([]*UDPSocket, error) {
+func GetUDPSockets(fpath string) ([]*UDPSocket, error) {
 	var sockets []*UDPSocket
-	fp, err := os.Open(ProcNetUDP)
+	fp, err := os.Open(fpath)
 	defer fp.Close()
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -157,8 +158,8 @@ func NewTCPSocketFromLine(line string) (*TCPSocket, error) {
 	// reference: https://github.com/ecki/net-tools/blob/master/netstat.c#L1070
 	var (
 		sl         int
-		localip    uint32
-		remoteip   uint32
+		localip    []byte
+		remoteip   []byte
 		tr         int
 		tmwhen     int
 		retransmit int
@@ -173,8 +174,8 @@ func NewTCPSocketFromLine(line string) (*TCPSocket, error) {
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	tcpSocket.LocalAddress.IP = intToIPv4(localip)
-	tcpSocket.RemoteAddress.IP = intToIPv4(remoteip)
+	tcpSocket.LocalAddress.IP = hexToIP(localip)
+	tcpSocket.RemoteAddress.IP = hexToIP(remoteip)
 	return tcpSocket, nil
 }
 
@@ -183,8 +184,8 @@ func NewUDPSocketFromLine(line string) (*UDPSocket, error) {
 	//  2511: 00000000:14E9 00000000:0000 07 00000000:00000000 00:00000000 00000000  1000        0 1662497 2 ffff91e6a9fcbc00 0
 	var (
 		sl         int
-		localip    uint32
-		remoteip   uint32
+		localip    []byte
+		remoteip   []byte
 		tr         int
 		tmwhen     int
 		retransmit int
@@ -199,8 +200,8 @@ func NewUDPSocketFromLine(line string) (*UDPSocket, error) {
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	udpSocket.LocalAddress.IP = intToIPv4(localip)
-	udpSocket.RemoteAddress.IP = intToIPv4(remoteip)
+	udpSocket.LocalAddress.IP = hexToIP(localip)
+	udpSocket.RemoteAddress.IP = hexToIP(remoteip)
 	return udpSocket, nil
 }
 
@@ -220,8 +221,10 @@ func NewUnixSocketFromLine(line string) (*UnixSocket, error) {
 	return unixSocket, nil
 }
 
-func intToIPv4(n uint32) net.IP {
-	ip := make([]byte, 4)
-	binary.LittleEndian.PutUint32(ip, n)
-	return net.IPv4(ip[0], ip[1], ip[2], ip[3])
+func hexToIP(in []byte) net.IP {
+	ip := make([]byte, len(in))
+	for i, v := range in {
+		ip[len(ip)-i-1] = v
+	}
+	return ip
 }
