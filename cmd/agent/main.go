@@ -90,7 +90,7 @@ func run() error {
 
 	log.SetOutput(os.Stderr)
 	if *debug == true {
-		log.SetLevel(log.InfoLevel)
+		log.SetLevel(log.DebugLevel)
 	} else {
 		log.SetLevel(log.WarnLevel)
 	}
