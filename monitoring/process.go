@@ -48,7 +48,12 @@ func (c *ProcessChecker) Check(ctx context.Context, reporter health.Reporter) {
 	}
 	for _, proc := range procs {
 		command, _ := proc.Comm()
-		if command == c.Process {
+		procstat, err := proc.NewStat()
+		if err != nil {
+			reporter.Add(NewProbeFromErr(c.Name(), trace.Errorf("failed to get %s process statistics: %v", command, err)))
+			return
+		}
+		if command == c.Process && procstat.PPID == 1 {
 			reporter.Add(&pb.Probe{Checker: c.Name(), Status: pb.Probe_Running})
 			return
 		}
