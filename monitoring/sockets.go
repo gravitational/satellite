@@ -48,11 +48,17 @@ func (c *SocketsChecker) Name() string {
 
 func (c *SocketsChecker) Check(ctx context.Context, reporter health.Reporter) {
 	if len(c.TCPPorts) > 0 {
-		allSocks, err := GetTCPSockets()
+		allSocksIPv4, err := GetTCPSockets(ProcNetTCP)
 		if err != nil {
 			reporter.Add(NewProbeFromErr(c.Name(), trace.Errorf("failed to get TCP sockets %v", err)))
 			return
 		}
+		allSocksIPv6, err := GetTCPSockets(ProcNetTCP6)
+		if err != nil {
+			reporter.Add(NewProbeFromErr(c.Name(), trace.Errorf("failed to get TCP6 sockets %v", err)))
+			return
+		}
+		allSocks := append(allSocksIPv4, allSocksIPv6...)
 		openPorts := make(map[int]bool)
 		for _, sock := range allSocks {
 			if sock.State == Listen {
@@ -68,16 +74,20 @@ func (c *SocketsChecker) Check(ctx context.Context, reporter health.Reporter) {
 	}
 
 	if len(c.UDPPorts) > 0 {
-		allSocks, err := GetUDPSockets()
+		allSocksIPv4, err := GetUDPSockets(ProcNetUDP)
 		if err != nil {
 			reporter.Add(NewProbeFromErr(c.Name(), trace.Errorf("failed to get UDP sockets %v", err)))
 			return
 		}
+		allSocksIPv6, err := GetUDPSockets(ProcNetUDP6)
+		if err != nil {
+			reporter.Add(NewProbeFromErr(c.Name(), trace.Errorf("failed to get UDP6 sockets %v", err)))
+			return
+		}
+		allSocks := append(allSocksIPv4, allSocksIPv6...)
 		openPorts := make(map[int]bool)
 		for _, sock := range allSocks {
-			if sock.State == Listen {
-				openPorts[sock.LocalAddress.Port] = true
-			}
+			openPorts[sock.LocalAddress.Port] = true
 		}
 		for _, port := range c.UDPPorts {
 			if _, ok := openPorts[port]; !ok {
@@ -101,7 +111,7 @@ func (c *SocketsChecker) Check(ctx context.Context, reporter health.Reporter) {
 		}
 		for _, sock := range c.UNIXSockets {
 			if _, ok := openSockets[sock]; !ok {
-				reporter.Add(NewProbeFromErr(c.Name(), trace.Errorf("not listening unix/%d", sock)))
+				reporter.Add(NewProbeFromErr(c.Name(), trace.Errorf("not listening unix/%s", sock)))
 				return
 			}
 		}
