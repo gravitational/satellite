@@ -42,23 +42,21 @@ func createProcessesHealth(processes []string) health.Checker {
 }
 
 func KubeMasterProcessesHealth() health.Checker {
-	processes := []string{"kube-apiserver", "kube-kubelet", "kube-proxy",
-		"etcd", "serf", "flanneld", "dockerd", "dnsmasq"}
+	processes := []string{"kube-apiserver", "kubelet", "kube-proxy", "etcd", "serf", "flanneld", "dockerd", "dnsmasq"}
 	return createProcessesHealth(processes)
 }
 
 func KubeNodeProcessesHealth() health.Checker {
-	processes := []string{"kube-kubelet", "kube-proxy", "etcd", "serf",
-		"flanneld", "dockerd", "dnsmasq"}
+	processes := []string{"kubelet", "kube-proxy", "etcd", "serf", "flanneld", "dockerd", "dnsmasq"}
 	return createProcessesHealth(processes)
 }
 
 func KubeMasterSocketsHealth() health.Checker {
 	tcpPorts := []int{
-		53,    // dnsmasq
-		2379,  // etcd
-		2380,  // etcd
-		4001,  // etcd
+		53, // dnsmasq
+		//2379,  // etcd -- TODO: add TCPv6 support
+		2380, // etcd
+		//4001,  // etcd -- TODO: add TCPv6 support
 		4194,  // kubelet
 		5000,  // docker registry
 		6443,  // apiserver
