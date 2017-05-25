@@ -27,8 +27,7 @@ import (
 
 func NewDockerChecker(host string) health.Checker {
 	return &DockerChecker{
-		Host:       host,
-		HTTPClient: &http.Client{},
+		Host: host,
 	}
 }
 
@@ -42,7 +41,7 @@ func (c *DockerChecker) Name() string {
 }
 
 func (c *DockerChecker) Check(ctx context.Context, reporter health.Reporter) {
-	dockerClient, err := client.NewClient(c.Host, "", c.HTTPClient, map[string]string{})
+	dockerClient, err := client.NewClient(c.Host, "", nil, nil)
 	if err != nil {
 		reporter.Add(NewProbeFromErr(c.Name(), trace.Errorf("failed to connect: %v", err)))
 		return
