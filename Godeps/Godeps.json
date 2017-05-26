@@ -6,7 +6,7 @@
 		"./cmd/...",
 		"./monitoring/",
 		"./agent/...",
-		"github.com/docker/docker/pkg/tarsum"
+		"./healthz/..."
 	],
 	"Deps": [
 		{
