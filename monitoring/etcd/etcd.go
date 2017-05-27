@@ -18,12 +18,12 @@ package etcd
 
 import (
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
+	"github.com/gravitational/roundtrip"
 	"github.com/gravitational/satellite/monitoring"
 	"github.com/gravitational/trace"
 	"github.com/prometheus/client_golang/prometheus"
@@ -36,35 +36,14 @@ const (
 	collectMetricsTimeout = 5 * time.Second
 )
 
-var (
-	followersLatency = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "", "etcd_followers_latency"),
-		"Bucketed histogram of latency time (s) between ETCD leader and follower",
-		//			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 13), // buckets from 0.0001 till 4.096 sec
-		[]string{"followerName"}, nil,
-	)
-
-	followersRaftFail = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "", "etcd_followers_raft_fail"),
-		"Counter of Raft RPC failed requests between ETCD leader and follower",
-		[]string{"followerName"}, nil,
-	)
-
-	followersRaftSuccess = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "", "etcd_followers_raft_success"),
-		"Counter of Raft RPC successful requests between ETCD leader and follower",
-		[]string{"followerName"}, nil,
-	)
-)
-
 // LeaderStats is used by the leader in an etcd cluster, and encapsulates
 // statistics about communication with its followers
 // reference documentation https://github.com/coreos/etcd/blob/master/etcdserver/stats/leader.go
 type LeaderStats struct {
 	// Leader is the ID of the leader in the etcd cluster.
-	Leader    string                    `json:"leader"`
-	Followers map[string]*FollowerStats `json:"followers"`
-	Message   string                    `json:"message"`
+	Leader    string                   `json:"leader"`
+	Followers map[string]FollowerStats `json:"followers"`
+	Message   string                   `json:"message"`
 }
 
 // FollowerStats encapsulates various statistics about a follower in an etcd cluster
@@ -87,7 +66,7 @@ type RaftStats struct {
 // Exporter collects ETCD stats from the given server and exports them using
 // the prometheus metrics package.
 type Exporter struct {
-	client *http.Client
+	client *roundtrip.Client
 	config monitoring.ETCDConfig
 	mutex  sync.RWMutex
 
@@ -96,17 +75,21 @@ type Exporter struct {
 	followersRaftSuccess *prometheus.GaugeVec
 }
 
-// NewExporter returns an initialized ETCDExporter.
+// NewExporter returns an initialized Exporter.
 func NewExporter(config *monitoring.ETCDConfig) (*Exporter, error) {
 	transport, err := config.NewHTTPTransport()
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
 
-	client := &http.Client{
+	if len(config.Endpoints) == 0 {
+		return nil, trace.BadParameter("no ETCD endpoints configured")
+	}
+
+	client, err := newClient(config.Endpoints[0], roundtrip.HTTPClient(&http.Client{
 		Transport: transport,
 		Timeout:   collectMetricsTimeout,
-	}
+	}))
 
 	return &Exporter{
 		client: client,
@@ -137,48 +120,41 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
-	for _, endpoint := range e.config.Endpoints {
+	var leaderStats LeaderStats
+	resp, err := e.client.Get(e.client.Endpoint("stats", "leader"), url.Values{})
+	if err != nil {
+		return trace.Wrap(err)
+	}
 
-		var leaderStats LeaderStats
-		url := fmt.Sprintf("%v/v2/stats/leader", endpoint)
+	err = json.Unmarshal(resp.Bytes(), &leaderStats)
+	if err != nil {
+		return trace.Wrap(err)
+	}
 
-		resp, err := e.client.Get(url)
-		if err != nil {
-			return trace.Wrap(err)
-		}
-		defer resp.Body.Close()
+	if leaderStats.Message != "" {
+		// Endpoint is not a leader of ETCD cluster
+		return nil
+	}
 
-		payload, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return trace.Wrap(err)
-		}
-
-		err = json.Unmarshal(payload, &leaderStats)
-		if err != nil {
-			return trace.Wrap(err)
-		}
-
-		if leaderStats.Message != "" {
-			// Endpoint is not a leader of ETCD cluster
-			continue
-		}
 	membersMap, err := e.getMembers()
 	if err != nil {
 		return trace.Wrap(err)
 	}
 
-		for id, follower := range leaderStats.Followers {
-			e.followersRaftSuccess.WithLabelValues(id).Set(float64(follower.RaftStats.Success))
-			e.followersRaftFail.WithLabelValues(id).Set(float64(follower.RaftStats.Fail))
-			e.followersLatency.WithLabelValues(id).Set(follower.Latency.Current)
+	for id, follower := range leaderStats.Followers {
+		memberName := id
+		if membersMap[id] != "" {
+			memberName = membersMap[id]
 		}
-
-		e.followersLatency.Collect(ch)
-		e.followersRaftFail.Collect(ch)
-		e.followersRaftSuccess.Collect(ch)
-		return nil
+		e.followersRaftSuccess.WithLabelValues(memberName).Set(float64(follower.RaftStats.Success))
+		e.followersRaftFail.WithLabelValues(memberName).Set(float64(follower.RaftStats.Fail))
+		e.followersLatency.WithLabelValues(memberName).Set(follower.Latency.Current)
 	}
-	return trace.Errorf("ETCD cluster has no leader")
+
+	e.followersLatency.Collect(ch)
+	e.followersRaftFail.Collect(ch)
+	e.followersRaftSuccess.Collect(ch)
+	return nil
 }
 
 // Collect fetches the stats from configured ETCD endpoint and delivers them
@@ -223,6 +199,10 @@ func (e *Exporter) getMembers() (map[string]string, error) {
 	return membersMap, nil
 }
 
+func newClient(url string, opts ...roundtrip.ClientParam) (*roundtrip.Client, error) {
+	clt, err := roundtrip.NewClient(url, "v2", opts...)
+	if err != nil {
+		return nil, trace.Wrap(err)
 	}
-	return
+	return clt, nil
 }
