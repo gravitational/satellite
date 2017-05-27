@@ -162,6 +162,10 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 			// Endpoint is not a leader of ETCD cluster
 			continue
 		}
+	membersMap, err := e.getMembers()
+	if err != nil {
+		return trace.Wrap(err)
+	}
 
 		for id, follower := range leaderStats.Followers {
 			e.followersRaftSuccess.WithLabelValues(id).Set(float64(follower.RaftStats.Success))
@@ -183,7 +187,42 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	e.mutex.Lock() // To protect metrics from concurrent collects.
 	defer e.mutex.Unlock()
 	if err := e.collect(ch); err != nil {
-		log.Errorf("Error collecting stats from ETCD: %v", err)
+		log.Errorf("error collecting stats from ETCD: %v", err)
+	}
+}
+
+// Member represents simplified ETCD member struct
+type Member struct {
+	// ID of etcd cluster member
+	ID string `json:"id"`
+	// Name of etcd cluster member
+	Name string `json:"name,omitempty"`
+}
+
+type Members struct {
+	// List of etcd cluster members
+	Members []Member `json:"members"`
+}
+
+func (e *Exporter) getMembers() (map[string]string, error) {
+	var members Members
+	resp, err := e.client.Get(e.client.Endpoint("stats", "leader"), url.Values{})
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	err = json.Unmarshal(resp.Bytes(), &members)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	membersMap := make(map[string]string)
+	for _, member := range members.Members {
+		membersMap[member.ID] = member.Name
+	}
+	return membersMap, nil
+}
+
 	}
 	return
 }
