@@ -1,13 +1,10 @@
 # Trace
 
-[![GoDoc](https://godoc.org/github.com/gravitational/trace?status.png)](https://godoc.org/github.com/gravitational/trace)
-
-
 Package for error handling and error reporting
 
 Read more here:
 
-http://gravitational.com/blog/golang_error_handling/
+http://blog.gravitational.com/thoughts-on-error-handling-in-go-programs/
 
 ### Capture file, line and function
 
@@ -16,7 +13,7 @@ http://gravitational.com/blog/golang_error_handling/
 import (
      "github.com/gravitational/trace"
 )
-
+     
 func someFunc() error {
    return trace.Wrap(err)
 }
@@ -53,12 +50,12 @@ import (
    "github.com/gravitational/trace"
    log "github.com/Sirupsen/logrus"
 )
-
+   
 func main() {
    hook, err := trace.NewUDPHook()
    if err != nil {
        log.Fatalf(err)
-   }
+   }  
    log.SetHook(hook)
 }
 ```

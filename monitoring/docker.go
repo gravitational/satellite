@@ -16,39 +16,9 @@ limitations under the License.
 
 package monitoring
 
-import (
-	"context"
-	"net/http"
+import "io"
 
-	"github.com/docker/docker/client"
-	"github.com/gravitational/satellite/agent/health"
-	"github.com/gravitational/trace"
-)
-
-func NewDockerChecker(host string) health.Checker {
-	return &DockerChecker{
-		Host: host,
-	}
-}
-
-type DockerChecker struct {
-	Host       string
-	HTTPClient *http.Client
-}
-
-func (c *DockerChecker) Name() string {
-	return "docker"
-}
-
-func (c *DockerChecker) Check(ctx context.Context, reporter health.Reporter) {
-	dockerClient, err := client.NewClient(c.Host, "", nil, nil)
-	if err != nil {
-		reporter.Add(NewProbeFromErr(c.Name(), trace.Errorf("failed to connect: %v", err)))
-		return
-	}
-	_, err = dockerClient.Info(ctx)
-	if err != nil {
-		reporter.Add(NewProbeFromErr(c.Name(), trace.Errorf("failed to get info: %v", err)))
-		return
-	}
+func dockerChecker(response io.Reader) error {
+	// no-op
+	return nil
 }

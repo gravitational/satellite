@@ -28,15 +28,15 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/blang/semver"
-	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api"
-	"k8s.io/client-go/pkg/api/errors"
-	"k8s.io/client-go/pkg/api/v1"
-	"k8s.io/client-go/pkg/fields"
-	"k8s.io/client-go/pkg/util/intstr"
-	"k8s.io/client-go/pkg/util/wait"
-	"k8s.io/client-go/rest"
+	"k8s.io/client-go/1.4/discovery"
+	kube "k8s.io/client-go/1.4/kubernetes"
+	"k8s.io/client-go/1.4/pkg/api"
+	"k8s.io/client-go/1.4/pkg/api/errors"
+	"k8s.io/client-go/1.4/pkg/api/v1"
+	"k8s.io/client-go/1.4/pkg/fields"
+	"k8s.io/client-go/1.4/pkg/util/intstr"
+	"k8s.io/client-go/1.4/pkg/util/wait"
+	"k8s.io/client-go/1.4/rest"
 )
 
 // This file implements a functional pod communication test.
@@ -70,7 +70,7 @@ func NewInterPodChecker(masterURL, nettestContainerImage string) health.Checker 
 }
 
 // testInterPodCommunication implements the inter-pod communication test.
-func (r *interPodChecker) testInterPodCommunication(ctx context.Context, client *kubernetes.Clientset) error {
+func (r *interPodChecker) testInterPodCommunication(ctx context.Context, client *kube.Clientset) error {
 	serviceName := generateName(serviceNamePrefix)
 	if err := createNamespaceIfNeeded(client, testNamespace); err != nil {
 		return trace.Wrap(err, "failed to create namespace `%v`", testNamespace)
@@ -106,7 +106,7 @@ func (r *interPodChecker) testInterPodCommunication(ctx context.Context, client 
 	}
 
 	cleanupService := func() {
-		if err = client.Services(testNamespace).Delete(svc.Name, &v1.DeleteOptions{}); err != nil {
+		if err = client.Services(testNamespace).Delete(svc.Name, &api.DeleteOptions{}); err != nil {
 			log.Infof("failed to delete service %q: %v", svc.Name, err)
 		}
 	}
@@ -145,7 +145,7 @@ func (r *interPodChecker) testInterPodCommunication(ctx context.Context, client 
 	passed := false
 
 	getDetail := func(detail string) ([]byte, error) {
-		proxyRequest, errProxy := getServicesProxyRequest(client, client.DiscoveryClient.RESTClient().Get())
+		proxyRequest, errProxy := getServicesProxyRequest(client, client.DiscoveryClient.Get())
 		if errProxy != nil {
 			return nil, trace.Wrap(errProxy)
 		}
@@ -213,7 +213,7 @@ type podCondition func(pod *v1.Pod) (bool, error)
 
 // waitTimeoutForPodRunningInNamespace waits for a pod in the specified namespace
 // to transition to 'Running' state within the specified amount of time.
-func waitTimeoutForPodRunningInNamespace(client *kubernetes.Clientset, podName string, namespace string, timeout time.Duration) error {
+func waitTimeoutForPodRunningInNamespace(client *kube.Clientset, podName string, namespace string, timeout time.Duration) error {
 	return waitForPodCondition(client, namespace, podName, "running", timeout, func(pod *v1.Pod) (bool, error) {
 		if pod.Status.Phase == v1.PodRunning {
 			log.Infof("found pod '%s' on node '%s'", podName, pod.Spec.NodeName)
@@ -227,7 +227,7 @@ func waitTimeoutForPodRunningInNamespace(client *kubernetes.Clientset, podName s
 }
 
 // waitForPodCondition waits until a pod is in the given condition within the specified amount of time.
-func waitForPodCondition(client *kubernetes.Clientset, ns, podName, desc string, timeout time.Duration, condition podCondition) error {
+func waitForPodCondition(client *kube.Clientset, ns, podName, desc string, timeout time.Duration, condition podCondition) error {
 	log.Infof("waiting up to %v for pod %s status to be %s", timeout, podName, desc)
 	for start := time.Now(); time.Since(start) < timeout; time.Sleep(pollInterval) {
 		pod, err := client.Pods(ns).Get(podName)
@@ -254,7 +254,7 @@ func waitForPodCondition(client *kubernetes.Clientset, ns, podName, desc string,
 
 // launchNetTestPodPerNode schedules a new test pod on each of specified nodes
 // using the specified containerImage.
-func launchNetTestPodPerNode(client *kubernetes.Clientset, nodes *v1.NodeList, name, containerImage, namespace string) ([]string, error) {
+func launchNetTestPodPerNode(client *kube.Clientset, nodes *v1.NodeList, name, containerImage, namespace string) ([]string, error) {
 	podNames := []string{}
 	totalPods := len(nodes.Items)
 
@@ -303,7 +303,7 @@ func podReady(pod *v1.Pod) bool {
 }
 
 // createNamespaceIfNeeded creates a namespace if not already created.
-func createNamespaceIfNeeded(client *kubernetes.Clientset, namespace string) error {
+func createNamespaceIfNeeded(client *kube.Clientset, namespace string) error {
 	log.Infof("creating %s namespace", namespace)
 	if _, err := client.Namespaces().Get(namespace); err != nil {
 		log.Infof("%s namespace not found: %v", namespace, err)
@@ -323,7 +323,7 @@ func generateName(prefix string) string {
 
 // getServiceAccount retrieves the service account with the specified name
 // in the provided namespace.
-func getServiceAccount(c *kubernetes.Clientset, ns, name string, shouldWait bool) (*v1.ServiceAccount, error) {
+func getServiceAccount(c *kube.Clientset, ns, name string, shouldWait bool) (*v1.ServiceAccount, error) {
 	if !shouldWait {
 		return c.ServiceAccounts(ns).Get(name)
 	}
@@ -348,15 +348,15 @@ func getServiceAccount(c *kubernetes.Clientset, ns, name string, shouldWait bool
 	return user, nil
 }
 
-func waitForAllNodesSchedulable(ctx context.Context, c *kubernetes.Clientset) (nodes *v1.NodeList, err error) {
+func waitForAllNodesSchedulable(ctx context.Context, c *kube.Clientset) (nodes *v1.NodeList, err error) {
 	const (
 		interval = 30 * time.Second
 		timeout  = 4 * time.Minute
 	)
 	err = wait.PollImmediate(interval, timeout, func() (bool, error) {
-		opts := v1.ListOptions{
+		opts := api.ListOptions{
 			ResourceVersion: "0",
-			FieldSelector:   fields.Set{"spec.unschedulable": "false"}.String(),
+			FieldSelector:   fields.Set{"spec.unschedulable": "false"}.AsSelector(),
 		}
 		nodes, err = c.Nodes().List(opts)
 		if err != nil {
@@ -428,7 +428,7 @@ func isNodeConditionUnset(node *v1.Node, conditionType v1.NodeConditionType) boo
 var subResourceServiceAndNodeProxyVersion = mustParseVersion("v1.2.0")
 
 // getServicesProxyRequest returns the service request based on the server version
-func getServicesProxyRequest(c *kubernetes.Clientset, request *rest.Request) (*rest.Request, error) {
+func getServicesProxyRequest(c *kube.Clientset, request *rest.Request) (*rest.Request, error) {
 	subResourceProxyAvailable, err := serverVersionGTE(subResourceServiceAndNodeProxyVersion, c)
 	if err != nil {
 		return nil, trace.Wrap(err)
