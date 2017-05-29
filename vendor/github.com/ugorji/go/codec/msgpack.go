@@ -549,7 +549,7 @@ func (d *msgpackDecDriver) DecodeBytes(bs []byte, isstring, zerocopy bool) (bsOu
 			bs = d.b[:]
 		}
 	}
-	return decByteSlice(d.r, clen, d.d.h.MaxInitLen, bs)
+	return decByteSlice(d.r, clen, bs)
 }
 
 func (d *msgpackDecDriver) DecodeString() (s string) {
@@ -559,13 +559,6 @@ func (d *msgpackDecDriver) DecodeString() (s string) {
 func (d *msgpackDecDriver) readNextBd() {
 	d.bd = d.r.readn1()
 	d.bdRead = true
-}
-
-func (d *msgpackDecDriver) uncacheRead() {
-	if d.bdRead {
-		d.r.unreadn1()
-		d.bdRead = false
-	}
 }
 
 func (d *msgpackDecDriver) ContainerType() (vt valueType) {
@@ -727,7 +720,7 @@ func (h *MsgpackHandle) newEncDriver(e *Encoder) encDriver {
 }
 
 func (h *MsgpackHandle) newDecDriver(d *Decoder) decDriver {
-	return &msgpackDecDriver{d: d, h: h, r: d.r, br: d.bytes}
+	return &msgpackDecDriver{d: d, r: d.r, h: h, br: d.bytes}
 }
 
 func (e *msgpackEncDriver) reset() {
@@ -735,7 +728,7 @@ func (e *msgpackEncDriver) reset() {
 }
 
 func (d *msgpackDecDriver) reset() {
-	d.r, d.br = d.d.r, d.d.bytes
+	d.r = d.d.r
 	d.bd, d.bdRead = 0, false
 }
 

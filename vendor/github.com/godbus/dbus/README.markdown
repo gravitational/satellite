@@ -1,5 +1,3 @@
-[![Build Status](https://travis-ci.org/godbus/dbus.svg?branch=master)](https://travis-ci.org/godbus/dbus)
-
 dbus
 ----
 

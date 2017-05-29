@@ -12,40 +12,19 @@ type cmdMixin struct {
 	actionMixin
 }
 
-// CmdCompletion returns completion options for arguments, if that's where
-// parsing left off, or commands if there aren't any unsatisfied args.
-func (c *cmdMixin) CmdCompletion(context *ParseContext) []string {
-	var options []string
-
-	// Count args already satisfied - we won't complete those, and add any
-	// default commands' alternatives, since they weren't listed explicitly
-	// and the user may want to explicitly list something else.
-	argsSatisfied := 0
-	for _, el := range context.Elements {
-		switch clause := el.Clause.(type) {
-		case *ArgClause:
-			if el.Value != nil && *el.Value != "" {
-				argsSatisfied++
-			}
-		case *CmdClause:
-			options = append(options, clause.completionAlts...)
-		default:
+func (c *cmdMixin) CmdCompletion() []string {
+	rv := []string{}
+	if len(c.cmdGroup.commandOrder) > 0 {
+		// This command has subcommands. We should
+		// show these to the user.
+		for _, option := range c.cmdGroup.commandOrder {
+			rv = append(rv, option.name)
 		}
-	}
-
-	if argsSatisfied < len(c.argGroup.args) {
-		// Since not all args have been satisfied, show options for the current one
-		options = append(options, c.argGroup.args[argsSatisfied].resolveCompletions()...)
 	} else {
-		// If all args are satisfied, then go back to completing commands
-		for _, cmd := range c.cmdGroup.commandOrder {
-			if !cmd.hidden {
-				options = append(options, cmd.name)
-			}
-		}
+		// No subcommands
+		rv = nil
 	}
-
-	return options
+	return rv
 }
 
 func (c *cmdMixin) FlagCompletion(flagName string, flagValue string) (choices []string, flagMatch bool, optionMatch bool) {
@@ -105,14 +84,6 @@ func (c *cmdGroup) defaultSubcommand() *CmdClause {
 		}
 	}
 	return nil
-}
-
-func (c *cmdGroup) cmdNames() []string {
-	names := make([]string, 0, len(c.commandOrder))
-	for _, cmd := range c.commandOrder {
-		names = append(names, cmd.name)
-	}
-	return names
 }
 
 // GetArg gets a command definition.
@@ -187,14 +158,13 @@ type CmdClauseValidator func(*CmdClause) error
 // and either subcommands or positional arguments.
 type CmdClause struct {
 	cmdMixin
-	app            *Application
-	name           string
-	aliases        []string
-	help           string
-	isDefault      bool
-	validator      CmdClauseValidator
-	hidden         bool
-	completionAlts []string
+	app       *Application
+	name      string
+	aliases   []string
+	help      string
+	isDefault bool
+	validator CmdClauseValidator
+	hidden    bool
 }
 
 func newCommand(app *Application, name, help string) *CmdClause {

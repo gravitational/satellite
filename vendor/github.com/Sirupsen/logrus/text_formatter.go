@@ -49,26 +49,9 @@ type TextFormatter struct {
 	// be desired.
 	DisableSorting bool
 
-	// QuoteEmptyFields will wrap empty fields in quotes if true
-	QuoteEmptyFields bool
-
-	// QuoteCharacter can be set to the override the default quoting character "
-	// with something else. For example: ', or `.
-	QuoteCharacter string
-
 	// Whether the logger's out is to a terminal
-	isTerminal bool
-
-	sync.Once
-}
-
-func (f *TextFormatter) init(entry *Entry) {
-	if len(f.QuoteCharacter) == 0 {
-		f.QuoteCharacter = "\""
-	}
-	if entry.Logger != nil {
-		f.isTerminal = IsTerminal(entry.Logger.Out)
-	}
+	isTerminal   bool
+	terminalOnce sync.Once
 }
 
 func (f *TextFormatter) Format(entry *Entry) ([]byte, error) {
@@ -89,7 +72,11 @@ func (f *TextFormatter) Format(entry *Entry) ([]byte, error) {
 
 	prefixFieldClashes(entry.Data)
 
-	f.Do(func() { f.init(entry) })
+	f.terminalOnce.Do(func() {
+		if entry.Logger != nil {
+			f.isTerminal = IsTerminal(entry.Logger.Out)
+		}
+	})
 
 	isColored := (f.ForceColors || f.isTerminal) && !f.DisableColors
 
@@ -145,10 +132,7 @@ func (f *TextFormatter) printColored(b *bytes.Buffer, entry *Entry, keys []strin
 	}
 }
 
-func (f *TextFormatter) needsQuoting(text string) bool {
-	if f.QuoteEmptyFields && len(text) == 0 {
-		return true
-	}
+func needsQuoting(text string) bool {
 	for _, ch := range text {
 		if !((ch >= 'a' && ch <= 'z') ||
 			(ch >= 'A' && ch <= 'Z') ||
@@ -171,17 +155,17 @@ func (f *TextFormatter) appendKeyValue(b *bytes.Buffer, key string, value interf
 func (f *TextFormatter) appendValue(b *bytes.Buffer, value interface{}) {
 	switch value := value.(type) {
 	case string:
-		if !f.needsQuoting(value) {
+		if !needsQuoting(value) {
 			b.WriteString(value)
 		} else {
-			fmt.Fprintf(b, "%s%v%s", f.QuoteCharacter, value, f.QuoteCharacter)
+			fmt.Fprintf(b, "%q", value)
 		}
 	case error:
 		errmsg := value.Error()
-		if !f.needsQuoting(errmsg) {
+		if !needsQuoting(errmsg) {
 			b.WriteString(errmsg)
 		} else {
-			fmt.Fprintf(b, "%s%v%s", f.QuoteCharacter, errmsg, f.QuoteCharacter)
+			fmt.Fprintf(b, "%q", errmsg)
 		}
 	default:
 		fmt.Fprint(b, value)

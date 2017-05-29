@@ -38,6 +38,10 @@ package codec
 // a length prefix, or if it used explicit breaks. If length-prefixed, we assume that
 // it has to be binary, and we do not even try to read separators.
 //
+// The only codec that may suffer (slightly) is cbor, and only when decoding indefinite-length.
+// It may suffer because we treat it like a text-based codec, and read separators.
+// However, this read is a no-op and the cost is insignificant.
+//
 // Philosophy
 // ------------
 // On decode, this codec will update containers appropriately:
@@ -133,6 +137,17 @@ const (
 	// Note that this will always cause rpc tests to fail, since they need io.EOF sent via panic.
 	recoverPanicToErr = true
 
+	// Fast path functions try to create a fast path encode or decode implementation
+	// for common maps and slices, by by-passing reflection altogether.
+	fastpathEnabled = true
+
+	// if checkStructForEmptyValue, check structs fields to see if an empty value.
+	// This could be an expensive call, so possibly disable it.
+	checkStructForEmptyValue = false
+
+	// if derefForIsEmptyValue, deref pointers and interfaces when checking isEmptyValue
+	derefForIsEmptyValue = false
+
 	// if resetSliceElemToZeroValue, then on decoding a slice, reset the element to a zero value first.
 	// Only concern is that, if the slice already contained some garbage, we will decode into that garbage.
 	// The chances of this are slim, so leave this "optimization".
@@ -202,39 +217,22 @@ const (
 	containerArrayEnd
 )
 
-// sfiIdx used for tracking where a (field/enc)Name is seen in a []*structFieldInfo
-type sfiIdx struct {
-	name  string
-	index int
+type rgetPoolT struct {
+	encNames [8]string
+	fNames   [8]string
+	etypes   [8]uintptr
+	sfis     [8]*structFieldInfo
 }
 
-// do not recurse if a containing type refers to an embedded type
-// which refers back to its containing type (via a pointer).
-// The second time this back-reference happens, break out,
-// so as not to cause an infinite loop.
-const rgetMaxRecursion = 2
-
-// Anecdotally, we believe most types have <= 12 fields.
-// Java's PMD rules set TooManyFields threshold to 15.
-const rgetPoolTArrayLen = 12
+var rgetPool = sync.Pool{
+	New: func() interface{} { return new(rgetPoolT) },
+}
 
 type rgetT struct {
 	fNames   []string
 	encNames []string
 	etypes   []uintptr
 	sfis     []*structFieldInfo
-}
-
-type rgetPoolT struct {
-	fNames   [rgetPoolTArrayLen]string
-	encNames [rgetPoolTArrayLen]string
-	etypes   [rgetPoolTArrayLen]uintptr
-	sfis     [rgetPoolTArrayLen]*structFieldInfo
-	sfiidx   [rgetPoolTArrayLen]sfiIdx
-}
-
-var rgetPool = sync.Pool{
-	New: func() interface{} { return new(rgetPoolT) },
 }
 
 type containerStateRecv interface {
@@ -262,7 +260,6 @@ var (
 	stringTyp     = reflect.TypeOf("")
 	timeTyp       = reflect.TypeOf(time.Time{})
 	rawExtTyp     = reflect.TypeOf(RawExt{})
-	rawTyp        = reflect.TypeOf(Raw{})
 	uint8SliceTyp = reflect.TypeOf([]uint8(nil))
 
 	mapBySliceTyp = reflect.TypeOf((*MapBySlice)(nil)).Elem()
@@ -280,7 +277,6 @@ var (
 
 	uint8SliceTypId = reflect.ValueOf(uint8SliceTyp).Pointer()
 	rawExtTypId     = reflect.ValueOf(rawExtTyp).Pointer()
-	rawTypId        = reflect.ValueOf(rawTyp).Pointer()
 	intfTypId       = reflect.ValueOf(intfTyp).Pointer()
 	timeTypId       = reflect.ValueOf(timeTyp).Pointer()
 	stringTypId     = reflect.ValueOf(stringTyp).Pointer()
@@ -361,11 +357,6 @@ type Handle interface {
 	isBinary() bool
 }
 
-// Raw represents raw formatted bytes.
-// We "blindly" store it during encode and store the raw bytes during decode.
-// Note: it is dangerous during encode, so we may gate the behaviour behind an Encode flag which must be explicitly set.
-type Raw []byte
-
 // RawExt represents raw unprocessed extension data.
 // Some codecs will decode extension data as a *RawExt if there is no registered extension for the tag.
 //
@@ -376,7 +367,7 @@ type RawExt struct {
 	// Data is used by codecs (e.g. binc, msgpack, simple) which do custom serialization of the types
 	Data []byte
 	// Value represents the extension, if Data is nil.
-	// Value is used by codecs (e.g. cbor, json) which use the format to do custom serialization of the types.
+	// Value is used by codecs (e.g. cbor) which use the format to do custom serialization of the types.
 	Value interface{}
 }
 
@@ -554,7 +545,7 @@ func (o *extHandle) AddExt(
 func (o *extHandle) SetExt(rt reflect.Type, tag uint64, ext Ext) (err error) {
 	// o is a pointer, because we may need to initialize it
 	if rt.PkgPath() == "" || rt.Kind() == reflect.Interface {
-		err = fmt.Errorf("codec.Handle.AddExt: Takes named type, not a pointer or interface: %T",
+		err = fmt.Errorf("codec.Handle.AddExt: Takes named type, especially not a pointer or interface: %T",
 			reflect.Zero(rt).Interface())
 		return
 	}
@@ -597,8 +588,7 @@ func (o extHandle) getExtForTag(tag uint64) *extTypeTagFn {
 }
 
 type structFieldInfo struct {
-	encName   string // encode name
-	fieldName string // field name
+	encName string // encode name
 
 	// only one of 'i' or 'is' can be set. If 'i' is -1, then 'is' has been set.
 
@@ -744,7 +734,6 @@ type typeInfo struct {
 }
 
 func (ti *typeInfo) indexForEncName(name string) int {
-	// NOTE: name may be a stringView, so don't pass it to another function.
 	//tisfi := ti.sfi
 	const binarySearchThreshold = 16
 	if sfilen := len(ti.sfi); sfilen < binarySearchThreshold {
@@ -859,18 +848,21 @@ func (x *TypeInfos) get(rtid uintptr, rt reflect.Type) (pti *typeInfo) {
 	}
 
 	if rt.Kind() == reflect.Struct {
-		var omitEmpty bool
+		var siInfo *structFieldInfo
 		if f, ok := rt.FieldByName(structInfoFieldName); ok {
-			siInfo := parseStructFieldInfo(structInfoFieldName, x.structTag(f.Tag))
+			siInfo = parseStructFieldInfo(structInfoFieldName, x.structTag(f.Tag))
 			ti.toArray = siInfo.toArray
-			omitEmpty = siInfo.omitEmpty
 		}
 		pi := rgetPool.Get()
 		pv := pi.(*rgetPoolT)
 		pv.etypes[0] = ti.baseId
 		vv := rgetT{pv.fNames[:0], pv.encNames[:0], pv.etypes[:1], pv.sfis[:0]}
-		x.rget(rt, rtid, omitEmpty, nil, &vv)
-		ti.sfip, ti.sfi = rgetResolveSFI(vv.sfis, pv.sfiidx[:0])
+		x.rget(rt, rtid, nil, &vv, siInfo)
+		ti.sfip = make([]*structFieldInfo, len(vv.sfis))
+		ti.sfi = make([]*structFieldInfo, len(vv.sfis))
+		copy(ti.sfip, vv.sfis)
+		sort.Sort(sfiSortedByEncName(vv.sfis))
+		copy(ti.sfi, vv.sfis)
 		rgetPool.Put(pi)
 	}
 	// sfi = sfip
@@ -884,17 +876,26 @@ func (x *TypeInfos) get(rtid uintptr, rt reflect.Type) (pti *typeInfo) {
 	return
 }
 
-func (x *TypeInfos) rget(rt reflect.Type, rtid uintptr, omitEmpty bool,
-	indexstack []int, pv *rgetT,
+func (x *TypeInfos) rget(rt reflect.Type, rtid uintptr,
+	indexstack []int, pv *rgetT, siInfo *structFieldInfo,
 ) {
-	// Read up fields and store how to access the value.
+	// This will read up the fields and store how to access the value.
+	// It uses the go language's rules for embedding, as below:
+	//   - if a field has been seen while traversing, skip it
+	//   - if an encName has been seen while traversing, skip it
+	//   - if an embedded type has been seen, skip it
 	//
-	// It uses go's rules for message selectors,
-	// which say that the field with the shallowest depth is selected.
+	// Also, per Go's rules, embedded fields must be analyzed AFTER all top-level fields.
 	//
 	// Note: we consciously use slices, not a map, to simulate a set.
-	//       Typically, types have < 16 fields,
-	//       and iteration using equals is faster than maps there
+	//       Typically, types have < 16 fields, and iteration using equals is faster than maps there
+
+	type anonField struct {
+		ft  reflect.Type
+		idx int
+	}
+
+	var anonFields []anonField
 
 LOOP:
 	for j, jlen := 0, rt.NumField(); j < jlen; j++ {
@@ -906,8 +907,7 @@ LOOP:
 			continue LOOP
 		}
 
-		// if r1, _ := utf8.DecodeRuneInString(f.Name);
-		// r1 == utf8.RuneError || !unicode.IsUpper(r1) {
+		// if r1, _ := utf8.DecodeRuneInString(f.Name); r1 == utf8.RuneError || !unicode.IsUpper(r1) {
 		if f.PkgPath != "" && !f.Anonymous { // unexported, not embedded
 			continue
 		}
@@ -916,8 +916,7 @@ LOOP:
 			continue
 		}
 		var si *structFieldInfo
-		// if anonymous and no struct tag (or it's blank),
-		// and a struct (or pointer to struct), inline it.
+		// if anonymous and no struct tag (or it's blank), and a struct (or pointer to struct), inline it.
 		if f.Anonymous && fkind != reflect.Interface {
 			doInline := stag == ""
 			if !doInline {
@@ -931,31 +930,8 @@ LOOP:
 					ft = ft.Elem()
 				}
 				if ft.Kind() == reflect.Struct {
-					// if etypes contains this, don't call rget again (as fields are already seen here)
-					ftid := reflect.ValueOf(ft).Pointer()
-					// We cannot recurse forever, but we need to track other field depths.
-					// So - we break if we see a type twice (not the first time).
-					// This should be sufficient to handle an embedded type that refers to its
-					// owning type, which then refers to its embedded type.
-					processIt := true
-					numk := 0
-					for _, k := range pv.etypes {
-						if k == ftid {
-							numk++
-							if numk == rgetMaxRecursion {
-								processIt = false
-								break
-							}
-						}
-					}
-					if processIt {
-						pv.etypes = append(pv.etypes, ftid)
-						indexstack2 := make([]int, len(indexstack)+1)
-						copy(indexstack2, indexstack)
-						indexstack2[len(indexstack)] = j
-						// indexstack2 := append(append(make([]int, 0, len(indexstack)+4), indexstack...), j)
-						x.rget(ft, ftid, omitEmpty, indexstack2, pv)
-					}
+					// handle anonymous fields after handling all the non-anon fields
+					anonFields = append(anonFields, anonField{ft, j})
 					continue
 				}
 			}
@@ -970,6 +946,11 @@ LOOP:
 			panic(noFieldNameToStructFieldInfoErr)
 		}
 
+		for _, k := range pv.fNames {
+			if k == f.Name {
+				continue LOOP
+			}
+		}
 		pv.fNames = append(pv.fNames, f.Name)
 
 		if si == nil {
@@ -977,8 +958,12 @@ LOOP:
 		} else if si.encName == "" {
 			si.encName = f.Name
 		}
-		si.fieldName = f.Name
 
+		for _, k := range pv.encNames {
+			if k == si.encName {
+				continue LOOP
+			}
+		}
 		pv.encNames = append(pv.encNames, si.encName)
 
 		// si.ikind = int(f.Type.Kind())
@@ -992,60 +977,32 @@ LOOP:
 			// si.is = append(append(make([]int, 0, len(indexstack)+4), indexstack...), j)
 		}
 
-		if omitEmpty {
-			si.omitEmpty = true
+		if siInfo != nil {
+			if siInfo.omitEmpty {
+				si.omitEmpty = true
+			}
 		}
 		pv.sfis = append(pv.sfis, si)
 	}
-}
 
-// resolves the struct field info got from a call to rget.
-// Returns a trimmed, unsorted and sorted []*structFieldInfo.
-func rgetResolveSFI(x []*structFieldInfo, pv []sfiIdx) (y, z []*structFieldInfo) {
-	var n int
-	for i, v := range x {
-		xn := v.encName //TODO: fieldName or encName? use encName for now.
-		var found bool
-		for j, k := range pv {
-			if k.name == xn {
-				// one of them must be reset to nil, and the index updated appropriately to the other one
-				if len(v.is) == len(x[k.index].is) {
-				} else if len(v.is) < len(x[k.index].is) {
-					pv[j].index = i
-					if x[k.index] != nil {
-						x[k.index] = nil
-						n++
-					}
-				} else {
-					if x[i] != nil {
-						x[i] = nil
-						n++
-					}
-				}
-				found = true
-				break
+	// now handle anonymous fields
+LOOP2:
+	for _, af := range anonFields {
+		// if etypes contains this, then do not call rget again (as the fields are already seen here)
+		ftid := reflect.ValueOf(af.ft).Pointer()
+		for _, k := range pv.etypes {
+			if k == ftid {
+				continue LOOP2
 			}
 		}
-		if !found {
-			pv = append(pv, sfiIdx{xn, i})
-		}
-	}
+		pv.etypes = append(pv.etypes, ftid)
 
-	// remove all the nils
-	y = make([]*structFieldInfo, len(x)-n)
-	n = 0
-	for _, v := range x {
-		if v == nil {
-			continue
-		}
-		y[n] = v
-		n++
+		indexstack2 := make([]int, len(indexstack)+1)
+		copy(indexstack2, indexstack)
+		indexstack2[len(indexstack)] = af.idx
+		// indexstack2 := append(append(make([]int, 0, len(indexstack)+4), indexstack...), j)
+		x.rget(af.ft, ftid, indexstack2, pv, siInfo)
 	}
-
-	z = make([]*structFieldInfo, len(y))
-	copy(z, y)
-	sort.Sort(sfiSortedByEncName(z))
-	return
 }
 
 func panicToErr(err *error) {

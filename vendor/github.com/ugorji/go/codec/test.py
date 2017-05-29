@@ -34,7 +34,7 @@ def get_test_data_list():
          True,
          u"null",
          None,
-         u"some&day>some<day",
+         u"someday",
          1328176922000002000,
          u"",
          -2206187877999998000,

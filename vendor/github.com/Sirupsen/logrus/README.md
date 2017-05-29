@@ -1,4 +1,4 @@
-# Logrus <img src="http://i.imgur.com/hTeVwmJ.png" width="40" height="40" alt=":walrus:" class="emoji" title=":walrus:"/>&nbsp;[![Build Status](https://travis-ci.org/sirupsen/logrus.svg?branch=master)](https://travis-ci.org/sirupsen/logrus)&nbsp;[![GoDoc](https://godoc.org/github.com/sirupsen/logrus?status.svg)](https://godoc.org/github.com/sirupsen/logrus)
+# Logrus <img src="http://i.imgur.com/hTeVwmJ.png" width="40" height="40" alt=":walrus:" class="emoji" title=":walrus:"/>&nbsp;[![Build Status](https://travis-ci.org/Sirupsen/logrus.svg?branch=master)](https://travis-ci.org/Sirupsen/logrus)&nbsp;[![GoDoc](https://godoc.org/github.com/Sirupsen/logrus?status.svg)](https://godoc.org/github.com/Sirupsen/logrus)
 
 **Seeing weird case-sensitive problems?** See [this
 issue](https://github.com/sirupsen/logrus/issues/451#issuecomment-264332021).
@@ -52,12 +52,6 @@ time="2015-03-26T01:27:38-04:00" level=fatal msg="The ice breaks!" err=&{0x20822
 exit status 1
 ```
 
-#### Case-sensitivity
-
-The organization's name was changed to lower-case--and this will not be changed
-back. If you are getting import conflicts due to case sensitivity, please use
-the lower-case import: `github.com/sirupsen/logrus`.
-
 #### Example
 
 The simplest way to use Logrus is simply the package-level exported logger:
@@ -66,7 +60,7 @@ The simplest way to use Logrus is simply the package-level exported logger:
 package main
 
 import (
-  log "github.com/sirupsen/logrus"
+  log "github.com/Sirupsen/logrus"
 )
 
 func main() {
@@ -77,7 +71,7 @@ func main() {
 ```
 
 Note that it's completely api-compatible with the stdlib logger, so you can
-replace your `log` imports everywhere with `log "github.com/sirupsen/logrus"`
+replace your `log` imports everywhere with `log "github.com/Sirupsen/logrus"`
 and you'll now have the flexibility of Logrus. You can customize it all you
 want:
 
@@ -86,7 +80,7 @@ package main
 
 import (
   "os"
-  log "github.com/sirupsen/logrus"
+  log "github.com/Sirupsen/logrus"
 )
 
 func init() {
@@ -136,8 +130,7 @@ application, you can also create an instance of the `logrus` Logger:
 package main
 
 import (
-  "os"
-  "github.com/sirupsen/logrus"
+  "github.com/Sirupsen/logrus"
 )
 
 // Create a new instance of the logger. You can have any number of instances.
@@ -165,7 +158,7 @@ func main() {
 
 #### Fields
 
-Logrus encourages careful, structured logging through logging fields instead of
+Logrus encourages careful, structured logging though logging fields instead of
 long, unparseable error messages. For example, instead of: `log.Fatalf("Failed
 to send event %s to topic %s with key %d")`, you should log the much more
 discoverable:
@@ -187,20 +180,6 @@ In general, with Logrus using any of the `printf`-family functions should be
 seen as a hint you should add a field, however, you can still use the
 `printf`-family functions with Logrus.
 
-#### Default Fields
-
-Often it's helpful to have fields _always_ attached to log statements in an
-application or parts of one. For example, you may want to always log the
-`request_id` and `user_ip` in the context of a request. Instead of writing
-`log.WithFields(log.Fields{"request_id": request_id, "user_ip": user_ip})` on
-every line, you can create a `logrus.Entry` to pass around instead:
-
-```go
-requestLogger := log.WithFields(log.Fields{"request_id": request_id, "user_ip": user_ip})
-requestLogger.Info("something happened on that request") # will log request_id and user_ip
-requestLogger.Warn("something not great happened")
-```
-
 #### Hooks
 
 You can add hooks for logging levels. For example to send errors to an exception
@@ -212,9 +191,9 @@ Logrus comes with [built-in hooks](hooks/). Add those, or your custom hook, in
 
 ```go
 import (
-  log "github.com/sirupsen/logrus"
+  log "github.com/Sirupsen/logrus"
   "gopkg.in/gemnasium/logrus-airbrake-hook.v2" // the package is named "aibrake"
-  logrus_syslog "github.com/sirupsen/logrus/hooks/syslog"
+  logrus_syslog "github.com/Sirupsen/logrus/hooks/syslog"
   "log/syslog"
 )
 
@@ -242,16 +221,14 @@ Note: Syslog hook also support connecting to local syslog (Ex. "/dev/log" or "/v
 | [Amqp-Hook](https://github.com/vladoatanasov/logrus_amqp) | Hook for logging to Amqp broker (Like RabbitMQ) |
 | [Bugsnag](https://github.com/Shopify/logrus-bugsnag/blob/master/bugsnag.go) | Send errors to the Bugsnag exception tracking service. |
 | [DeferPanic](https://github.com/deferpanic/dp-logrus) | Hook for logging to DeferPanic |
-| [Discordrus](https://github.com/kz/discordrus) | Hook for logging to [Discord](https://discordapp.com/) |
 | [ElasticSearch](https://github.com/sohlich/elogrus) | Hook for logging to ElasticSearch|
-| [Firehose](https://github.com/beaubrewer/logrus_firehose) | Hook for logging to [Amazon Firehose](https://aws.amazon.com/kinesis/firehose/)
 | [Fluentd](https://github.com/evalphobia/logrus_fluent) | Hook for logging to fluentd |
 | [Go-Slack](https://github.com/multiplay/go-slack) | Hook for logging to [Slack](https://slack.com) |
 | [Graylog](https://github.com/gemnasium/logrus-graylog-hook) | Hook for logging to [Graylog](http://graylog2.org/) |
 | [Hiprus](https://github.com/nubo/hiprus) | Send errors to a channel in hipchat. |
 | [Honeybadger](https://github.com/agonzalezro/logrus_honeybadger) | Hook for sending exceptions to Honeybadger |
 | [InfluxDB](https://github.com/Abramovic/logrus_influxdb) | Hook for logging to influxdb |
-| [Influxus](http://github.com/vlad-doru/influxus) | Hook for concurrently logging to [InfluxDB](http://influxdata.com/) |
+| [Influxus] (http://github.com/vlad-doru/influxus) | Hook for concurrently logging to [InfluxDB] (http://influxdata.com/) |
 | [Journalhook](https://github.com/wercker/journalhook) | Hook for logging to `systemd-journald` |
 | [KafkaLogrus](https://github.com/goibibo/KafkaLogrus) | Hook for logging to kafka |
 | [LFShook](https://github.com/rifflock/lfshook) | Hook for logging to the local filesystem |
@@ -279,7 +256,6 @@ Note: Syslog hook also support connecting to local syslog (Ex. "/dev/log" or "/v
 | [TraceView](https://github.com/evalphobia/logrus_appneta) | Hook for logging to [AppNeta TraceView](https://www.appneta.com/products/traceview/) |
 | [Typetalk](https://github.com/dragon3/logrus-typetalk-hook) | Hook for logging to [Typetalk](https://www.typetalk.in/) |
 | [logz.io](https://github.com/ripcurld00d/logrus-logzio-hook) | Hook for logging to [logz.io](https://logz.io), a Log as a Service using Logstash |
-| [SQS-Hook](https://github.com/tsarpaul/logrus_sqs) | Hook for logging to [Amazon Simple Queue Service (SQS)](https://aws.amazon.com/sqs/) |
 
 #### Level logging
 
@@ -328,7 +304,7 @@ could do:
 
 ```go
 import (
-  log "github.com/sirupsen/logrus"
+  log "github.com/Sirupsen/logrus"
 )
 
 init() {
@@ -355,11 +331,8 @@ The built-in logging formatters are:
   without colors.
   * *Note:* to force colored output when there is no TTY, set the `ForceColors`
     field to `true`.  To force no colored output even if there is a TTY  set the
-    `DisableColors` field to `true`. For Windows, see
-    [github.com/mattn/go-colorable](https://github.com/mattn/go-colorable).
-  * All options are listed in the [generated docs](https://godoc.org/github.com/sirupsen/logrus#TextFormatter).
+    `DisableColors` field to `true`
 * `logrus.JSONFormatter`. Logs fields as JSON.
-  * All options are listed in the [generated docs](https://godoc.org/github.com/sirupsen/logrus#JSONFormatter).
 
 Third party logging formatters:
 
@@ -408,18 +381,6 @@ srv := http.Server{
 Each line written to that writer will be printed the usual way, using formatters
 and hooks. The level for those entries is `info`.
 
-This means that we can override the standard library logger easily:
-
-```go
-logger := logrus.New()
-logger.Formatter = &logrus.JSONFormatter{}
-
-// Use logrus for standard log output
-// Note that `log` here references stdlib's log
-// Not logrus imported under the name `log`.
-log.SetOutput(logger.Writer())
-```
-
 #### Rotation
 
 Log rotation is not provided with Logrus. Log rotation should be done by an
@@ -431,7 +392,7 @@ entries. It should not be a feature of the application-level logger.
 | Tool | Description |
 | ---- | ----------- |
 |[Logrus Mate](https://github.com/gogap/logrus_mate)|Logrus mate is a tool for Logrus to manage loggers, you can initial logger's level, hook and formatter by config file, the logger will generated with different config at different environment.|
-|[Logrus Viper Helper](https://github.com/heirko/go-contrib/tree/master/logrusHelper)|An Helper around Logrus to wrap with spf13/Viper to load configuration with fangs! And to simplify Logrus configuration use some behavior of [Logrus Mate](https://github.com/gogap/logrus_mate). [sample](https://github.com/heirko/iris-contrib/blob/master/middleware/logrus-logger/example) |
+|[Logrus Viper Helper](https://github.com/heirko/go-contrib/tree/master/logrusHelper)|An Helper arround Logrus to wrap with spf13/Viper to load configuration with fangs! And to simplify Logrus configuration use some behavior of [Logrus Mate](https://github.com/gogap/logrus_mate). [sample](https://github.com/heirko/iris-contrib/blob/master/middleware/logrus-logger/example) |
 
 #### Testing
 
@@ -441,24 +402,15 @@ Logrus has a built in facility for asserting the presence of log messages. This 
 * a test logger (`test.NewNullLogger`) that just records log messages (and does not output any):
 
 ```go
-import(
-  "github.com/sirupsen/logrus"
-  "github.com/sirupsen/logrus/hooks/null"
-  "github.com/stretchr/testify/assert"
-  "testing"
-)
+logger, hook := NewNullLogger()
+logger.Error("Hello error")
 
-func TestSomething(t*testing.T){
-  logger, hook := null.NewNullLogger()
-  logger.Error("Helloerror")
+assert.Equal(1, len(hook.Entries))
+assert.Equal(logrus.ErrorLevel, hook.LastEntry().Level)
+assert.Equal("Hello error", hook.LastEntry().Message)
 
-  assert.Equal(t, 1, len(hook.Entries))
-  assert.Equal(t, logrus.ErrorLevel, hook.LastEntry().Level)
-  assert.Equal(t, "Helloerror", hook.LastEntry().Message)
-
-  hook.Reset()
-  assert.Nil(t, hook.LastEntry())
-}
+hook.Reset()
+assert.Nil(hook.LastEntry())
 ```
 
 #### Fatal handlers
