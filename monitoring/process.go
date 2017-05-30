@@ -22,24 +22,29 @@ import (
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+
 	"github.com/gravitational/trace"
 	"github.com/prometheus/procfs"
 )
 
+// NewProcessChecker creates and returns new ProcessChecker
 func NewProcessChecker(process string) health.Checker {
 	return &ProcessChecker{
 		Process: process,
 	}
 }
 
+// ProcessChecker is a health.Checker which is able to validate presence of process with PPID 1 on a node
 type ProcessChecker struct {
 	Process string
 }
 
+// Name returns the name of this checker
 func (c *ProcessChecker) Name() string {
 	return fmt.Sprintf("process %s", c.Process)
 }
 
+// Check inspects procfs and tries to find process specified by name with PPID 1 and reports all errors to reporter
 func (c *ProcessChecker) Check(ctx context.Context, reporter health.Reporter) {
 	procs, err := procfs.AllProcs()
 	if err != nil {
@@ -58,5 +63,5 @@ func (c *ProcessChecker) Check(ctx context.Context, reporter health.Reporter) {
 			return
 		}
 	}
-	reporter.Add(NewProbeFromErr(c.Name(), trace.Errorf("no process %v found", c.Process)))
+	reporter.Add(NewProbeFromErr(c.Name(), trace.NotFound("no process %v found", c.Process)))
 }

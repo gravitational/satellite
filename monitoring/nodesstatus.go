@@ -48,7 +48,7 @@ type nodesStatusChecker struct {
 // Name returns the name of this checker
 func (r *nodesStatusChecker) Name() string { return "nodesstatuses" }
 
-// Check validates the status of kubernetes components
+// Check checks if there're more than nodesReadyThreshold specified in nodesStatusChecker available in a cluster
 func (r *nodesStatusChecker) Check(ctx context.Context, reporter health.Reporter) {
 	client, err := ConnectToKube(r.hostPort, "")
 	if err != nil {

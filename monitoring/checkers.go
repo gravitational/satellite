@@ -41,16 +41,19 @@ func createProcessesHealth(processes []string) health.Checker {
 	return &checker
 }
 
+// KubeMasterProcessesHealth creates checker for essential processes on machine with `master` role
 func KubeMasterProcessesHealth() health.Checker {
 	processes := []string{"kube-apiserver", "kubelet", "kube-proxy", "etcd", "serf", "flanneld", "dockerd", "dnsmasq"}
 	return createProcessesHealth(processes)
 }
 
+// KubeNodeProcessesHealth creates checker for essential processes on machine with `node` role
 func KubeNodeProcessesHealth() health.Checker {
 	processes := []string{"kubelet", "kube-proxy", "etcd", "serf", "flanneld", "dockerd", "dnsmasq"}
 	return createProcessesHealth(processes)
 }
 
+// KubeMasterSocketsHealth creates checker for essential TCP/UDP/Unix sockets on machine with `master` role
 func KubeMasterSocketsHealth() health.Checker {
 	tcpPorts := []int{
 		53,    // dnsmasq
@@ -78,6 +81,7 @@ func KubeMasterSocketsHealth() health.Checker {
 	return NewSocketsChecker(tcpPorts, udpPorts, unixSocks)
 }
 
+// KubeNodeSocketsHealth creates checker for essential TCP/UDP/Unix sockets on machine with `node` role
 func KubeNodeSocketsHealth() health.Checker {
 	tcpPorts := []int{
 		53,    // dnsmasq

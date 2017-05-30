@@ -46,7 +46,7 @@ type HTTPHealthzChecker struct {
 // Name returns the name of this checker
 func (r *HTTPHealthzChecker) Name() string { return r.name }
 
-// Check runs an HTTP check and reports errors to the specified Reporter
+// Check runs a HTTP check and reports errors to the specified Reporter
 func (r *HTTPHealthzChecker) Check(ctx context.Context, reporter health.Reporter) {
 	req, err := http.NewRequest("GET", r.URL, nil)
 	if err != nil {
