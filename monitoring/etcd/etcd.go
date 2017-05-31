@@ -43,7 +43,9 @@ type LeaderStats struct {
 	// Leader is the ID of the leader in the etcd cluster.
 	Leader    string                   `json:"leader"`
 	Followers map[string]FollowerStats `json:"followers"`
-	Message   string                   `json:"message"`
+	// Message contains information about request.
+	// It will be not empty string, when request was sent to follower.
+	Message string `json:"message"`
 }
 
 // FollowerStats encapsulates various statistics about a follower in an etcd cluster
@@ -54,12 +56,15 @@ type FollowerStats struct {
 
 // LatencyStats encapsulates latency statistics.
 type LatencyStats struct {
+	// Current latency between follower and leader
 	Current float64 `json:"current"`
 }
 
 // RaftStats encapsulates raft statistics.
 type RaftStats struct {
-	Fail    uint64 `json:"fail"`
+	// Number of failed RPC requests
+	Fail uint64 `json:"fail"`
+	// Number of successful RPC requests
 	Success uint64 `json:"success"`
 }
 
@@ -167,7 +172,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
-// Member represents simplified ETCD member struct
+// Member represents simplified ETCD member structure
 type Member struct {
 	// ID of etcd cluster member
 	ID string `json:"id"`
@@ -175,13 +180,13 @@ type Member struct {
 	Name string `json:"name,omitempty"`
 }
 
-type Members struct {
-	// List of etcd cluster members
-	Members []Member `json:"members"`
-}
-
 func (e *Exporter) getMembers() (map[string]string, error) {
-	var members Members
+
+	var members struct {
+		// List of etcd cluster members
+		Members []Member `json:"members"`
+	}
+
 	resp, err := e.client.Get(e.client.Endpoint("stats", "leader"), url.Values{})
 	if err != nil {
 		return nil, trace.Wrap(err)
