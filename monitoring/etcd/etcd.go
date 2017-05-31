@@ -178,6 +178,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		e.followersLatency.WithLabelValues(memberName).Set(follower.Latency.Current)
 	}
 
+	e.health.Collect(ch)
 	e.followersLatency.Collect(ch)
 	e.followersRaftFail.Collect(ch)
 	e.followersRaftSuccess.Collect(ch)
@@ -193,8 +194,10 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	if err := e.collect(ch); err != nil {
 		log.Errorf("error collecting stats from ETCD: %v", err)
 		e.up.WithLabelValues(e.config.Endpoints[0]).Set(0.0)
+	} else {
+		e.up.WithLabelValues(e.config.Endpoints[0]).Set(1.0)
 	}
-	e.up.WithLabelValues(e.config.Endpoints[0]).Set(1.0)
+	e.up.Collect(ch)
 }
 
 // Member represents simplified ETCD member structure
