@@ -75,6 +75,8 @@ type Exporter struct {
 	config monitoring.ETCDConfig
 	mutex  sync.RWMutex
 
+	up                   *prometheus.GaugeVec
+	health               prometheus.Gauge
 	followersLatency     *prometheus.GaugeVec
 	followersRaftFail    *prometheus.GaugeVec
 	followersRaftSuccess *prometheus.GaugeVec
@@ -99,6 +101,16 @@ func NewExporter(config *monitoring.ETCDConfig) (*Exporter, error) {
 	return &Exporter{
 		client: client,
 		config: *config,
+		up: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      "up",
+			Help:      "Whether scraping ETCD metrics was successful.",
+		}, []string{"endpoint"}),
+		health: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      "health",
+			Help:      "Health status of ETCD.",
+		}),
 		followersLatency: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: namespace,
 			Name:      "followers_latency",
@@ -146,6 +158,16 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		return trace.Wrap(err)
 	}
 
+	health, err := e.healthStatus()
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	if health {
+		e.health.Set(1.0)
+	} else {
+		e.health.Set(0.0)
+	}
+
 	for id, follower := range leaderStats.Followers {
 		memberName := id
 		if membersMap[id] != "" {
@@ -167,9 +189,12 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	e.mutex.Lock() // To protect metrics from concurrent collects.
 	defer e.mutex.Unlock()
+
 	if err := e.collect(ch); err != nil {
 		log.Errorf("error collecting stats from ETCD: %v", err)
+		e.up.WithLabelValues(e.config.Endpoints[0]).Set(0.0)
 	}
+	e.up.WithLabelValues(e.config.Endpoints[0]).Set(1.0)
 }
 
 // Member represents simplified ETCD member structure
@@ -202,6 +227,26 @@ func (e *Exporter) getMembers() (map[string]string, error) {
 		membersMap[member.ID] = member.Name
 	}
 	return membersMap, nil
+}
+
+// healthStatus determines status of etcd member
+func (e *Exporter) healthStatus() (healthy bool, err error) {
+	result := struct{ Health string }{}
+	nresult := struct{ Health bool }{}
+	resp, err := e.client.Get(e.client.Endpoint("health", ""), url.Values{})
+	if err != nil {
+		return false, trace.Wrap(err)
+	}
+
+	err = json.Unmarshal(resp.Bytes(), &result)
+	if err != nil {
+		err = json.Unmarshal(resp.Bytes(), &nresult)
+	}
+	if err != nil {
+		return false, trace.Wrap(err)
+	}
+
+	return (result.Health == "true" || nresult.Health == true), nil
 }
 
 func newClient(url string, opts ...roundtrip.ClientParam) (*roundtrip.Client, error) {
