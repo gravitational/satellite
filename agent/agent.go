@@ -218,15 +218,20 @@ func (r *agent) Join(peers []string) error {
 
 // Close stops all background activity and releases the agent's resources.
 func (r *agent) Close() (err error) {
+	var errors []error
 	err = r.metricsListener.Close()
 	if err != nil {
-		return trace.Wrap(err)
+		errors = append(errors, trace.Wrap(err))
 	}
 	r.rpc.Stop()
 	close(r.done)
 	err = r.serfClient.Close()
 	if err != nil {
-		return trace.Wrap(err)
+		errors = append(errors, trace.Wrap(err))
+	}
+
+	if len(errors) > 0 {
+		return trace.NewAggregate(errors...)
 	}
 	return nil
 }

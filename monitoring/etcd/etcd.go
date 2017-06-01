@@ -75,7 +75,7 @@ type Exporter struct {
 	config monitoring.ETCDConfig
 	mutex  sync.RWMutex
 
-	up                   *prometheus.GaugeVec
+	isRunning            *prometheus.GaugeVec
 	health               prometheus.Gauge
 	followersLatency     *prometheus.GaugeVec
 	followersRaftFail    *prometheus.GaugeVec
@@ -101,7 +101,7 @@ func NewExporter(config *monitoring.ETCDConfig) (*Exporter, error) {
 	return &Exporter{
 		client: client,
 		config: *config,
-		up: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		isRunning: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: namespace,
 			Name:      "up",
 			Help:      "Whether scraping ETCD metrics was successful.",
@@ -131,25 +131,34 @@ func NewExporter(config *monitoring.ETCDConfig) (*Exporter, error) {
 
 // Describe implements prometheus.Collector.
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
+	e.isRunning.Describe(ch)
+	e.health.Describe(ch)
 	e.followersLatency.Describe(ch)
 	e.followersRaftFail.Describe(ch)
 	e.followersRaftSuccess.Describe(ch)
 }
 
 func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
+	sendStatus := func() {
+		e.isRunning.Collect(ch)
+	}
+	defer sendStatus()
+	e.isRunning.WithLabelValues(e.config.Endpoints[0]).Set(0.0)
+
 	var leaderStats LeaderStats
-	resp, err := e.client.Get(e.client.Endpoint("stats", "leader"), url.Values{})
+	resp, err := e.client.Get(e.client.Endpoint("v2", "stats", "leader"), url.Values{})
 	if err != nil {
 		return trace.Wrap(err)
 	}
 
 	err = json.Unmarshal(resp.Bytes(), &leaderStats)
 	if err != nil {
-		return trace.Wrap(err)
+		return trace.Wrap(err, "unable to parse JSON output: %v", resp.Bytes())
 	}
 
 	if leaderStats.Message != "" {
 		// Endpoint is not a leader of ETCD cluster
+		e.isRunning.WithLabelValues(e.config.Endpoints[0]).Set(1.0)
 		return nil
 	}
 
@@ -177,6 +186,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		e.followersRaftFail.WithLabelValues(memberName).Set(float64(follower.RaftStats.Fail))
 		e.followersLatency.WithLabelValues(memberName).Set(follower.Latency.Current)
 	}
+	e.isRunning.WithLabelValues(e.config.Endpoints[0]).Set(1.0)
 
 	e.health.Collect(ch)
 	e.followersLatency.Collect(ch)
@@ -193,11 +203,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 
 	if err := e.collect(ch); err != nil {
 		log.Errorf("error collecting stats from ETCD: %v", err)
-		e.up.WithLabelValues(e.config.Endpoints[0]).Set(0.0)
-	} else {
-		e.up.WithLabelValues(e.config.Endpoints[0]).Set(1.0)
 	}
-	e.up.Collect(ch)
 }
 
 // Member represents simplified ETCD member structure
@@ -215,14 +221,14 @@ func (e *Exporter) getMembers() (map[string]string, error) {
 		Members []Member `json:"members"`
 	}
 
-	resp, err := e.client.Get(e.client.Endpoint("stats", "leader"), url.Values{})
+	resp, err := e.client.Get(e.client.Endpoint("v2", "stats", "leader"), url.Values{})
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
 
 	err = json.Unmarshal(resp.Bytes(), &members)
 	if err != nil {
-		return nil, trace.Wrap(err)
+		return nil, trace.Wrap(err, "unable to parse JSON output: %v", resp.Bytes())
 	}
 
 	membersMap := make(map[string]string)
@@ -236,7 +242,7 @@ func (e *Exporter) getMembers() (map[string]string, error) {
 func (e *Exporter) healthStatus() (healthy bool, err error) {
 	result := struct{ Health string }{}
 	nresult := struct{ Health bool }{}
-	resp, err := e.client.Get(e.client.Endpoint("health", ""), url.Values{})
+	resp, err := e.client.Get(e.client.Endpoint("health"), url.Values{})
 	if err != nil {
 		return false, trace.Wrap(err)
 	}
@@ -246,14 +252,14 @@ func (e *Exporter) healthStatus() (healthy bool, err error) {
 		err = json.Unmarshal(resp.Bytes(), &nresult)
 	}
 	if err != nil {
-		return false, trace.Wrap(err)
+		return false, trace.Wrap(err, "unable to parse JSON output: %v", resp.Bytes())
 	}
 
 	return (result.Health == "true" || nresult.Health == true), nil
 }
 
 func newClient(url string, opts ...roundtrip.ClientParam) (*roundtrip.Client, error) {
-	clt, err := roundtrip.NewClient(url, "v2", opts...)
+	clt, err := roundtrip.NewClient(url, "", opts...)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
