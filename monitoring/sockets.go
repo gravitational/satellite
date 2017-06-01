@@ -51,9 +51,8 @@ func (c *SocketsChecker) Name() string {
 
 // checkTCPPorts checks if specified slice of TCP ports are opened and returns slice of errors found
 func checkTCPPorts(ports []int) []error {
-	errors := make([]error, 0)
 	if len(ports) == 0 {
-		return errors
+		return nil
 	}
 	allSocksIPv4, err := GetTCPSockets(ProcNetTCP)
 	if err != nil {
@@ -70,6 +69,7 @@ func checkTCPPorts(ports []int) []error {
 			listeningPorts[sock.LocalAddress.Port] = true
 		}
 	}
+	var errors []error
 	for _, port := range ports {
 		if _, listening := listeningPorts[port]; !listening {
 			errors = append(errors, trace.NotFound("not listening tcp/%d", port))
@@ -80,9 +80,8 @@ func checkTCPPorts(ports []int) []error {
 
 // checkUDPPorts checks if specified slice of UDP ports are opened and returns slice of errors found
 func checkUDPPorts(ports []int) []error {
-	errors := make([]error, 0)
 	if len(ports) == 0 {
-		return errors
+		return nil
 	}
 	allSocksIPv4, err := GetUDPSockets(ProcNetUDP)
 	if err != nil {
@@ -97,6 +96,7 @@ func checkUDPPorts(ports []int) []error {
 	for _, sock := range allSocks {
 		listeningPorts[sock.LocalAddress.Port] = true
 	}
+	var errors []error
 	for _, port := range ports {
 		if _, listening := listeningPorts[port]; !listening {
 			errors = append(errors, trace.NotFound("not listening udp/%d", port))
@@ -107,9 +107,8 @@ func checkUDPPorts(ports []int) []error {
 
 // checkUnixPorts checks if specified slice of Unix ports are opened and returns slice of errors found
 func checkUnixSockets(socks []string) []error {
-	errors := make([]error, 0)
 	if len(socks) == 0 {
-		return errors
+		return nil
 	}
 	allSocks, err := GetUnixSockets(ProcNetUnix)
 	if err != nil {
@@ -121,6 +120,7 @@ func checkUnixSockets(socks []string) []error {
 			openSockets[sock.Path] = true
 		}
 	}
+	var errors []error
 	for _, sock := range socks {
 		if _, listening := openSockets[sock]; !listening {
 			errors = append(errors, trace.Errorf("not listening unix/%s", sock))
@@ -131,33 +131,16 @@ func checkUnixSockets(socks []string) []error {
 
 // Check if all specified TCP/UDP/Unix sockets present and opened on host
 func (c *SocketsChecker) Check(ctx context.Context, reporter health.Reporter) {
-	failed := false
+	errors := append([]error{}, checkTCPPorts(c.TCPPorts)...)
+	errors = append(errors, checkUDPPorts(c.UDPPorts)...)
+	errors = append(errors, checkUnixSockets(c.UNIXSockets)...)
 
-	errors := checkTCPPorts(c.TCPPorts)
-	if len(errors) > 0 {
-		for _, err := range errors {
-			reporter.Add(NewProbeFromErr(c.Name(), err))
-		}
-		failed = true
-	}
-
-	errors = checkUDPPorts(c.UDPPorts)
-	if len(errors) > 0 {
-		for _, err := range errors {
-			reporter.Add(NewProbeFromErr(c.Name(), err))
-		}
-		failed = true
-	}
-
-	errors = checkUnixSockets(c.UNIXSockets)
-	if len(errors) > 0 {
-		for _, err := range errors {
-			reporter.Add(NewProbeFromErr(c.Name(), err))
-		}
-		failed = true
-	}
-
-	if !failed {
+	if len(errors) == 0 {
 		reporter.Add(&pb.Probe{Checker: c.Name(), Status: pb.Probe_Running})
+		return
+	}
+
+	for _, err := range errors {
+		reporter.Add(NewProbeFromErr(c.Name(), err))
 	}
 }

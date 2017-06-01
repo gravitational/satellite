@@ -90,71 +90,81 @@ type UnixSocket struct {
 	Path     string
 }
 
-type socketparser func(string) (interface{}, error)
+type socketparser func(string) error
 
-func parseSocketFile(parse socketparser, fpath string) (interface{}, error) {
-	var sockets []interface{}
+func parseSocketFile(fpath string, parse socketparser) error {
 	fp, err := os.Open(fpath)
 	defer fp.Close()
 	if err != nil {
-		return nil, trace.ConvertSystemError(err)
+		return trace.ConvertSystemError(err)
 	}
 	lineScanner := bufio.NewScanner(fp)
 	lineScanner.Scan() // Drop header line
 	for lineScanner.Scan() {
-		socket, err := parse(lineScanner.Text())
+		err := parse(lineScanner.Text())
 		if err != nil {
-			return nil, trace.Wrap(err)
+			return trace.Wrap(err)
 		}
-		sockets = append(sockets, socket)
 	}
 	if err := lineScanner.Err(); err != nil {
+		return trace.Wrap(err)
+	}
+	return nil
+}
+
+// GetTCPSockets reads specified file formatted as /proc/net/tcp{,6} and returns slice of *TCPSocket
+func GetTCPSockets(fpath string) ([]*TCPSocket, error) {
+	var sockets []*TCPSocket
+	err := parseSocketFile(fpath, func(line string) error {
+		socket, err := newTCPSocketFromLine(line)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+		sockets = append(sockets, socket)
+		return nil
+	})
+	if err != nil {
 		return nil, trace.Wrap(err)
 	}
 	return sockets, nil
 }
 
-// GetTCPSockets reads specified file formatted as /proc/net/tcp{,6} and returns slice of *TCPSocket
-func GetTCPSockets(fpath string) ([]*TCPSocket, error) {
-	sockets, err := parseSocketFile(newTCPSocketFromLine, fpath)
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
-	if socketsAsserted, ok := sockets.([]*TCPSocket); !ok {
-		return nil, trace.BadParameter("type assertion failed")
-	} else {
-		return socketsAsserted, nil
-	}
-}
-
 // GetUDPSockets reads specified file formatted as /proc/net/udp{,6} and returns slice of *UDPSocket
 func GetUDPSockets(fpath string) ([]*UDPSocket, error) {
-	sockets, err := parseSocketFile(newUDPSocketFromLine, fpath)
+	var sockets []*UDPSocket
+	err := parseSocketFile(fpath, func(line string) error {
+		socket, err := newUDPSocketFromLine(line)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+		sockets = append(sockets, socket)
+		return nil
+	})
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	if socketsAsserted, ok := sockets.([]*UDPSocket); !ok {
-		return nil, trace.BadParameter("type assertion failed")
-	} else {
-		return socketsAsserted, nil
-	}
+	return sockets, nil
 }
 
 // GetUnixSockets reads specified file formatted as /proc/net/unix and returns slice of *UnixSocket
 func GetUnixSockets(fpath string) ([]*UnixSocket, error) {
-	sockets, err := parseSocketFile(newUnixSocketFromLine, fpath)
+	var sockets []*UnixSocket
+	err := parseSocketFile(fpath, func(line string) error {
+		socket, err := newUnixSocketFromLine(line)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+		sockets = append(sockets, socket)
+		return nil
+	})
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	if socketsAsserted, ok := sockets.([]*UnixSocket); !ok {
-		return nil, trace.BadParameter("type assertion failed")
-	} else {
-		return socketsAsserted, nil
-	}
+	return sockets, nil
 }
 
 // newTCPSocketFromLine parses line in /proc/net/tcp{,6} format and returns TCPSocket object and error
-func newTCPSocketFromLine(line string) (interface{}, error) {
+func newTCPSocketFromLine(line string) (*TCPSocket, error) {
 	// sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
 	//  0: 00000000:0035 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 18616 1 ffff91e759d47080 100 0 0 10 0
 	// reference: https://github.com/ecki/net-tools/blob/master/netstat.c#L1070
@@ -182,7 +192,7 @@ func newTCPSocketFromLine(line string) (interface{}, error) {
 }
 
 // newUDPSocketFromLine parses line in /proc/net/udp{,6} format and returns UDPSocket object and error
-func newUDPSocketFromLine(line string) (interface{}, error) {
+func newUDPSocketFromLine(line string) (*UDPSocket, error) {
 	//    sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode ref pointer drops
 	//  2511: 00000000:14E9 00000000:0000 07 00000000:00000000 00:00000000 00000000  1000        0 1662497 2 ffff91e6a9fcbc00 0
 	var (
@@ -210,7 +220,7 @@ func newUDPSocketFromLine(line string) (interface{}, error) {
 }
 
 // newUnixSocketFromLine parses line in /proc/net/unix format and returns UnixSocket object and error
-func newUnixSocketFromLine(line string) (interface{}, error) {
+func newUnixSocketFromLine(line string) (*UnixSocket, error) {
 	// Num               RefCount Protocol Flags    Type St Inode Path
 	// ffff91e759dfb800: 00000002 00000000 00010000 0001 01 16163 /tmp/sddm-auth3949710e-7c3f-4aa2-b5fc-25cc34a7f31e
 	var (
