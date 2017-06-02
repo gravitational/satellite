@@ -18,6 +18,7 @@ package etcd
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"sync"
@@ -153,7 +154,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 
 	err = json.Unmarshal(resp.Bytes(), &leaderStats)
 	if err != nil {
-		return trace.Wrap(err, "unable to parse JSON output: %v", resp.Bytes())
+		return trace.Wrap(err, "unable to parse JSON output: %s", resp.Bytes())
 	}
 
 	if leaderStats.Message != "" {
@@ -176,7 +177,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	} else {
 		e.health.Set(0.0)
 	}
-
+	fmt.Println(membersMap)
 	for id, follower := range leaderStats.Followers {
 		memberName := id
 		if membersMap[id] != "" {
@@ -228,7 +229,7 @@ func (e *Exporter) getMembers() (map[string]string, error) {
 
 	err = json.Unmarshal(resp.Bytes(), &members)
 	if err != nil {
-		return nil, trace.Wrap(err, "unable to parse JSON output: %v", resp.Bytes())
+		return nil, trace.Wrap(err, "unable to parse JSON output: %s", resp.Bytes())
 	}
 
 	membersMap := make(map[string]string)
@@ -252,7 +253,7 @@ func (e *Exporter) healthStatus() (healthy bool, err error) {
 		err = json.Unmarshal(resp.Bytes(), &nresult)
 	}
 	if err != nil {
-		return false, trace.Wrap(err, "unable to parse JSON output: %v", resp.Bytes())
+		return false, trace.Wrap(err, "unable to parse JSON output: %s", resp.Bytes())
 	}
 
 	return (result.Health == "true" || nresult.Health == true), nil
