@@ -16,9 +16,44 @@ limitations under the License.
 
 package monitoring
 
-import "io"
+import (
+	"context"
+	"net/http"
 
-func dockerChecker(response io.Reader) error {
-	// no-op
-	return nil
+	"github.com/docker/docker/client"
+	"github.com/gravitational/satellite/agent/health"
+	"github.com/gravitational/trace"
+)
+
+// NewDockerChecker creates DockerChecker using specified host url, read
+// https://docs.docker.com/engine/reference/commandline/dockerd/#daemon-socket-option for details
+func NewDockerChecker(host string) health.Checker {
+	return &DockerChecker{
+		Host: host,
+	}
+}
+
+// DockerChecker is a health.Checker that can validate dockerd daemon health using `docker info` command
+type DockerChecker struct {
+	Host       string
+	HTTPClient *http.Client
+}
+
+// Name returns the name of this checker
+func (c *DockerChecker) Name() string {
+	return "docker"
+}
+
+// Check runs a dockerd daemon check via executing `docker info` command and reports errors to the specified Reporter
+func (c *DockerChecker) Check(ctx context.Context, reporter health.Reporter) {
+	dockerClient, err := client.NewClient(c.Host, "", nil, nil)
+	if err != nil {
+		reporter.Add(NewProbeFromErr(c.Name(), trace.Errorf("failed to connect: %v", err)))
+		return
+	}
+	_, err = dockerClient.Info(ctx)
+	if err != nil {
+		reporter.Add(NewProbeFromErr(c.Name(), trace.Errorf("failed to get info: %v", err)))
+		return
+	}
 }
