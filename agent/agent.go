@@ -174,15 +174,25 @@ type agent struct {
 
 // Start starts the agent's background tasks.
 func (r *agent) Start() error {
+	errChan := make(chan error, 10)
 	r.done = make(chan struct{})
 
 	go r.statusUpdateLoop()
 
 	go func() {
 		http.Handle("/metrics", prometheus.Handler())
-		_ = http.Serve(r.metricsListener, nil)
+		if err := http.Serve(r.metricsListener, nil); err != nil {
+			errChan <- trace.Wrap(err)
+			return
+		}
 	}()
-	return nil
+
+	select {
+	case err := <-errChan:
+		return err
+	case <-time.After(1 * time.Second):
+		return nil
+	}
 }
 
 // IsMember returns true if this agent is a member of the serf cluster
