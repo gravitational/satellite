@@ -174,7 +174,7 @@ type agent struct {
 
 // Start starts the agent's background tasks.
 func (r *agent) Start() error {
-	errChan := make(chan error, 10)
+	errChan := make(chan error, 1)
 	r.done = make(chan struct{})
 
 	go r.statusUpdateLoop()
@@ -183,7 +183,6 @@ func (r *agent) Start() error {
 		http.Handle("/metrics", prometheus.Handler())
 		if err := http.Serve(r.metricsListener, nil); err != nil {
 			errChan <- trace.Wrap(err)
-			return
 		}
 	}()
 
