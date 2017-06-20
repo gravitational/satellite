@@ -19,6 +19,7 @@ package agent
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -27,6 +28,7 @@ import (
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/trace"
+	"github.com/prometheus/client_golang/prometheus"
 
 	log "github.com/Sirupsen/logrus"
 	serf "github.com/hashicorp/serf/client"
@@ -68,6 +70,9 @@ type Config struct {
 	// RPC address of local serf node.
 	SerfRPCAddr string
 
+	// Address to listen on for web interface and telemetry for Prometheus metrics.
+	MetricsAddr string
+
 	// Peers lists the nodes that are part of the initial serf cluster configuration.
 	// This is not a final cluster configuration and new nodes or node updates
 	// are still possible.
@@ -97,6 +102,10 @@ func New(config *Config) (Agent, error) {
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to update serf agent tags")
 	}
+	metricsListener, err := net.Listen("tcp", config.MetricsAddr)
+	if err != nil {
+		return nil, trace.Wrap(err, "failed to serve prometheus metrics")
+	}
 	var listeners []net.Listener
 	defer func() {
 		if err != nil {
@@ -114,13 +123,14 @@ func New(config *Config) (Agent, error) {
 	}
 	clock := clockwork.NewRealClock()
 	agent := &agent{
-		serfClient:   client,
-		name:         config.Name,
-		cache:        config.Cache,
-		dialRPC:      defaultDialRPC,
-		statusClock:  clock,
-		recycleClock: clock,
-		localStatus:  emptyNodeStatus(config.Name),
+		serfClient:      client,
+		name:            config.Name,
+		cache:           config.Cache,
+		dialRPC:         defaultDialRPC,
+		statusClock:     clock,
+		recycleClock:    clock,
+		localStatus:     emptyNodeStatus(config.Name),
+		metricsListener: metricsListener,
 	}
 	agent.rpc = newRPCServer(agent, listeners)
 	return agent, nil
@@ -128,6 +138,8 @@ func New(config *Config) (Agent, error) {
 
 type agent struct {
 	health.Checkers
+
+	metricsListener net.Listener
 
 	// serfClient provides access to the serf agent.
 	serfClient serfClient
@@ -162,10 +174,24 @@ type agent struct {
 
 // Start starts the agent's background tasks.
 func (r *agent) Start() error {
+	errChan := make(chan error, 1)
 	r.done = make(chan struct{})
 
 	go r.statusUpdateLoop()
-	return nil
+
+	go func() {
+		http.Handle("/metrics", prometheus.Handler())
+		if err := http.Serve(r.metricsListener, nil); err != nil {
+			errChan <- trace.Wrap(err)
+		}
+	}()
+
+	select {
+	case err := <-errChan:
+		return err
+	case <-time.After(1 * time.Second):
+		return nil
+	}
 }
 
 // IsMember returns true if this agent is a member of the serf cluster
@@ -201,11 +227,20 @@ func (r *agent) Join(peers []string) error {
 
 // Close stops all background activity and releases the agent's resources.
 func (r *agent) Close() (err error) {
+	var errors []error
+	err = r.metricsListener.Close()
+	if err != nil {
+		errors = append(errors, trace.Wrap(err))
+	}
 	r.rpc.Stop()
 	close(r.done)
 	err = r.serfClient.Close()
 	if err != nil {
-		return trace.Wrap(err)
+		errors = append(errors, trace.Wrap(err))
+	}
+
+	if len(errors) > 0 {
+		return trace.NewAggregate(errors...)
 	}
 	return nil
 }

@@ -56,6 +56,7 @@ func run() error {
 		cagentNettestContainerImage = cagent.Flag("nettest-image", "Name of the image to use for networking test").Default("gcr.io/google_containers/nettest:1.8").String()
 		cagentName                  = cagent.Flag("name", "Agent name.  Must be the same as the name of the local serf node").OverrideDefaultFromEnvar(EnvAgentName).String()
 		cagentSerfRPCAddr           = cagent.Flag("serf-rpc-addr", "RPC address of the local serf node").Default("127.0.0.1:7373").String()
+		cagentMetricsAddr           = cagent.Flag("metrics-addr", "Address to listen on for web interface and telemetry for Prometheus metrics").Default("127.0.0.1:7580").String()
 		cagentInitialCluster        = KeyValueListFlag(cagent.Flag("initial-cluster", "Initial cluster configuration as a comma-separated list of peers").OverrideDefaultFromEnvar(EnvInitialCluster))
 		cagentTags                  = KeyValueListFlag(cagent.Flag("tags", "Define a tags as comma-separated list of key:value pairs").OverrideDefaultFromEnvar(EnvTags))
 		disableInterPodCheck        = cagent.Flag("disable-interpod-check", "Disable inter-pod check for single node cluster").Bool()
@@ -128,6 +129,7 @@ func run() error {
 			Name:        *cagentName,
 			RPCAddrs:    *cagentRPCAddrs,
 			SerfRPCAddr: *cagentSerfRPCAddr,
+			MetricsAddr: *cagentMetricsAddr,
 			Tags:        *cagentTags,
 			Cache:       multiplex.New(cache, backends...),
 		}

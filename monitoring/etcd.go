@@ -95,10 +95,10 @@ func etcdStatus(payload []byte) (healthy bool, err error) {
 	return (result.Health == "true" || nresult.Health == true), nil
 }
 
-// newHTTPTransport creates a new http.Transport from the specified
+// NewHTTPTransport creates a new http.Transport from the specified
 // set of attributes.
 // The resulting transport can be used to create an http.Client
-func (r *ETCDConfig) newHTTPTransport() (*http.Transport, error) {
+func (r *ETCDConfig) NewHTTPTransport() (*http.Transport, error) {
 	tlsConfig, err := r.clientConfig()
 	if err != nil {
 		return nil, trace.Wrap(err)

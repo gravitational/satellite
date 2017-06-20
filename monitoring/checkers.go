@@ -63,7 +63,7 @@ func NodesStatusHealth(kubeAddr string, nodesReadyThreshold int) health.Checker 
 func EtcdHealth(config *ETCDConfig) (health.Checker, error) {
 	const name = "etcd-healthz"
 
-	transport, err := config.newHTTPTransport()
+	transport, err := config.NewHTTPTransport()
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
