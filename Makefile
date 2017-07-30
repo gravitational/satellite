@@ -39,10 +39,10 @@ test:
 test-style:
 	@scripts/validate-license.sh
 
-test-package: binaries
+test-package:
 	go test -v -test.parallel=0 ./$(p)
 
-test-grep-package: binaries
+test-grep-package:
 	go test -v ./$(p) -check.f=$(e)
 
 cover-package:
