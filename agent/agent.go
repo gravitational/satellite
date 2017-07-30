@@ -30,9 +30,9 @@ import (
 	"github.com/gravitational/trace"
 	"github.com/prometheus/client_golang/prometheus"
 
-	log "github.com/Sirupsen/logrus"
 	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 
@@ -179,12 +179,14 @@ func (r *agent) Start() error {
 
 	go r.statusUpdateLoop()
 
-	go func() {
-		http.Handle("/metrics", prometheus.Handler())
-		if err := http.Serve(r.metricsListener, nil); err != nil {
-			errChan <- trace.Wrap(err)
-		}
-	}()
+	if r.metricsListener != nil {
+		go func() {
+			http.Handle("/metrics", prometheus.Handler())
+			if err := http.Serve(r.metricsListener, nil); err != nil {
+				errChan <- trace.Wrap(err)
+			}
+		}()
+	}
 
 	select {
 	case err := <-errChan:
@@ -228,10 +230,13 @@ func (r *agent) Join(peers []string) error {
 // Close stops all background activity and releases the agent's resources.
 func (r *agent) Close() (err error) {
 	var errors []error
-	err = r.metricsListener.Close()
-	if err != nil {
-		errors = append(errors, trace.Wrap(err))
+	if r.metricsListener != nil {
+		err = r.metricsListener.Close()
+		if err != nil {
+			errors = append(errors, trace.Wrap(err))
+		}
 	}
+
 	r.rpc.Stop()
 	close(r.done)
 	err = r.serfClient.Close()

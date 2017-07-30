@@ -22,7 +22,7 @@ import (
 
 	"github.com/gravitational/satellite/agent/health"
 	"github.com/gravitational/trace"
-	kube "k8s.io/client-go/1.4/kubernetes"
+	kube "k8s.io/client-go/kubernetes"
 )
 
 // healthzChecker is secure healthz checker

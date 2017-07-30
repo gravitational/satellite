@@ -28,7 +28,7 @@ import (
 	"github.com/gravitational/trace"
 	"github.com/gravitational/version"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 

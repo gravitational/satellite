@@ -34,9 +34,9 @@ import (
 	"github.com/gravitational/satellite/healthz/utils"
 	"github.com/gravitational/satellite/monitoring/etcd"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/gravitational/trace"
 	"github.com/prometheus/client_golang/prometheus"
+	log "github.com/sirupsen/logrus"
 )
 
 func main() {
