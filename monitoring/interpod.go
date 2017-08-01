@@ -26,17 +26,17 @@ import (
 	"github.com/gravitational/satellite/agent/health"
 	"github.com/gravitational/trace"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/blang/semver"
-	"k8s.io/client-go/1.4/discovery"
-	kube "k8s.io/client-go/1.4/kubernetes"
-	"k8s.io/client-go/1.4/pkg/api"
-	"k8s.io/client-go/1.4/pkg/api/errors"
-	"k8s.io/client-go/1.4/pkg/api/v1"
-	"k8s.io/client-go/1.4/pkg/fields"
-	"k8s.io/client-go/1.4/pkg/util/intstr"
-	"k8s.io/client-go/1.4/pkg/util/wait"
-	"k8s.io/client-go/1.4/rest"
+	log "github.com/sirupsen/logrus"
+	"k8s.io/client-go/discovery"
+	kube "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/pkg/api"
+	"k8s.io/client-go/pkg/api/errors"
+	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/pkg/fields"
+	"k8s.io/client-go/pkg/util/intstr"
+	"k8s.io/client-go/pkg/util/wait"
+	"k8s.io/client-go/rest"
 )
 
 // This file implements a functional pod communication test.
@@ -106,7 +106,7 @@ func (r *interPodChecker) testInterPodCommunication(ctx context.Context, client 
 	}
 
 	cleanupService := func() {
-		if err = client.Services(testNamespace).Delete(svc.Name, &api.DeleteOptions{}); err != nil {
+		if err = client.Services(testNamespace).Delete(svc.Name, &v1.DeleteOptions{}); err != nil {
 			log.Infof("failed to delete service %q: %v", svc.Name, err)
 		}
 	}
@@ -145,7 +145,7 @@ func (r *interPodChecker) testInterPodCommunication(ctx context.Context, client 
 	passed := false
 
 	getDetail := func(detail string) ([]byte, error) {
-		proxyRequest, errProxy := getServicesProxyRequest(client, client.DiscoveryClient.Get())
+		proxyRequest, errProxy := getServicesProxyRequest(client, client.DiscoveryClient.RESTClient().Get())
 		if errProxy != nil {
 			return nil, trace.Wrap(errProxy)
 		}
@@ -354,9 +354,9 @@ func waitForAllNodesSchedulable(ctx context.Context, c *kube.Clientset) (nodes *
 		timeout  = 4 * time.Minute
 	)
 	err = wait.PollImmediate(interval, timeout, func() (bool, error) {
-		opts := api.ListOptions{
+		opts := v1.ListOptions{
 			ResourceVersion: "0",
-			FieldSelector:   fields.Set{"spec.unschedulable": "false"}.AsSelector(),
+			FieldSelector:   fields.Set{"spec.unschedulable": "false"}.String(),
 		}
 		nodes, err = c.Nodes().List(opts)
 		if err != nil {

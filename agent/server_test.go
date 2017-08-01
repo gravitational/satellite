@@ -28,9 +28,9 @@ import (
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
-	log "github.com/Sirupsen/logrus"
 	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
+	log "github.com/sirupsen/logrus"
 	. "gopkg.in/check.v1"
 )
 

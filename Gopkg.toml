@@ -1,0 +1,78 @@
+
+# Gopkg.toml example
+#
+# Refer to https://github.com/golang/dep/blob/master/docs/Gopkg.toml.md
+# for detailed Gopkg.toml documentation.
+#
+# required = ["github.com/user/thing/cmd/thing"]
+# ignored = ["github.com/user/project/pkgX", "bitbucket.org/user/project/pkgA/pkgY"]
+#
+# [[constraint]]
+#   name = "github.com/user/project"
+#   version = "1.0.0"
+#
+# [[constraint]]
+#   name = "github.com/user/project2"
+#   branch = "dev"
+#   source = "github.com/myfork/project2"
+#
+# [[override]]
+#  name = "github.com/x/y"
+#  version = "2.4.0"
+
+
+[[constraint]]
+  name = "github.com/blang/semver"
+  version = "3.5.0"
+
+[[constraint]]
+  name = "github.com/coreos/go-systemd"
+  version = "4.0.0"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/gravitational/configure"
+
+[[constraint]]
+  version = "1.0.0"
+  name = "github.com/gravitational/trace"
+
+[[constraint]]
+  name = "github.com/gravitational/version"
+  version = "0.0.1"
+
+[[constraint]]
+  name = "github.com/hashicorp/serf"
+  version = "0.8.1"
+
+[[constraint]]
+  name = "github.com/influxdata/influxdb"
+  version = ">=0.10.0, <=403.0.0-gf18d7e7"
+
+[[constraint]]
+  name = "github.com/jonboulle/clockwork"
+  version = "0.1.0"
+
+[[constraint]]
+  name = "github.com/prometheus/client_golang"
+  version = ">=0.7.0, <=64.0.0-g275368f"
+
+[[constraint]]
+  name = "github.com/sirupsen/logrus"
+  version = ">=1.0.2, <=34.0.0-g181d419"
+
+[[constraint]]
+  revision = "e90d6d0afc4c315a0d87a568ae68577cc15149a0"
+  name = "golang.org/x/net"
+
+[[constraint]]
+  revision = "231b4cfea0e79843053a33f5fe90bd4d84b23cd3"
+  name = "google.golang.org/grpc"
+
+[[constraint]]
+  name = "gopkg.in/alecthomas/kingpin.v2"
+  version = "2.1.11"
+
+[[constraint]]
+  name = "k8s.io/client-go"
+  version = "2.0.0"

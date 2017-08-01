@@ -24,7 +24,7 @@ import (
 	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/trace"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 // runAgent starts the monitoring process and blocks waiting for a signal.
