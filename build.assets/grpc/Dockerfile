@@ -1,4 +1,4 @@
-FROM golang:1.8.3-onbuild
+FROM golang:1.8.3-stretch
 
 ARG PROTOC_VER
 ARG GOGO_PROTO_TAG
