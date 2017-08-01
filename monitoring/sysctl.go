@@ -31,5 +31,8 @@ func Sysctl(name string) (string, error) {
 	if err != nil {
 		return "", trace.ConvertSystemError(err)
 	}
+	if len(data) == 0 {
+		return "", trace.BadParameter("empty output from sysctl")
+	}
 	return string(data[:len(data)-1]), nil
 }

@@ -67,12 +67,13 @@ buildbox:
           --build-arg PLATFORM=$(PLATFORM) \
           -t $(BUILDBOX_TAG) .
 
-# proto generates GRPC defs from service definitions
+# grpc generates Go source code from protobuf specifications
+# using docker buildbox image
 .PHONY: grpc
 grpc: buildbox
 	docker run -v $(shell pwd):/go/src/github.com/gravitational/satellite $(BUILDBOX_TAG) make -C /go/src/github.com/gravitational/satellite buildbox-grpc
 
-# proto generates GRPC stuff inside buildbox
+# buildbox-gpc generates Go source code from protobuf specifications
 .PHONY: buildbox-grpc
 buildbox-grpc:
 # standard GRPC output
