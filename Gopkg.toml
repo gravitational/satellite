@@ -75,4 +75,8 @@
 
 [[constraint]]
   name = "k8s.io/client-go"
-  version = "2.0.0"
+  branch = "release-4.0"
+
+[[constraint]]
+  name = "k8s.io/apimachinery"
+  branch = "release-1.7"

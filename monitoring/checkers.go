@@ -22,6 +22,7 @@ import (
 
 	"github.com/gravitational/satellite/agent/health"
 	"github.com/gravitational/trace"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kube "k8s.io/client-go/kubernetes"
 )
 
@@ -45,7 +46,7 @@ func KubeAPIServerHealth(kubeAddr string, config string) health.Checker {
 
 // testHealthz executes a test by using k8s API
 func (h *healthzChecker) testHealthz(ctx context.Context, client *kube.Clientset) error {
-	_, err := client.Core().ComponentStatuses().Get("scheduler")
+	_, err := client.Core().ComponentStatuses().Get("scheduler", metav1.GetOptions{})
 	return err
 }
 
