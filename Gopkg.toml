@@ -66,8 +66,8 @@
   branch = "release-branch.go1.8"
 
 [[constraint]]
-  revision = "231b4cfea0e79843053a33f5fe90bd4d84b23cd3"
   name = "google.golang.org/grpc"
+  version = ">=v1.5.2"
 
 [[constraint]]
   name = "gopkg.in/alecthomas/kingpin.v2"
