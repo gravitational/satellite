@@ -62,8 +62,8 @@
   version = ">=1.0.2, <=34.0.0-g181d419"
 
 [[constraint]]
-  revision = "e90d6d0afc4c315a0d87a568ae68577cc15149a0"
   name = "golang.org/x/net"
+  branch = "release-branch.go1.8"
 
 [[constraint]]
   revision = "231b4cfea0e79843053a33f5fe90bd4d84b23cd3"

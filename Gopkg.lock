@@ -314,9 +314,10 @@
   revision = "558b6879de74bc843225cde5686419267ff707ca"
 
 [[projects]]
+  branch = "release-branch.go1.8"
   name = "golang.org/x/net"
   packages = ["context","http2","http2/hpack","idna","internal/timeseries","lex/httplex","trace"]
-  revision = "e90d6d0afc4c315a0d87a568ae68577cc15149a0"
+  revision = "186fd3fc8194a5e9980a82230d69c1ff7134229f"
 
 [[projects]]
   name = "golang.org/x/sys"
@@ -377,6 +378,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "c91b660971a2872bc80b121a62fb4e98de387c4da3c0d1ba4f30dd582566d28f"
+  inputs-digest = "2bbbb8fad40896c1500063adc1f2e8419f59e4269626d7098191e98fea2a3c05"
   solver-name = "gps-cdcl"
   solver-version = 1
