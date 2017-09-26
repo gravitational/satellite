@@ -82,12 +82,12 @@ func (r *KubeChecker) Name() string { return r.name }
 func (r *KubeChecker) Check(ctx context.Context, reporter health.Reporter) {
 	client, err := r.connect()
 	if err != nil {
-		reporter.Add(NewProbeFromErr(r.name, err))
+		reporter.Add(NewProbeFromErr(r.name, "failed to connect to health endpoint", err))
 		return
 	}
 	err = r.checker(ctx, client)
 	if err != nil {
-		reporter.Add(NewProbeFromErr(r.name, err))
+		reporter.Add(NewProbeFromErr(r.name, noErrorDetail, err))
 		return
 	}
 	reporter.Add(&pb.Probe{

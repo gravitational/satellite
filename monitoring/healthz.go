@@ -50,13 +50,13 @@ func (r *HTTPHealthzChecker) Name() string { return r.name }
 func (r *HTTPHealthzChecker) Check(ctx context.Context, reporter health.Reporter) {
 	req, err := http.NewRequest("GET", r.URL, nil)
 	if err != nil {
-		reporter.Add(NewProbeFromErr(r.name, trace.Errorf("failed to create request: %v", err)))
+		reporter.Add(NewProbeFromErr(r.name, noErrorDetail, trace.Errorf("failed to create request: %v", err)))
 		return
 	}
 	req = req.WithContext(ctx)
 	resp, err := r.client.Do(req)
 	if err != nil {
-		reporter.Add(NewProbeFromErr(r.name, trace.Errorf("healthz check failed: %v", err)))
+		reporter.Add(NewProbeFromErr(r.name, noErrorDetail, trace.Errorf("healthz check failed: %v", err)))
 		return
 	}
 	defer resp.Body.Close()
@@ -71,7 +71,7 @@ func (r *HTTPHealthzChecker) Check(ctx context.Context, reporter health.Reporter
 		return
 	}
 	if err = r.checker(resp.Body); err != nil {
-		reporter.Add(NewProbeFromErr(r.name, err))
+		reporter.Add(NewProbeFromErr(r.name, noErrorDetail, err))
 		return
 	}
 	reporter.Add(&pb.Probe{
