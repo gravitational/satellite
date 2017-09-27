@@ -9,6 +9,7 @@ func LocalCheckers() health.Checker {
 	return &compositeChecker{
 		name: "local",
 		checkers: []health.Checker{
+			DefaultOsChecker(),
 			NewIPForwardChecker(),
 			NewBrNetfilterChecker(),
 			DefaultProcessChecker(),

@@ -88,6 +88,12 @@
   revision = "73d445a93680fa1a78ae23a5839bad48f32ba1ee"
 
 [[projects]]
+  name = "github.com/go-ini/ini"
+  packages = ["."]
+  revision = "20b96f641a5ea98f2f8619ff4f3e061cff4833bd"
+  version = "v1.28.2"
+
+[[projects]]
   branch = "master"
   name = "github.com/go-openapi/analysis"
   packages = ["."]
@@ -396,6 +402,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "c450365655d9d9dc31cf7c882afbe87779c0d0f3e92dcd3331f95ade707f3b6b"
+  inputs-digest = "6ca4408a5bf063ab11be197d139717fbc00f84f2674654b37eb8f4b299c7bda7"
   solver-name = "gps-cdcl"
   solver-version = 1
