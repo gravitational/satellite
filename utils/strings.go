@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// StringInSlice returns true if needle is within haystack
 func StringInSlice(haystack []string, needle string) bool {
 	found := false
 	for i := range haystack {
@@ -17,6 +18,7 @@ func StringInSlice(haystack []string, needle string) bool {
 	return found
 }
 
+// StringsInSlice returns true if needles are within haystack
 func StringsInSlice(haystack []string, needles ...string) bool {
 	for _, needle := range needles {
 		found := false
@@ -33,6 +35,7 @@ func StringsInSlice(haystack []string, needles ...string) bool {
 	return true
 }
 
+// CompareStringSlices does two string array comparison
 func CompareStringSlices(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
