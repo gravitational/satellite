@@ -18,10 +18,13 @@ package monitoring
 
 import pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
+const noErrorDetail = ""
+
 // NewProbeFromErr creates a new Probe given an error and a checker name
-func NewProbeFromErr(name string, err error) *pb.Probe {
+func NewProbeFromErr(name, detail string, err error) *pb.Probe {
 	return &pb.Probe{
 		Checker: name,
+		Detail:  detail,
 		Error:   err.Error(),
 		Status:  pb.Probe_Failed,
 	}

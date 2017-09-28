@@ -17,16 +17,68 @@ limitations under the License.
 package monitoring
 
 import (
+	"context"
+	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
 
+	"github.com/gravitational/satellite/agent/health"
+	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/trace"
 )
 
+// SysctlCHecker verifies various /proc filesystem runtime parameters
+type SysctlChecker struct {
+	// Name is checker name
+	CheckerName string
+	// Param is parameter name
+	Param string
+	// Expected is expected parameter value
+	Expected string
+	// OnMissing is description when parameter is missing
+	OnMissing string
+	// OnValueMismatch is description when parameter value is not equal to expected
+	OnValueMismatch string
+}
+
+// Name returns name of checker
+func (c *SysctlChecker) Name() string {
+	return c.CheckerName
+}
+
+// Check will verify the parameter value is as expected or complain otherwise
+func (c *SysctlChecker) Check(ctx context.Context, reporter health.Reporter) {
+	value, err := Sysctl(c.Param)
+
+	if err == nil && value == c.Expected {
+		reporter.Add(&pb.Probe{
+			Checker: c.CheckerName,
+			Status:  pb.Probe_Running,
+		})
+		return
+	}
+
+	if err == nil && value != c.Expected {
+		reporter.Add(&pb.Probe{
+			Checker: c.CheckerName,
+			Detail:  c.OnValueMismatch,
+			Status:  pb.Probe_Failed})
+		return
+	}
+
+	if trace.IsNotFound(err) {
+		reporter.Add(NewProbeFromErr(c.CheckerName, c.OnMissing, trace.Wrap(err)))
+		return
+	}
+
+	reporter.Add(NewProbeFromErr(c.CheckerName,
+		fmt.Sprintf("failed to query sysctl parameter %s", c.Param), trace.Wrap(err)))
+}
+
 // Sysctl returns kernel parameter by reading proc/sys
 func Sysctl(name string) (string, error) {
-	path := filepath.Clean(filepath.Join("proc", "sys", strings.Replace(name, ".", "/", -1)))
+	path := filepath.Clean(filepath.Join("/proc", "sys", strings.Replace(name, ".", "/", -1)))
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return "", trace.ConvertSystemError(err)

@@ -77,6 +77,9 @@ func run() error {
 		cstatusPrettyPrint = cstatus.Flag("pretty", "Pretty-print the output").Bool()
 		cstatusLocal       = cstatus.Flag("local", "Query the status of the local node").Bool()
 
+		// checks command
+		cchecks = app.Command("checks", "Run local compatibility checks")
+
 		// `version` command
 		cversion = app.Command("version", "Display version")
 	)
@@ -150,6 +153,8 @@ func run() error {
 		err = runAgent(agentConfig, monitoringConfig, toAddrList(*cagentInitialCluster))
 	case cstatus.FullCommand():
 		status(*cstatusRPCPort, *cstatusLocal, *cstatusPrettyPrint)
+	case cchecks.FullCommand():
+		localChecks()
 	case cversion.FullCommand():
 		version.Print()
 	}

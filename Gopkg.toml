@@ -25,6 +25,14 @@
   name = "github.com/blang/semver"
   version = "3.5.0"
 
+[[override]]
+  name = "github.com/mitchellh/go-ps"
+  branch = "master"
+
+[[override]]
+  name = "github.com/go-ini/ini"
+  version = "v1.28.2"
+
 [[constraint]]
   name = "github.com/coreos/go-systemd"
   version = "4.0.0"
@@ -62,12 +70,12 @@
   version = ">=1.0.2, <=34.0.0-g181d419"
 
 [[constraint]]
-  revision = "e90d6d0afc4c315a0d87a568ae68577cc15149a0"
   name = "golang.org/x/net"
+  revision = "0744d001aa8470aaa53df28d32e5ceeb8af9bd70"
 
 [[constraint]]
-  revision = "231b4cfea0e79843053a33f5fe90bd4d84b23cd3"
   name = "google.golang.org/grpc"
+  version = ">=v1.5.2"
 
 [[constraint]]
   name = "gopkg.in/alecthomas/kingpin.v2"
@@ -75,8 +83,12 @@
 
 [[constraint]]
   name = "k8s.io/client-go"
-  branch = "release-4.0"
+  version = "4.0.0"
 
 [[constraint]]
   name = "k8s.io/apimachinery"
   branch = "release-1.7"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/drael/GOnetstat"

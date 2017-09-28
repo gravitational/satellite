@@ -78,12 +78,13 @@ func (r systemdChecker) Name() string { return "systemd" }
 func (r systemdChecker) Check(ctx context.Context, reporter health.Reporter) {
 	systemStatus, err := isSystemRunning()
 	if err != nil {
-		reporter.Add(NewProbeFromErr(r.Name(), trace.Errorf("failed to check system health: %v", err)))
+		reason := "failed to query system health"
+		reporter.Add(NewProbeFromErr(r.Name(), reason, trace.Wrap(err)))
 	}
 
 	conditions, err := systemdStatus()
 	if err != nil {
-		reporter.Add(NewProbeFromErr(r.Name(), trace.Errorf("failed to check systemd status: %v", err)))
+		reporter.Add(NewProbeFromErr(r.Name(), "failed to check systemd status", trace.Wrap(err)))
 	}
 
 	if len(conditions) > 0 && SystemStatusType(systemStatus) == SystemStatusRunning {

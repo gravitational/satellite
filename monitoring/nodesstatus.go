@@ -53,7 +53,8 @@ func (r *nodesStatusChecker) Name() string { return "nodesstatuses" }
 func (r *nodesStatusChecker) Check(ctx context.Context, reporter health.Reporter) {
 	client, err := ConnectToKube(r.hostPort, "")
 	if err != nil {
-		reporter.Add(NewProbeFromErr(r.Name(), trace.Errorf("failed to connect to kube: %v", err)))
+		reason := "failed to connect to kubernetes apiserver"
+		reporter.Add(NewProbeFromErr(r.Name(), reason, trace.Wrap(err)))
 		return
 	}
 	listOptions := metav1.ListOptions{
@@ -62,7 +63,8 @@ func (r *nodesStatusChecker) Check(ctx context.Context, reporter health.Reporter
 	}
 	statuses, err := client.Nodes().List(listOptions)
 	if err != nil {
-		reporter.Add(NewProbeFromErr(r.Name(), trace.Errorf("failed to query nodes: %v", err)))
+		reason := "failed to query nodes"
+		reporter.Add(NewProbeFromErr(r.Name(), reason, trace.Wrap(err)))
 		return
 	}
 	var nodesReady int
