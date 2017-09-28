@@ -10,6 +10,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package monitoring
 
 import (
@@ -27,10 +28,11 @@ import (
 
 // ProcessChecker is checking aginst known list of conflicting processes
 type ProcessChecker struct {
+	// ProcessNames contains list of processes which should not be running at the time of check
 	ProcessNames []string
 }
 
-const ProcessCheckerID = "process-checker"
+const processCheckerID = "process-checker"
 
 // DefaultProcessChecker returns checker which will ensure no conflicting program is running
 func DefaultProcessChecker() *ProcessChecker {
@@ -50,14 +52,14 @@ func DefaultProcessChecker() *ProcessChecker {
 
 // Name returns checker name
 func (c *ProcessChecker) Name() string {
-	return ProcessCheckerID
+	return processCheckerID
 }
 
 // Check will query current process list and report for each conflicting program found
 func (c *ProcessChecker) Check(ctx context.Context, r health.Reporter) {
 	running, err := ps.Processes()
 	if err != nil {
-		r.Add(NewProbeFromErr(ProcessCheckerID, "failed to obtain running process list", trace.Wrap(err)))
+		r.Add(NewProbeFromErr(processCheckerID, "failed to obtain running process list", trace.Wrap(err)))
 		return
 	}
 
@@ -70,14 +72,14 @@ func (c *ProcessChecker) Check(ctx context.Context, r health.Reporter) {
 
 	if len(prohibited) == 0 {
 		r.Add(&pb.Probe{
-			Checker: ProcessCheckerID,
+			Checker: processCheckerID,
 			Status:  pb.Probe_Running,
 		})
 		return
 	}
 
 	r.Add(&pb.Probe{
-		Checker: ProcessCheckerID,
+		Checker: processCheckerID,
 		Detail:  fmt.Sprintf("conflicting programs: %v", prohibited.Slice()),
 		Status:  pb.Probe_Failed,
 	})

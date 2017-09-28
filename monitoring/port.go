@@ -10,6 +10,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
 package monitoring
 
 import (
@@ -77,6 +78,22 @@ func (c *PortChecker) Name() string {
 	return portCheckerID
 }
 
+func (c *PortChecker) checkProcess(proto string, proc netstat.Process) {
+	for _, r := range c.Ranges {
+		if r.protocol != proto {
+			continue
+		}
+		if proc.Port >= r.From && proc.Port <= r.To {
+			conflicts = true
+			reporter.Add(&pb.Probe{
+				Checker: portCheckerID,
+				Detail: fmt.Sprintf("a conflicting program %q(pid=%s) is occupying port %s/%d(%s)",
+					proc.Name, proc.Pid, proto, proc.Port, proc.State),
+				Status: pb.Probe_Failed})
+		}
+	}
+}
+
 // Check will scan current open ports and report every conflict detected
 func (c *PortChecker) Check(ctx context.Context, reporter health.Reporter) {
 	used := map[string][]netstat.Process{
@@ -86,19 +103,7 @@ func (c *PortChecker) Check(ctx context.Context, reporter health.Reporter) {
 
 	for proto, processes := range used {
 		for _, proc := range processes {
-			for _, r := range c.Ranges {
-				if r.protocol != proto {
-					continue
-				}
-				if proc.Port >= r.From && proc.Port <= r.To {
-					conflicts = true
-					reporter.Add(&pb.Probe{
-						Checker: portCheckerID,
-						Detail: fmt.Sprintf("a conflicting program %q(pid=%s) is occupying port %s/%d(%s)",
-							proc.Name, proc.Pid, proto, proc.Port, proc.State),
-						Status: pb.Probe_Failed})
-				}
-			}
+			c.checkProcess(proto, proc)
 		}
 	}
 
