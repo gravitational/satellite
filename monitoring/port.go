@@ -78,7 +78,8 @@ func (c *PortChecker) Name() string {
 	return portCheckerID
 }
 
-func (c *PortChecker) checkProcess(proto string, proc netstat.Process) {
+func (c *PortChecker) checkProcess(proto string, proc netstat.Process, reporter health.Reporter) bool {
+	conflicts := false
 	for _, r := range c.Ranges {
 		if r.protocol != proto {
 			continue
@@ -92,6 +93,7 @@ func (c *PortChecker) checkProcess(proto string, proc netstat.Process) {
 				Status: pb.Probe_Failed})
 		}
 	}
+	return conflicts
 }
 
 // Check will scan current open ports and report every conflict detected
@@ -103,7 +105,7 @@ func (c *PortChecker) Check(ctx context.Context, reporter health.Reporter) {
 
 	for proto, processes := range used {
 		for _, proc := range processes {
-			c.checkProcess(proto, proc)
+			conflicts = conflicts || c.checkProcess(proto, proc, reporter)
 		}
 	}
 
