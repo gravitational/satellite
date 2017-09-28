@@ -28,6 +28,7 @@ import (
 	"github.com/gravitational/trace"
 )
 
+// SysctlCHecker verifies various /proc filesystem runtime parameters
 type SysctlChecker struct {
 	// Name is checker name
 	CheckerName string
@@ -41,10 +42,12 @@ type SysctlChecker struct {
 	OnValueMismatch string
 }
 
+// Name returns name of checker
 func (c *SysctlChecker) Name() string {
 	return c.CheckerName
 }
 
+// Check will verify the parameter value is as expected or complain otherwise
 func (c *SysctlChecker) Check(ctx context.Context, reporter health.Reporter) {
 	value, err := Sysctl(c.Param)
 

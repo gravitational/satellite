@@ -9,7 +9,7 @@ import (
 )
 
 func localChecks() {
-	ch := monitoring.LocalCheckers()
+	ch := monitoring.BasicCheckers()
 	var r health.Probes
 
 	ch.Check(context.TODO(), &r)

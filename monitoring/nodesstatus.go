@@ -53,7 +53,7 @@ func (r *nodesStatusChecker) Name() string { return "nodesstatuses" }
 func (r *nodesStatusChecker) Check(ctx context.Context, reporter health.Reporter) {
 	client, err := ConnectToKube(r.hostPort, "")
 	if err != nil {
-		reason := "failed to connect to k8s"
+		reason := "failed to connect to kubernetes apiserver"
 		reporter.Add(NewProbeFromErr(r.Name(), reason, trace.Wrap(err)))
 		return
 	}

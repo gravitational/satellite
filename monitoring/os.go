@@ -1,3 +1,16 @@
+/*
+Copyright 2017 Gravitational, Inc.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package monitoring
 
 import (
@@ -12,64 +25,72 @@ import (
 	"github.com/go-ini/ini"
 )
 
-// OsRelease is used to represent a certain OS release based on https://www.freedesktop.org/software/systemd/man/os-release.html fields
-type OsRelease struct {
-	// Id is either ubuntu, redhat or centos
-	Id string
-	// VersionId is major release version i.e. 16.04
-	VersionId string
+// OSRelease is used to represent a certain OS release based on https://www.freedesktop.org/software/systemd/man/os-release.html fields
+type OSRelease struct {
+	// ID is either ubuntu, redhat or centos
+	ID string
+	// VersionID is major release version i.e. 16.04
+	VersionID string
 }
 
-// OsChecker validates host OS based on https://www.freedesktop.org/software/systemd/man/os-release.html
-type OsChecker struct {
-	Releases []OsRelease
+// OSChecker validates host OS based on https://www.freedesktop.org/software/systemd/man/os-release.html
+type OSChecker struct {
+	Releases []OSRelease
 }
 
-const OsCheckerId = "os-checker"
+const osCheckerID = "os-checker"
 
-// DefaultOsChecker returns standard distributions supported by Telekube
-func DefaultOsChecker() *OsChecker {
-	return &OsChecker{
-		[]OsRelease{
-			OsRelease{"redhat", "7.2"},
-			OsRelease{"redhat", "7.3"},
-			OsRelease{"redhat", "7.4"},
-			OsRelease{"centos", "7.2"},
-			OsRelease{"centos", "7.3"},
-			OsRelease{"ubuntu", "16.04"},
-			OsRelease{"ubuntu-core", "16"},
+// DefaultOSChecker returns standard distributions supported by Telekube
+func DefaultOSChecker() *OSChecker {
+	return &OSChecker{
+		[]OSRelease{
+			OSRelease{"rhel", "7.2"},
+			OSRelease{"rhel", "7.3"},
+			OSRelease{"rhel", "7.4"},
+			OSRelease{"centos", "7.2"},
+			OSRelease{"centos", "7.3"},
+			OSRelease{"ubuntu", "16.04"},
+			OSRelease{"ubuntu-core", "16"},
 		},
 	}
 }
 
-func (c *OsChecker) Name() string {
-	return OsCheckerId
+// Name returns name of the checker
+func (c *OSChecker) Name() string {
+	return osCheckerID
 }
 
-func (c *OsChecker) Check(ctx context.Context, reporter health.Reporter) {
-	id, versionId, err := parseOsRelease()
+// Check checks current OS and release is within supported list
+func (c *OSChecker) Check(ctx context.Context, reporter health.Reporter) {
+	id, versionID, err := parseOSRelease()
 	if err != nil {
-		reporter.Add(NewProbeFromErr(OsCheckerId, "failed to parse /etc/os-release", trace.Wrap(err)))
+		reporter.Add(NewProbeFromErr(osCheckerID, "failed to parse /etc/os-release", trace.Wrap(err)))
 		return
 	}
 
 	for _, rel := range c.Releases {
-		if rel.Id == id && rel.VersionId == versionId {
+		if rel.ID == id && rel.VersionID == versionID {
 			reporter.Add(&pb.Probe{
-				Checker: OsCheckerId,
+				Checker: osCheckerID,
 				Status:  pb.Probe_Running})
 			return
 		}
 	}
 
 	reporter.Add(&pb.Probe{
-		Checker: OsCheckerId,
-		Detail:  fmt.Sprintf("%s %s is not supported, please see https://gravitational.com/docs/pack/#distributions", id, versionId),
+		Checker: osCheckerID,
+		Detail:  fmt.Sprintf("%s %s is not supported, please see https://gravitational.com/docs/pack/#distributions", id, versionID),
 		Status:  pb.Probe_Failed})
 }
 
-func parseOsRelease() (id, versionId string, err error) {
-	osrelFile, err := ini.Load("/etc/os-release")
+const (
+	osRelFile      = "/etc/os-release"
+	osRelID        = "ID"
+	osRelVersionID = "VERSION_ID"
+)
+
+func parseOSRelease() (id, versionID string, err error) {
+	osrelFile, err := ini.Load(osRelFile)
 	if err != nil {
 		return "", "", trace.Wrap(err)
 	}
@@ -79,6 +100,6 @@ func parseOsRelease() (id, versionId string, err error) {
 		return "", "", trace.Wrap(err)
 	}
 
-	return osrel.Key("ID").String(), osrel.Key("VERSION_ID").String(), nil
+	return osrel.Key(osRelID).String(), osrel.Key(osRelVersionID).String(), nil
 
 }

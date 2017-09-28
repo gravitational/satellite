@@ -1,3 +1,15 @@
+/*
+Copyright 2017 Gravitational, Inc.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 package monitoring
 
 import (
@@ -20,9 +32,11 @@ type ProcessChecker struct {
 
 const ProcessCheckerID = "process-checker"
 
+// DefaultProcessChecker returns checker which will ensure no conflicting program is running
 func DefaultProcessChecker() *ProcessChecker {
 	return &ProcessChecker{[]string{
 		"dockerd",
+		"lxd",
 		"dnsmasq",
 		"kube-apiserver",
 		"kube-scheduler",
@@ -34,10 +48,12 @@ func DefaultProcessChecker() *ProcessChecker {
 	}}
 }
 
+// Name returns checker name
 func (c *ProcessChecker) Name() string {
 	return ProcessCheckerID
 }
 
+// Check will query current process list and report for each conflicting program found
 func (c *ProcessChecker) Check(ctx context.Context, r health.Reporter) {
 	running, err := ps.Processes()
 	if err != nil {
