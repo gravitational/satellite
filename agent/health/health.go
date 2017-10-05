@@ -63,6 +63,19 @@ func (r Probes) GetProbes() []*pb.Probe {
 	return []*pb.Probe(r)
 }
 
+// GetFailed returns all probes that reported an error
+func (r Probes) GetFailed() []*pb.Probe {
+	var failed []*pb.Probe
+
+	for _, probe := range r {
+		if probe.Status == pb.Probe_Failed {
+			failed = append(failed, probe)
+		}
+	}
+
+	return failed
+}
+
 // Status computes the node status based on collected probes.
 func (r Probes) Status() pb.NodeStatus_Type {
 	result := pb.NodeStatus_Running

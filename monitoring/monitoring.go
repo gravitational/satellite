@@ -16,7 +16,10 @@ limitations under the License.
 
 package monitoring
 
-import pb "github.com/gravitational/satellite/agent/proto/agentpb"
+import (
+	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/trace"
+)
 
 const noErrorDetail = ""
 
@@ -25,7 +28,7 @@ func NewProbeFromErr(name, detail string, err error) *pb.Probe {
 	return &pb.Probe{
 		Checker: name,
 		Detail:  detail,
-		Error:   err.Error(),
+		Error:   trace.DebugReport(err),
 		Status:  pb.Probe_Failed,
 	}
 }

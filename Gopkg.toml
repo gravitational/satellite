@@ -92,3 +92,11 @@
 [[constraint]]
   branch = "master"
   name = "github.com/drael/GOnetstat"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/cloudfoundry/gosigar"
+
+[[constraint]]
+  name = "github.com/stretchr/testify"
+  version = "1.1.4"
