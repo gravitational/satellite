@@ -39,3 +39,8 @@ func (r *compositeChecker) Check(ctx context.Context, reporter health.Reporter) 
 		checker.Check(ctx, reporter)
 	}
 }
+
+// NewCompositeChecker makes checker out of array of checkers
+func NewCompositeChecker(name string, checkers []health.Checker) health.Checker {
+	return &compositeChecker{name, checkers}
+}

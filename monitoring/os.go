@@ -79,7 +79,7 @@ func (c *OSChecker) Check(ctx context.Context, reporter health.Reporter) {
 
 	reporter.Add(&pb.Probe{
 		Checker: osCheckerID,
-		Detail:  fmt.Sprintf("%s %s is not supported, please see https://gravitational.com/docs/pack/#distributions", id, versionID),
+		Detail:  fmt.Sprintf("%s %s is not supported", id, versionID),
 		Status:  pb.Probe_Failed})
 }
 

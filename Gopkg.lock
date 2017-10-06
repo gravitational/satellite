@@ -48,6 +48,12 @@
   version = "v3.5.0"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/cloudfoundry/gosigar"
+  packages = ["."]
+  revision = "f4030c18ce1a78252deadef2f5e460b35cce7ae5"
+
+[[projects]]
   name = "github.com/coreos/go-systemd"
   packages = ["dbus"]
   revision = "b4a58d95188dd092ae20072bac14cece0e67c388"
@@ -70,6 +76,12 @@
   name = "github.com/drael/GOnetstat"
   packages = ["."]
   revision = "a08125f5157d481dd0d0355c021467bd8c84eb6d"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/dustin/go-humanize"
+  packages = ["."]
+  revision = "79e699ccd02f240a1f1fbbdcee7e64c1c12e41aa"
 
 [[projects]]
   name = "github.com/emicklei/go-restful"
@@ -285,6 +297,12 @@
   revision = "d0303fe809921458f417bcf828397a65db30a7e4"
 
 [[projects]]
+  name = "github.com/pmezard/go-difflib"
+  packages = ["difflib"]
+  revision = "792786c7400a136282c1664665ae0a8db921c6c2"
+  version = "v1.0.0"
+
+[[projects]]
   name = "github.com/prometheus/client_golang"
   packages = ["prometheus"]
   revision = "c5b7fccd204277076155f10851dad72b76a49317"
@@ -319,6 +337,12 @@
   packages = ["."]
   revision = "e57e3eeb33f795204c1ca35f56c44f83227c6e66"
   version = "v1.0.0"
+
+[[projects]]
+  name = "github.com/stretchr/testify"
+  packages = ["assert","require"]
+  revision = "69483b4bd14f5845b5a1e55bca19e954e827f1d0"
+  version = "v1.1.4"
 
 [[projects]]
   name = "github.com/ugorji/go"
@@ -402,6 +426,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "6ca4408a5bf063ab11be197d139717fbc00f84f2674654b37eb8f4b299c7bda7"
+  inputs-digest = "9371bc614c66dc74b1b2293100bc9636d7b11bf07188e74b0df0361c0c499333"
   solver-name = "gps-cdcl"
   solver-version = 1
