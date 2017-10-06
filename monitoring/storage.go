@@ -31,6 +31,7 @@ import (
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/utils"
+
 	"github.com/gravitational/trace"
 
 	sigar "github.com/cloudfoundry/gosigar"
@@ -91,15 +92,18 @@ func (c *StorageChecker) check(ctx context.Context, reporter health.Reporter) er
 // if path doesn't exist but should be created, then it returns
 // first available parent directory, and checks will be applied to it
 func (c *StorageChecker) evalPath() error {
-	fi, err := os.Stat(c.Path)
-
-	if os.IsNotExist(err) && !c.WillBeCreated {
-		return trace.BadParameter("%s does not exist", c.Path)
-	}
-
 	p := c.Path
 	for {
-		fi, err = os.Stat(p)
+		fi, err := os.Stat(p)
+
+		if err != nil && !os.IsNotExist(err) {
+			return trace.ConvertSystemError(err)
+		}
+
+		if os.IsNotExist(err) && !c.WillBeCreated {
+			return trace.BadParameter("%s does not exist", c.Path)
+		}
+
 		if err == nil && fi.IsDir() {
 			c.path = p
 			return nil
@@ -132,7 +136,7 @@ func (c *StorageChecker) checkFsType(ctx context.Context, reporter health.Report
 		probe.Status = pb.Probe_Running
 	} else {
 		probe.Status = pb.Probe_Failed
-		probe.Detail = fmt.Sprintf("path %s requires %v, belongs to %s mount point of type %s",
+		probe.Detail = fmt.Sprintf("path %s requires filesystem %v, belongs to %s mount point of type %s",
 			c.Path, c.Filesystems, mnt.DirName, mnt.SysTypeName)
 	}
 	reporter.Add(probe)
@@ -201,9 +205,9 @@ func (c *StorageChecker) checkWriteSpeed(ctx context.Context, reporter health.Re
 	}
 
 	defer func() {
-		err_c := file.Close()
-		err_r := os.Remove(file.Name())
-		err = trace.NewAggregate(err_c, err_r)
+		err = trace.NewAggregate(
+			trace.ConvertSystemError(file.Close()),
+			trace.ConvertSystemError(os.Remove(file.Name())))
 	}()
 
 	start := time.Now()

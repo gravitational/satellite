@@ -32,16 +32,18 @@ const (
 
 // HostChecker validates CPU and RAM requirements
 type HostChecker struct {
-	// MinCPU minimum amount of logical CPUs
+	// MinCPU is minimum amount of logical CPUs
 	MinCPU int
-	// MinRamBytes minimum amount of RAM
+	// MinRamBytes is minimum amount of RAM
 	MinRAMBytes uint64
 }
 
+// Name returns checker id
 func (c *HostChecker) Name() string {
 	return hostCheckerID
 }
 
+// Check runs check
 func (c *HostChecker) Check(ctx context.Context, reporter health.Reporter) {
 	failed := false
 
