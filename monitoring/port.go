@@ -31,8 +31,8 @@ const (
 
 // PortRange defines ports and protocol family to check
 type PortRange struct {
-	protocol    string
-	From, To    int64
+	Protocol    string
+	From, To    uint64
 	Description string
 }
 
@@ -81,10 +81,10 @@ func (c *PortChecker) Name() string {
 func (c *PortChecker) checkProcess(proto string, proc netstat.Process, reporter health.Reporter) bool {
 	conflicts := false
 	for _, r := range c.Ranges {
-		if r.protocol != proto {
+		if r.Protocol != proto {
 			continue
 		}
-		if proc.Port >= r.From && proc.Port <= r.To {
+		if uint64(proc.Port) >= r.From && uint64(proc.Port) <= r.To {
 			conflicts = true
 			reporter.Add(&pb.Probe{
 				Checker: portCheckerID,
