@@ -20,6 +20,7 @@ import (
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/trace"
 
 	"github.com/cloudfoundry/gosigar"
 	"github.com/dustin/go-humanize"
@@ -44,7 +45,12 @@ func (c *HostChecker) Name() string {
 func (c *HostChecker) Check(ctx context.Context, reporter health.Reporter) {
 	failed := false
 
-	mem := sigar.Mem{}
+	var mem sigar.Mem
+	err := mem.Get()
+	if err != nil {
+		reporter.Add(NewProbeFromErr(hostCheckerID, "querying memory info", trace.Wrap(err)))
+	}
+
 	if mem.Total < c.MinRAMBytes {
 		failed = true
 		reporter.Add(&pb.Probe{
