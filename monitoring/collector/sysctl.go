@@ -17,12 +17,10 @@ limitations under the License.
 package collector
 
 import (
-	"io/ioutil"
-	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 
+	"github.com/gravitational/satellite/monitoring"
 	"github.com/gravitational/trace"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -60,7 +58,7 @@ func (s *SysctlCollector) Collect(ch chan<- prometheus.Metric) error {
 		m      prometheus.Metric
 	)
 
-	param, err := sysctl("net.ipv4.ip_forward")
+	param, err := monitoring.Sysctl("net.ipv4.ip_forward")
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -72,7 +70,7 @@ func (s *SysctlCollector) Collect(ch chan<- prometheus.Metric) error {
 	}
 	ch <- m
 
-	param, err = sysctl("net.bridge.bridge-nf-call-iptables")
+	param, err = monitoring.Sysctl("net.bridge.bridge-nf-call-iptables")
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -85,17 +83,4 @@ func (s *SysctlCollector) Collect(ch chan<- prometheus.Metric) error {
 	ch <- m
 
 	return nil
-}
-
-// sysctl returns kernel parameter by reading /proc/sys directory
-func sysctl(name string) (string, error) {
-	path := filepath.Clean(filepath.Join("/proc", "sys", strings.Replace(name, ".", "/", -1)))
-	data, err := ioutil.ReadFile(path)
-	if err != nil {
-		return "", trace.ConvertSystemError(err)
-	}
-	if len(data) == 0 {
-		return "", trace.BadParameter("empty output from sysctl")
-	}
-	return string(data[:len(data)-1]), nil
 }
