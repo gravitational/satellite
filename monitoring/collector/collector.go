@@ -62,8 +62,11 @@ func NewPlanetCollector(configETCD *monitoring.ETCDConfig) (*PlanetCollector, er
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	collectors["etcd"] = collectorETCD
 
+	collectorSysctl := NewSysctlCollector()
+
+	collectors["etcd"] = collectorETCD
+	collectors["sysctl"] = collectorSysctl
 	return &PlanetCollector{Collectors: collectors}, nil
 }
 
@@ -88,25 +91,34 @@ func (pc *PlanetCollector) Collect(ch chan<- prometheus.Metric) {
 
 func execute(name string, c Collector, ch chan<- prometheus.Metric) {
 	begin := time.Now()
-	err := c.Update(ch)
+	err := c.Collect(ch)
 	duration := time.Since(begin)
 	var success float64
 
 	if err != nil {
-		log.Errorf("ERROR: %s collector failed after %fs: %s", name, duration.Seconds(), err)
+		log.Errorf("%s collector failed after %fs: %s", name, duration.Seconds(), err)
 		success = 0
 	} else {
-		log.Debugf("OK: %s collector succeeded after %fs.", name, duration.Seconds())
+		log.Debugf("%s collector succeeded after %fs.", name, duration.Seconds())
 		success = 1
 	}
-	ch <- prometheus.MustNewConstMetric(scrapeDurationDesc, prometheus.GaugeValue, duration.Seconds(), name)
-	ch <- prometheus.MustNewConstMetric(scrapeSuccessDesc, prometheus.GaugeValue, success, name)
+	m, err := prometheus.NewConstMetric(scrapeDurationDesc, prometheus.GaugeValue, duration.Seconds(), name)
+	if err != nil {
+		log.Errorf("failed to collect of collector_duration_seconds metric: %s", err)
+	}
+	ch <- m
+
+	m, err = prometheus.NewConstMetric(scrapeSuccessDesc, prometheus.GaugeValue, success, name)
+	if err != nil {
+		log.Errorf("failed to collect of collector_success metric: %s", err)
+	}
+	ch <- m
 }
 
 // Collector is the interface a collector has to implement.
 type Collector interface {
 	// Get new metrics and expose them via prometheus registry.
-	Update(ch chan<- prometheus.Metric) error
+	Collect(ch chan<- prometheus.Metric) error
 }
 
 type typedDesc struct {
@@ -114,6 +126,6 @@ type typedDesc struct {
 	valueType prometheus.ValueType
 }
 
-func (d *typedDesc) mustNewConstMetric(value float64, labels ...string) prometheus.Metric {
-	return prometheus.MustNewConstMetric(d.desc, d.valueType, value, labels...)
+func (d *typedDesc) newConstMetric(value float64, labels ...string) (prometheus.Metric, error) {
+	return prometheus.NewConstMetric(d.desc, d.valueType, value, labels...)
 }

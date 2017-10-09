@@ -17,6 +17,7 @@ limitations under the License.
 package collector
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -37,6 +38,7 @@ type ETCDCollector struct {
 
 	isRunning typedDesc
 	health    typedDesc
+	isLeader  typedDesc
 }
 
 // NewETCDCollector returns an initialized ETCDCollector.
@@ -68,30 +70,72 @@ func NewETCDCollector(config *monitoring.ETCDConfig) (Collector, error) {
 			"Health status of ETCD.",
 			nil, nil,
 		), prometheus.GaugeValue},
+		isLeader: typedDesc{prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "etcd", "leader"),
+			"Endpoint is leader of ETCD cluster.",
+			nil, nil,
+		), prometheus.GaugeValue},
 	}, nil
 }
 
-// Update implements prometheus.Collector.
-func (e *ETCDCollector) Update(ch chan<- prometheus.Metric) error {
+// Collect implements prometheus.Collector.
+func (e *ETCDCollector) Collect(ch chan<- prometheus.Metric) error {
 	e.mutex.Lock() // To protect metrics from concurrent collects.
 	defer e.mutex.Unlock()
 
-	sendStatus := func() {
-		ch <- e.isRunning.mustNewConstMetric(1.0)
-	}
-	defer sendStatus()
+	var m prometheus.Metric
+	var err error
+	success := true
 
-	ch <- e.isRunning.mustNewConstMetric(0.0)
-
-	health, err := e.healthStatus()
+	resp, err := e.client.Get(e.client.Endpoint("v2", "stats", "leader"), url.Values{})
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	if health {
-		ch <- e.health.mustNewConstMetric(1.0)
+
+	if bytes.Contains(resp.Bytes(), []byte("not current leader")) {
+		m, err = e.isLeader.newConstMetric(0.0)
+		if err != nil {
+			success = false
+		}
+		ch <- m
 	} else {
-		ch <- e.health.mustNewConstMetric(0.0)
+		health, err := e.healthStatus()
+		if err != nil {
+			success = false
+		}
+		if health {
+			m, err = e.health.newConstMetric(1.0)
+			if err != nil {
+				success = false
+			}
+			ch <- m
+		} else {
+			m, err = e.health.newConstMetric(0.0)
+			if err != nil {
+				success = false
+			}
+			ch <- m
+		}
+		m, err = e.isLeader.newConstMetric(1.0)
+		if err != nil {
+			success = false
+		}
+		ch <- m
 	}
+
+	if !success {
+		m, err = e.isRunning.newConstMetric(0.0)
+		if err != nil {
+			success = false
+		}
+		ch <- m
+	}
+
+	m, err = e.isRunning.newConstMetric(1.0)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	ch <- m
 
 	return nil
 }
