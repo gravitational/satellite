@@ -18,69 +18,76 @@ package collector
 
 import (
 	"strconv"
-	"sync"
 
 	"github.com/gravitational/satellite/monitoring"
 	"github.com/gravitational/trace"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// SysctlCollector collects metrics from kernel system params
+// Name of sysctl parameters to scrape
+const (
+	IPv4Forwarding  = "net.ipv4.ip_forward"
+	BridgeNetfilter = "net.bridge.bridge-nf-call-iptables"
+)
+
+// SysctlCollector converts kernel system parameters to prometheus metrics
 type SysctlCollector struct {
 	ipv4Forwarding typedDesc
 	brNetfilter    typedDesc
-	mutex          sync.RWMutex
 }
 
 // NewSysctlCollector returns an initialized SysctlCollector.
-func NewSysctlCollector() Collector {
+func NewSysctlCollector() *SysctlCollector {
 	return &SysctlCollector{
 		ipv4Forwarding: typedDesc{prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "sysctl", "ipv4_forwarding"),
-			"Status of IPv4 forwarding kernel param",
+			"Value of IPv4 forwarding kernel parameter",
 			nil, nil,
 		), prometheus.GaugeValue},
 		brNetfilter: typedDesc{prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "sysctl", "br_netfilter"),
-			"Status of bridge netfilter kernel param",
+			"Value of bridge netfilter module parameter",
 			nil, nil,
 		), prometheus.GaugeValue},
 	}
 }
 
+// Describe implements the prometheus.Collector interface
+func (s *SysctlCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- s.ipv4Forwarding.desc
+	ch <- s.brNetfilter.desc
+}
+
 // Collect implements prometheus.Collector.
 func (s *SysctlCollector) Collect(ch chan<- prometheus.Metric) error {
-	s.mutex.Lock() // To protect metrics from concurrent collects.
-	defer s.mutex.Unlock()
-
 	var (
-		metric float64
-		m      prometheus.Metric
+		parsedMetric float64
+		metric       prometheus.Metric
 	)
 
-	param, err := monitoring.Sysctl("net.ipv4.ip_forward")
+	param, err := monitoring.Sysctl(IPv4Forwarding)
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	if metric, err = strconv.ParseFloat(param, 64); err != nil {
+	if parsedMetric, err = strconv.ParseFloat(param, 64); err != nil {
 		return trace.Wrap(err)
 	}
-	if m, err = s.ipv4Forwarding.newConstMetric(metric); err != nil {
+	if metric, err = s.ipv4Forwarding.newConstMetric(parsedMetric); err != nil {
 		return trace.Wrap(err)
 	}
-	ch <- m
+	ch <- metric
 
-	param, err = monitoring.Sysctl("net.bridge.bridge-nf-call-iptables")
+	param, err = monitoring.Sysctl(BridgeNetfilter)
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	if metric, err = strconv.ParseFloat(param, 64); err != nil {
+	if parsedMetric, err = strconv.ParseFloat(param, 64); err != nil {
 		return trace.Wrap(err)
 	}
-	if m, err = s.brNetfilter.newConstMetric(metric); err != nil {
+	if metric, err = s.brNetfilter.newConstMetric(parsedMetric); err != nil {
 		return trace.Wrap(err)
 	}
-	ch <- m
+	ch <- metric
 
 	return nil
 }

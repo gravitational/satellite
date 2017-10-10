@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
-	"sync"
 
 	"github.com/gravitational/roundtrip"
 	"github.com/gravitational/satellite/monitoring"
@@ -29,119 +28,90 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// ETCDCollector collects ETCD stats from the given server and exports them using
-// the prometheus metrics package.
-type ETCDCollector struct {
-	client *roundtrip.Client
-	config monitoring.ETCDConfig
-	mutex  sync.RWMutex
+var (
+	isLeader = typedDesc{prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "etcd", "leader"),
+		"Endpoint is the leader of etcd cluster.",
+		nil, nil), prometheus.GaugeValue}
 
-	isRunning typedDesc
-	health    typedDesc
-	isLeader  typedDesc
+	isRunning = typedDesc{prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "etcd", "up"),
+		"Whether scraping ETCD metrics was successful.",
+		nil, nil), prometheus.GaugeValue}
+
+	health = typedDesc{prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "etcd", "health"),
+		"Health status of ETCD.",
+		nil, nil), prometheus.GaugeValue}
+
+	runningOn = isRunning.mustNewConstMetric(1.0)
+
+	healthyOn  = health.mustNewConstMetric(1.0)
+	healthyOff = health.mustNewConstMetric(0.0)
+
+	leaderOn  = isLeader.mustNewConstMetric(1.0)
+	leaderOff = isLeader.mustNewConstMetric(0.0)
+)
+
+// EtcdCollector collects etcd stats from the given server and exports them using
+// the prometheus metrics package.
+type EtcdCollector struct {
+	client *roundtrip.Client
 }
 
-// NewETCDCollector returns an initialized ETCDCollector.
-func NewETCDCollector(config *monitoring.ETCDConfig) (Collector, error) {
+// NewEtcdCollector returns an initialized EtcdCollector.
+func NewEtcdCollector(config *monitoring.ETCDConfig) (*EtcdCollector, error) {
+	if len(config.Endpoints) == 0 {
+		return nil, trace.BadParameter("no etcd endpoints configured")
+	}
+
 	transport, err := config.NewHTTPTransport()
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-
-	if len(config.Endpoints) == 0 {
-		return nil, trace.BadParameter("no ETCD endpoints configured")
-	}
-
 	client, err := newClient(config.Endpoints[0], roundtrip.HTTPClient(&http.Client{
 		Transport: transport,
 		Timeout:   collectMetricsTimeout,
 	}))
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
 
-	return &ETCDCollector{
+	return &EtcdCollector{
 		client: client,
-		config: *config,
-		isRunning: typedDesc{prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "etcd", "up"),
-			"Whether scraping ETCD metrics was successful.",
-			nil, nil,
-		), prometheus.GaugeValue},
-		health: typedDesc{prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "etcd", "health"),
-			"Health status of ETCD.",
-			nil, nil,
-		), prometheus.GaugeValue},
-		isLeader: typedDesc{prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "etcd", "leader"),
-			"Endpoint is leader of ETCD cluster.",
-			nil, nil,
-		), prometheus.GaugeValue},
 	}, nil
 }
 
-// Collect implements prometheus.Collector.
-func (e *ETCDCollector) Collect(ch chan<- prometheus.Metric) error {
-	e.mutex.Lock() // To protect metrics from concurrent collects.
-	defer e.mutex.Unlock()
-
-	var m prometheus.Metric
-	var err error
-	success := true
-
+// Collect implements the prometheus.Collector interface
+func (e *EtcdCollector) Collect(ch chan<- prometheus.Metric) error {
 	resp, err := e.client.Get(e.client.Endpoint("v2", "stats", "leader"), url.Values{})
 	if err != nil {
 		return trace.Wrap(err)
 	}
 
-	if bytes.Contains(resp.Bytes(), []byte("not current leader")) {
-		m, err = e.isLeader.newConstMetric(0.0)
-		if err != nil {
-			success = false
-		}
-		ch <- m
-	} else {
-		health, err := e.healthStatus()
-		if err != nil {
-			success = false
-		}
-		if health {
-			m, err = e.health.newConstMetric(1.0)
-			if err != nil {
-				success = false
-			}
-			ch <- m
-		} else {
-			m, err = e.health.newConstMetric(0.0)
-			if err != nil {
-				success = false
-			}
-			ch <- m
-		}
-		m, err = e.isLeader.newConstMetric(1.0)
-		if err != nil {
-			success = false
-		}
-		ch <- m
+	if isFollowerResp(resp) {
+		ch <- leaderOff
+		ch <- runningOn
+		return nil
 	}
 
-	if !success {
-		m, err = e.isRunning.newConstMetric(0.0)
-		if err != nil {
-			success = false
-		}
-		ch <- m
-	}
-
-	m, err = e.isRunning.newConstMetric(1.0)
+	ch <- leaderOn
+	healthy, err := e.healthStatus()
 	if err != nil {
-		return trace.Wrap(err)
+		return trace.Wrap(err, "failed to get health status of etcd cluster")
 	}
-	ch <- m
+	if healthy {
+		ch <- healthyOn
+	} else {
+		ch <- healthyOff
+	}
 
+	ch <- runningOn
 	return nil
 }
 
 // healthStatus determines status of etcd member
-func (e *ETCDCollector) healthStatus() (healthy bool, err error) {
+func (e *EtcdCollector) healthStatus() (healthy bool, err error) {
 	result := struct{ Health string }{}
 	nresult := struct{ Health bool }{}
 	resp, err := e.client.Get(e.client.Endpoint("health"), url.Values{})
@@ -154,10 +124,15 @@ func (e *ETCDCollector) healthStatus() (healthy bool, err error) {
 		err = json.Unmarshal(resp.Bytes(), &nresult)
 	}
 	if err != nil {
-		return false, trace.Wrap(err, "unable to parse JSON output: %s", resp.Bytes())
+		return false, trace.Wrap(err, "unable to parse JSON output: %s", string(resp.Bytes()))
 	}
 
 	return (result.Health == "true" || nresult.Health == true), nil
+}
+
+// isFollowerRes determines follower type of etcd member
+func isFollowerResp(resp *roundtrip.Response) bool {
+	return bytes.Contains(resp.Bytes(), []byte("not current leader"))
 }
 
 func newClient(url string, opts ...roundtrip.ClientParam) (*roundtrip.Client, error) {
