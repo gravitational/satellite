@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/monitoring"
 	"github.com/gravitational/trace"
 	"github.com/prometheus/client_golang/prometheus"
@@ -29,6 +30,8 @@ import (
 const (
 	namespace             = "planet"
 	collectMetricsTimeout = 5 * time.Second
+	// schedulerConfigPath is the path to kube-scheduler configuration file
+	schedulerConfigPath = "/etc/kubernetes/scheduler.kubeconfig"
 )
 
 var (
@@ -54,7 +57,7 @@ type PlanetCollector struct {
 }
 
 // NewPlanetCollector creates a new PlanetCollector
-func NewPlanetCollector(configEtcd *monitoring.ETCDConfig, kubeAddr string) (*PlanetCollector, error) {
+func NewPlanetCollector(configEtcd *monitoring.ETCDConfig, kubeAddr string, role agent.Role) (*PlanetCollector, error) {
 	collectorEtcd, err := NewEtcdCollector(configEtcd)
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -65,6 +68,13 @@ func NewPlanetCollector(configEtcd *monitoring.ETCDConfig, kubeAddr string) (*Pl
 	}
 
 	collectors := make(map[string]Collector)
+	if role == agent.RoleMaster {
+		collectorKubernetes, err := NewKubernetesCollector(kubeAddr)
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
+		collectors["k8s"] = collectorKubernetes
+	}
 	collectors["etcd"] = collectorEtcd
 	collectors["sysctl"] = NewSysctlCollector()
 	collectors["docker"] = collectorDocker

@@ -36,12 +36,12 @@ var (
 
 	isRunning = typedDesc{prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "etcd", "up"),
-		"Whether scraping ETCD metrics was successful.",
+		"Whether scraping etcd metrics was successful.",
 		nil, nil), prometheus.GaugeValue}
 
 	health = typedDesc{prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "etcd", "health"),
-		"Health status of ETCD.",
+		"Health status of etcd.",
 		nil, nil), prometheus.GaugeValue}
 
 	runningOn = isRunning.mustNewConstMetric(1.0)
