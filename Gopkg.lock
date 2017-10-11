@@ -176,12 +176,6 @@
   revision = "e4af62d086c303f2bed467b227fc0a034b218916"
 
 [[projects]]
-  branch = "dmitri/2832-user-panic"
-  name = "github.com/gravitational/GOnetstat"
-  packages = ["."]
-  revision = "65b00ef52acc84a412a8b1b5e5b1f656f56aea07"
-
-[[projects]]
   branch = "master"
   name = "github.com/gravitational/configure"
   packages = [".","cstrings"]
@@ -266,6 +260,12 @@
   name = "github.com/juju/ratelimit"
   packages = ["."]
   revision = "5b9ff866471762aa2ab2dced63c9fb6f53921342"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/kylelemons/godebug"
+  packages = ["diff"]
+  revision = "d65d576e9348f5982d7f6d83682b694e731a45c6"
 
 [[projects]]
   branch = "master"
@@ -426,6 +426,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "f80bef29a583ac055f33e46daab5cf78f45827e256af8addffa0e3be249f5237"
+  inputs-digest = "573b0572a8c5c972bbed4102fe330a3a82bf3f458d469ad29df9bc4f9ba2c1fa"
   solver-name = "gps-cdcl"
   solver-version = 1
