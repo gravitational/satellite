@@ -73,12 +73,6 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/drael/GOnetstat"
-  packages = ["."]
-  revision = "a08125f5157d481dd0d0355c021467bd8c84eb6d"
-
-[[projects]]
-  branch = "master"
   name = "github.com/dustin/go-humanize"
   packages = ["."]
   revision = "79e699ccd02f240a1f1fbbdcee7e64c1c12e41aa"
@@ -180,6 +174,12 @@
   name = "github.com/google/gofuzz"
   packages = ["."]
   revision = "e4af62d086c303f2bed467b227fc0a034b218916"
+
+[[projects]]
+  branch = "dmitri/2832-user-panic"
+  name = "github.com/gravitational/GOnetstat"
+  packages = ["."]
+  revision = "65b00ef52acc84a412a8b1b5e5b1f656f56aea07"
 
 [[projects]]
   branch = "master"
@@ -426,6 +426,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "9371bc614c66dc74b1b2293100bc9636d7b11bf07188e74b0df0361c0c499333"
+  inputs-digest = "f80bef29a583ac055f33e46daab5cf78f45827e256af8addffa0e3be249f5237"
   solver-name = "gps-cdcl"
   solver-version = 1

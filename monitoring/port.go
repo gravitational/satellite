@@ -20,7 +20,8 @@ import (
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
-	netstat "github.com/drael/GOnetstat"
+	netstat "github.com/gravitational/GOnetstat"
+	"github.com/gravitational/trace"
 )
 
 const (
@@ -98,9 +99,21 @@ func (c *PortChecker) checkProcess(proto string, proc netstat.Process, reporter 
 
 // Check will scan current open ports and report every conflict detected
 func (c *PortChecker) Check(ctx context.Context, reporter health.Reporter) {
+	procsTCP, err := netstat.Tcp()
+	if err != nil {
+		reporter.Add(NewProbeFromErr(hostCheckerID, "querying tcp connections", trace.Wrap(err)))
+		return
+	}
+
+	procsUDP, err := netstat.Udp()
+	if err != nil {
+		reporter.Add(NewProbeFromErr(hostCheckerID, "querying udp connections", trace.Wrap(err)))
+		return
+	}
+
 	used := map[string][]netstat.Process{
-		protoTCP: netstat.Tcp(),
-		protoUDP: netstat.Udp()}
+		protoTCP: procsTCP,
+		protoUDP: procsUDP}
 	conflicts := false
 
 	for proto, processes := range used {
