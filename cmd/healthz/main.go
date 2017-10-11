@@ -32,10 +32,8 @@ import (
 	"github.com/gravitational/satellite/healthz/config"
 	"github.com/gravitational/satellite/healthz/handlers"
 	"github.com/gravitational/satellite/healthz/utils"
-	"github.com/gravitational/satellite/monitoring/etcd"
 
 	"github.com/gravitational/trace"
-	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -93,14 +91,6 @@ func run() error {
 		clusterHealthMu.Unlock()
 		handlers.Healthz(status, w, req)
 	})
-
-	etcdExporter, err := etcd.NewExporter(&cfg.ETCDConfig)
-	if err != nil {
-		return trace.Wrap(err)
-	}
-	prometheus.MustRegister(etcdExporter)
-
-	http.Handle("/metrics", prometheus.Handler())
 
 	listener, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
