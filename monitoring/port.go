@@ -88,7 +88,7 @@ func (c *PortChecker) checkProcess(proto string, proc process, reporter health.R
 			conflicts = true
 			reporter.Add(&pb.Probe{
 				Checker: portCheckerID,
-				Detail: fmt.Sprintf("a conflicting program %q(pid=%s) is occupying port %s/%d(%s)",
+				Detail: fmt.Sprintf("a conflicting program %q(pid=%v) is occupying port %v/%d(%v)",
 					proc.name, proc.pid, proto, proc.localAddr().port, proc.state()),
 				Status: pb.Probe_Failed})
 		}
