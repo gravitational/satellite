@@ -35,11 +35,11 @@ func newPortCollector() (*portCollector, error) {
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to query running processes")
 	}
-	fds, err := getFds(procs)
+	inodes, err := mapAllProcs(procs)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to query open file descriptors")
 	}
-	return &portCollector{fds}, nil
+	return &portCollector{inodes}, nil
 }
 
 func (r *portCollector) tcp() (ret []process, err error) {
@@ -93,24 +93,20 @@ func (r *portCollector) udp() (ret []process, err error) {
 }
 
 func (r *portCollector) findProcessByInode(inode string) (proc process, err error) {
-	pid := pidUnknown
-	if fds, exists := r.fds[inode]; exists {
-		for _, fd := range fds {
-			pid = fd.pid
-			break
-		}
+	proc = process{pid: pidUnknown, name: valueUnknown}
+	if pid, exists := r.inodes[inode]; exists {
+		proc.pid = pid
 	}
-	proc = process{pid: pid, name: valueUnknown}
 
 	comm := valueUnknown
-	if pid != pidUnknown {
-		p, err := procfs.NewProc(pid)
+	if proc.pid != pidUnknown {
+		p, err := procfs.NewProc(int(proc.pid))
 		if err != nil {
-			return proc, trace.Wrap(err, "failed to query process metadata for pid %v", pid)
+			return proc, trace.Wrap(err, "failed to query process metadata for pid %v", proc.pid)
 		}
 		comm, err = p.Comm()
 		if err != nil {
-			return proc, trace.Wrap(err, "failed to query process name for pid %v", pid)
+			return proc, trace.Wrap(err, "failed to query process name for pid %v", proc.pid)
 		}
 		proc.name = comm
 		return proc, nil
@@ -119,12 +115,12 @@ func (r *portCollector) findProcessByInode(inode string) (proc process, err erro
 }
 
 type portCollector struct {
-	fds map[string][]pidToFd
+	inodes map[string]pid
 }
 
 type process struct {
 	name string
-	pid  int
+	pid  pid
 	socket
 }
 
@@ -236,8 +232,8 @@ func newTCPSocketFromLine(line string) (*tcpSocket, error) {
 		retransmit int
 		timeout    int
 		tails      string
+		socket     tcpSocket
 	)
-	socket := &tcpSocket{}
 	_, err := fmt.Sscanf(line, "%d: %32X:%4X %32X:%4X %2X %8X:%8X %2X:%8X %8X %d %d %d %1s",
 		&sl, &localip, &socket.LocalAddress.Port, &remoteip, &socket.RemoteAddress.Port,
 		&socket.State, &socket.TXQueue, &socket.RXQueue, &tr, &tmwhen, &retransmit,
@@ -247,7 +243,7 @@ func newTCPSocketFromLine(line string) (*tcpSocket, error) {
 	}
 	socket.LocalAddress.IP = hexToIP(localip)
 	socket.RemoteAddress.IP = hexToIP(remoteip)
-	return socket, nil
+	return &socket, nil
 }
 
 // newUDPSocketFromLine parses line in /proc/net/udp{,6} format and returns UDPSocket object and error
@@ -263,8 +259,8 @@ func newUDPSocketFromLine(line string) (*udpSocket, error) {
 		retransmit int
 		timeout    int
 		pointer    []byte
+		socket     udpSocket
 	)
-	socket := &udpSocket{}
 	_, err := fmt.Sscanf(line, "%d: %32X:%4X %32X:%4X %2X %8X:%8X %2X:%8X %8X %d %d %d %d %128X %d",
 		&sl, &localip, &socket.LocalAddress.Port, &remoteip, &socket.RemoteAddress.Port,
 		&socket.State, &socket.TXQueue, &socket.RXQueue, &tr, &tmwhen, &retransmit,
@@ -275,24 +271,22 @@ func newUDPSocketFromLine(line string) (*udpSocket, error) {
 	}
 	socket.LocalAddress.IP = hexToIP(localip)
 	socket.RemoteAddress.IP = hexToIP(remoteip)
-	return socket, nil
+	return &socket, nil
 }
 
 // newUnixSocketFromLine parses line in /proc/net/unix format and returns UnixSocket object and error
 func newUnixSocketFromLine(line string) (*unixSocket, error) {
 	// Num               RefCount Protocol Flags    Type St Inode Path
 	// ffff91e759dfb800: 00000002 00000000 00010000 0001 01 16163 /tmp/sddm-auth3949710e-7c3f-4aa2-b5fc-25cc34a7f31e
-	var (
-		pointer []byte
-	)
-	socket := &unixSocket{}
+	var pointer []byte
+	var socket unixSocket
 	n, err := fmt.Sscanf(line, "%128X: %8X %8X %8X %4X %2X %d %32000s",
 		&pointer, &socket.RefCount, &socket.Protocol, &socket.Flags,
 		&socket.Type, &socket.State, &socket.Inode, &socket.Path)
 	if err != nil && n < 7 {
 		return nil, trace.Wrap(err)
 	}
-	return socket, nil
+	return &socket, nil
 }
 
 // hexToIP converts byte slice to net.IP
@@ -304,24 +298,22 @@ func hexToIP(in []byte) net.IP {
 	return ip
 }
 
-// getFds fetches open file descriptors for all running processes.
+// mapAllProcs builds a mapping of inode values to running processes.
 // It will skip processes it does not have access to.
-func getFds(procs []procfs.Proc) (map[string][]pidToFd, error) {
-	fds := make(map[string][]pidToFd, len(procs))
+func mapAllProcs(procs []procfs.Proc) (inodes map[string]pid, err error) {
+	inodes = make(map[string]pid, len(procs))
 	for _, proc := range procs {
-		err := mapPidToFds(proc.PID, fds, -1)
+		err = mapPidToInode(pid(proc.PID), inodes)
 		if err != nil {
-			log.Warnf("failed to query open file descriptors for process %v: %v", proc.PID, err)
+			log.Warnf("failed to associate sockets with process %v: %v", proc.PID, err)
 			continue
 		}
 	}
-	return fds, nil
+	return inodes, nil
 }
 
-// mapPidToFds retrieves the list of open file descriptors for the process
-// identified with pid as a map of inode -> file descriptor
-// With max > 0, the number of file descriptor entries consumed is limited to max.
-func mapPidToFds(pid int, fds map[string][]pidToFd, max int) error {
+// mapPidToInode associates the process given with pid with the sockets it has opened
+func mapPidToInode(pid pid, inodes map[string]pid) error {
 	dir := fdDir(pid)
 	f, err := os.Open(dir)
 	if err != nil {
@@ -329,13 +321,13 @@ func mapPidToFds(pid int, fds map[string][]pidToFd, max int) error {
 	}
 	defer f.Close()
 
-	files, err := f.Readdir(max)
+	files, err := f.Readdirnames(-1)
 	if err != nil {
 		return err
 	}
 
 	for _, f := range files {
-		inodePath := filepath.Join(dir, f.Name())
+		inodePath := filepath.Join(dir, f)
 		inode, err := os.Readlink(inodePath)
 		if err != nil {
 			log.Debugf("failed to readlink(%q): %v", inodePath, err)
@@ -346,29 +338,22 @@ func mapPidToFds(pid int, fds map[string][]pidToFd, max int) error {
 		}
 		// Extract inode value from 'socket:[inode]'
 		inode = inode[len(socketPrefix) : len(inode)-1]
-		fd, err := strconv.Atoi(f.Name())
-		if err != nil {
-			log.Debugf("file descriptor is not a valid number: %q", f.Name())
-			continue
+		if _, exists := inodes[inode]; !exists {
+			inodes[inode] = pid
 		}
-
-		item := pidToFd{
-			pid: pid,
-			fd:  uint(fd),
-		}
-		fds[inode] = append(fds[inode], item)
 	}
 	return nil
 }
 
-func fdDir(pid int) string {
-	return filepath.Join("/proc", strconv.FormatInt(int64(pid), 10), "fd")
+func fdDir(pid pid) string {
+	return filepath.Join("/proc", pid.String(), "fd")
 }
 
-type pidToFd struct {
-	pid int
-	fd  uint
+func (r pid) String() string {
+	return strconv.FormatInt(int64(r), 10)
 }
+
+type pid int
 
 const socketPrefix = "socket:["
 
@@ -397,6 +382,34 @@ const (
 	procNetUDP6 = "/proc/net/udp6"
 	procNetUnix = "/proc/net/unix"
 )
+
+func (r socketState) String() string {
+	switch r {
+	case Established:
+		return "established"
+	case SynSent:
+		return "syn-sent"
+	case SynRecv:
+		return "syn-recv"
+	case FinWait1:
+		return "fin-wait-1"
+	case FinWait2:
+		return "fin-wait-2"
+	case TimeWait:
+		return "time-wait"
+	case Close:
+		return "close"
+	case CloseWait:
+		return "close-wait"
+	case LastAck:
+		return "last-ack"
+	case Listen:
+		return "listen"
+	case Closing:
+		return "closing"
+	}
+	return strconv.FormatInt(int64(r), 10)
+}
 
 // SocketState stores Linux socket state
 type socketState uint8

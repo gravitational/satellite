@@ -5,7 +5,6 @@ import (
 
 	"github.com/gravitational/satellite/lib/test"
 	. "gopkg.in/check.v1"
-	// log "github.com/sirupsen/logrus"
 )
 
 type S struct{}
@@ -22,7 +21,6 @@ func (_ *S) TestParseSocketFile(c *C) {
 func (_ *S) TestGetTCPSockets(c *C) {
 	sockets, err := getTCPSockets("fixtures/tcp")
 	c.Assert(err, IsNil)
-	// FIXME
 	c.Assert(sockets, Not(IsNil))
 
 	sockets, err = getTCPSockets("fixtures/tcp6")
