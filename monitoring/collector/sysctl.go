@@ -52,42 +52,38 @@ func NewSysctlCollector() *SysctlCollector {
 	}
 }
 
-// Describe implements the prometheus.Collector interface
-func (s *SysctlCollector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- s.ipv4Forwarding.desc
-	ch <- s.brNetfilter.desc
-}
-
 // Collect implements prometheus.Collector.
 func (s *SysctlCollector) Collect(ch chan<- prometheus.Metric) error {
-	var (
-		parsedMetric float64
-		metric       prometheus.Metric
-	)
-
-	param, err := monitoring.Sysctl(IPv4Forwarding)
+	metric, err := sysctlMetric(IPv4Forwarding, s.ipv4Forwarding)
 	if err != nil {
-		return trace.Wrap(err)
-	}
-	if parsedMetric, err = strconv.ParseFloat(param, 64); err != nil {
-		return trace.Wrap(err)
-	}
-	if metric, err = s.ipv4Forwarding.newConstMetric(parsedMetric); err != nil {
 		return trace.Wrap(err)
 	}
 	ch <- metric
 
-	param, err = monitoring.Sysctl(BridgeNetfilter)
+	metric, err = sysctlMetric(BridgeNetfilter, s.brNetfilter)
 	if err != nil {
-		return trace.Wrap(err)
-	}
-	if parsedMetric, err = strconv.ParseFloat(param, 64); err != nil {
-		return trace.Wrap(err)
-	}
-	if metric, err = s.brNetfilter.newConstMetric(parsedMetric); err != nil {
 		return trace.Wrap(err)
 	}
 	ch <- metric
 
 	return nil
+}
+
+func sysctlMetric(paramName string, desc typedDesc) (prometheus.Metric, error) {
+	var (
+		parsedMetric float64
+		metric       prometheus.Metric
+	)
+
+	param, err := monitoring.Sysctl(paramName)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	if parsedMetric, err = strconv.ParseFloat(param, 64); err != nil {
+		return nil, trace.Wrap(err)
+	}
+	if metric, err = desc.newConstMetric(parsedMetric); err != nil {
+		return nil, trace.Wrap(err)
+	}
+	return metric, nil
 }

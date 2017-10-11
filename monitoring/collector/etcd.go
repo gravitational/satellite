@@ -69,7 +69,7 @@ func NewEtcdCollector(config *monitoring.ETCDConfig) (*EtcdCollector, error) {
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	client, err := newClient(config.Endpoints[0], roundtrip.HTTPClient(&http.Client{
+	client, err := NewRoundtripClient(config.Endpoints[0], roundtrip.HTTPClient(&http.Client{
 		Transport: transport,
 		Timeout:   collectMetricsTimeout,
 	}))
@@ -133,12 +133,4 @@ func (e *EtcdCollector) healthStatus() (healthy bool, err error) {
 // isFollowerRes determines follower type of etcd member
 func isFollowerResp(resp *roundtrip.Response) bool {
 	return bytes.Contains(resp.Bytes(), []byte("not current leader"))
-}
-
-func newClient(url string, opts ...roundtrip.ClientParam) (*roundtrip.Client, error) {
-	clt, err := roundtrip.NewClient(url, "", opts...)
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
-	return clt, nil
 }

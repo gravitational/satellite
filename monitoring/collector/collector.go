@@ -59,6 +59,7 @@ func NewPlanetCollector(configEtcd *monitoring.ETCDConfig, kubeAddr string) (*Pl
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
+	collectorDocker, err := NewDockerCollector()
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -66,6 +67,7 @@ func NewPlanetCollector(configEtcd *monitoring.ETCDConfig, kubeAddr string) (*Pl
 	collectors := make(map[string]Collector)
 	collectors["etcd"] = collectorEtcd
 	collectors["sysctl"] = NewSysctlCollector()
+	collectors["docker"] = collectorDocker
 	return &PlanetCollector{collectors: collectors}, nil
 }
 
