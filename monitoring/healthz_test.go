@@ -31,7 +31,7 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-func TestHealthz(t *testing.T) { TestingT(t) }
+func TestMonitoring(t *testing.T) { TestingT(t) }
 
 type HealthzSuite struct{}
 

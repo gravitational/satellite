@@ -25,9 +25,7 @@ import (
 
 	"github.com/gravitational/satellite/agent/health"
 
-	"github.com/dustin/go-humanize"
 	"github.com/stretchr/testify/require"
-	syscall "golang.org/x/sys/unix"
 )
 
 const (

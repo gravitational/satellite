@@ -90,10 +90,6 @@
   branch = "release-1.7"
 
 [[constraint]]
-  branch = "dmitri/2832-user-panic"
-  name = "github.com/gravitational/GOnetstat"
-
-[[constraint]]
   branch = "master"
   name = "github.com/cloudfoundry/gosigar"
 
