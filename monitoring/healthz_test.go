@@ -87,5 +87,5 @@ func (_ *HealthzSuite) TestUsesClientTimeout(c *C) {
 	checker.Check(context.TODO(), &reporter)
 
 	c.Assert(reporter, HasLen, 1)
-	c.Assert(reporter[0].Error, Matches, `.*Client\.Timeout.*`)
+	c.Assert(reporter[0].Error, Matches, `(?s).*Client\.Timeout.*`)
 }

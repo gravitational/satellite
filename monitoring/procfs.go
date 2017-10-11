@@ -37,7 +37,7 @@ func newPortCollector() (*portCollector, error) {
 	}
 	inodes, err := mapAllProcs(procs)
 	if err != nil {
-		return nil, trace.Wrap(err, "failed to query open file descriptors")
+		return nil, trace.Wrap(err, "failed to query open sockets")
 	}
 	return &portCollector{inodes}, nil
 }
@@ -56,7 +56,7 @@ func (r *portCollector) tcp() (ret []process, err error) {
 	for _, socket := range append(sockets, sockets6...) {
 		proc, err := r.findProcessByInode(socket.inode())
 		if err != nil {
-			log.Warnf(err.Error())
+			log.Warn(err.Error())
 		}
 		ret = append(ret, process{
 			name:   proc.name,
@@ -81,7 +81,7 @@ func (r *portCollector) udp() (ret []process, err error) {
 	for _, socket := range append(sockets, sockets6...) {
 		proc, err := r.findProcessByInode(socket.inode())
 		if err != nil {
-			log.Warnf(err.Error())
+			log.Warn(err.Error())
 		}
 		ret = append(ret, process{
 			name:   proc.name,
