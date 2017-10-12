@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	namespace             = "planet"
+	namespace             = "satellite"
 	collectMetricsTimeout = 5 * time.Second
 	// schedulerConfigPath is the path to kube-scheduler configuration file
 	schedulerConfigPath = "/etc/kubernetes/scheduler.kubeconfig"
@@ -50,14 +50,16 @@ var (
 	)
 )
 
-// PlanetCollector implements the prometheus.Collector interface.
-type PlanetCollector struct {
+// MetricsCollector groups collectors that collect various system
+// metrics and additionally exposes metrics about the duration
+// of each scrape as well as whether the scrapes were successful.
+type MetricsCollector struct {
 	configEtcd monitoring.ETCDConfig
 	collectors map[string]Collector
 }
 
-// NewPlanetCollector creates a new PlanetCollector
-func NewPlanetCollector(configEtcd *monitoring.ETCDConfig, kubeAddr string, role agent.Role) (*PlanetCollector, error) {
+// NewMetricsCollector creates a new MetricsCollector
+func NewMetricsCollector(configEtcd *monitoring.ETCDConfig, kubeAddr string, role agent.Role) (*MetricsCollector, error) {
 	collectorEtcd, err := NewEtcdCollector(configEtcd)
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -78,20 +80,20 @@ func NewPlanetCollector(configEtcd *monitoring.ETCDConfig, kubeAddr string, role
 	collectors["etcd"] = collectorEtcd
 	collectors["sysctl"] = NewSysctlCollector()
 	collectors["docker"] = collectorDocker
-	return &PlanetCollector{collectors: collectors}, nil
+	return &MetricsCollector{collectors: collectors}, nil
 }
 
 // Describe implements the prometheus.Collector interface.
-func (pc *PlanetCollector) Describe(ch chan<- *prometheus.Desc) {
+func (mc *MetricsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- scrapeDurationDesc
 	ch <- scrapeSuccessDesc
 }
 
 // Collect implements the prometheus.Collector interface.
-func (pc *PlanetCollector) Collect(ch chan<- prometheus.Metric) {
+func (mc *MetricsCollector) Collect(ch chan<- prometheus.Metric) {
 	wg := sync.WaitGroup{}
-	wg.Add(len(pc.collectors))
-	for name, c := range pc.collectors {
+	wg.Add(len(mc.collectors))
+	for name, c := range mc.collectors {
 		go func(name string, c Collector) {
 			defer wg.Done()
 			execute(name, c, ch)
@@ -128,6 +130,8 @@ func execute(name string, c Collector, ch chan<- prometheus.Metric) {
 	}
 }
 
+// Collector defines an interface for collecting specific facts about
+// a system and expose them to prometheus on the provided channel as metrics.
 type Collector interface {
 	// Collect collects metrics and exposes them to the prometheus registry
 	// on the specified channel. Returns an error if collection fails
