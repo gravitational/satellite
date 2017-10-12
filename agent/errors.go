@@ -27,3 +27,16 @@ func ConvertGRPCError(err error) error {
 	}
 	return trace.Wrap(err)
 }
+
+// IsUnavailableError determines if the specified error
+// is a temporary agent availability error
+func IsUnavailableError(err error) bool {
+	err = ConvertGRPCError(err)
+	switch {
+	case grpc.Code(trace.Unwrap(err)) == grpcerrors.Unavailable:
+		return true
+	case trace.IsLimitExceeded(err):
+		return true
+	}
+	return false
+}
