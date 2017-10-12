@@ -38,8 +38,8 @@ var (
 		nil, nil,
 	), prometheus.GaugeValue}
 
-	runningOn  = dockerUp.mustNewConstMetric(1.0)
-	runningOff = dockerUp.mustNewConstMetric(0.0)
+	dockerOn  = dockerUp.mustNewConstMetric(1.0)
+	dockerOff = dockerUp.mustNewConstMetric(0.0)
 )
 
 // DockerCollector collect metrics about docker service status
@@ -74,11 +74,11 @@ func (d *DockerCollector) Collect(ch chan<- prometheus.Metric) error {
 		return trace.Wrap(err)
 	}
 	if healthy {
-		ch <- runningOn
+		ch <- dockerOn
 		return nil
 	}
 
-	ch <- runningOff
+	ch <- dockerOff
 	return nil
 }
 
