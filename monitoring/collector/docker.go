@@ -31,10 +31,20 @@ const (
 	dockerURL        = "http://docker/"
 )
 
+var (
+	dockerUp = typedDesc{prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "docker", "health"),
+		"Status of Docker daemon",
+		nil, nil,
+	), prometheus.GaugeValue}
+
+	runningOn  = dockerUp.mustNewConstMetric(1.0)
+	runningOff = dockerUp.mustNewConstMetric(0.0)
+)
+
 // DockerCollector collect metrics about docker service status
 type DockerCollector struct {
-	client   *roundtrip.Client
-	dockerUp typedDesc
+	client *roundtrip.Client
 }
 
 // NewDockerCollector returns initialized DockerCollector
@@ -54,33 +64,21 @@ func NewDockerCollector() (*DockerCollector, error) {
 
 	return &DockerCollector{
 		client: client,
-		dockerUp: typedDesc{prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "docker", "health"),
-			"Status of Docker daemon",
-			nil, nil,
-		), prometheus.GaugeValue},
 	}, nil
 }
 
 // Collect is called by the Prometheus registry when collecting metrics.
 func (d *DockerCollector) Collect(ch chan<- prometheus.Metric) error {
-	var metric prometheus.Metric
-
 	healthy, err := d.healthStatus()
 	if err != nil {
 		return trace.Wrap(err)
 	}
 	if healthy {
-		if metric, err = d.dockerUp.newConstMetric(1.0); err != nil {
-			return trace.Wrap(err, "failed to create prometheus metric: %v", err)
-		}
-	} else {
-		if metric, err = d.dockerUp.newConstMetric(0.0); err != nil {
-			return trace.Wrap(err, "failed to create prometheus metric: %v", err)
-		}
+		ch <- runningOn
+		return nil
 	}
 
-	ch <- metric
+	ch <- runningOff
 	return nil
 }
 
