@@ -148,7 +148,8 @@ func (r udpSocket) state() socketState {
 	return r.State
 }
 
-// getTCPSockets reads specified file formatted as /proc/net/tcp{,6} and returns slice of *TCPSocket
+// getTCPSockets interprets the file specified with fpath formatted as /proc/net/tcp{,6}
+// and returns a list of TCPSockets
 func getTCPSockets(fpath string) (ret []tcpSocket, err error) {
 	err = parseSocketFile(fpath, func(line string) error {
 		socket, err := newTCPSocketFromLine(line)
@@ -164,7 +165,8 @@ func getTCPSockets(fpath string) (ret []tcpSocket, err error) {
 	return ret, nil
 }
 
-// getUDPSockets reads specified file formatted as /proc/net/udp{,6} and returns slice of *UDPSocket
+// getUDPSockets interprets the file specified with fpath formatted as /proc/net/udp{,6}
+// and returns a list of UDPPSockets
 func getUDPSockets(fpath string) (ret []udpSocket, err error) {
 	err = parseSocketFile(fpath, func(line string) error {
 		socket, err := newUDPSocketFromLine(line)
@@ -180,7 +182,8 @@ func getUDPSockets(fpath string) (ret []udpSocket, err error) {
 	return ret, nil
 }
 
-// getUnixSockets reads specified file formatted as /proc/net/unix and returns slice of *UnixSocket
+// getUnixSockets interprets the file specified with fpath formatted as /proc/net/unix
+// and returns a list of UnixPSockets
 func getUnixSockets(fpath string) (ret []unixSocket, err error) {
 	err = parseSocketFile(fpath, func(line string) error {
 		socket, err := newUnixSocketFromLine(line)
@@ -218,7 +221,7 @@ func parseSocketFile(fpath string, parse socketparser) error {
 
 type socketparser func(string) error
 
-// newTCPSocketFromLine parses line in /proc/net/tcp{,6} format and returns TCPSocket object and error
+// newTCPSocketFromLine parses a TCPSocket from a line in /proc/net/tcp{,6}
 func newTCPSocketFromLine(line string) (*tcpSocket, error) {
 	// sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
 	//  0: 00000000:0035 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 18616 1 ffff91e759d47080 100 0 0 10 0
@@ -246,7 +249,7 @@ func newTCPSocketFromLine(line string) (*tcpSocket, error) {
 	return &socket, nil
 }
 
-// newUDPSocketFromLine parses line in /proc/net/udp{,6} format and returns UDPSocket object and error
+// newUDPSocketFromLine parses a UDPSocket from a line in /proc/net/udp{,6}
 func newUDPSocketFromLine(line string) (*udpSocket, error) {
 	//    sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode ref pointer drops
 	//  2511: 00000000:14E9 00000000:0000 07 00000000:00000000 00:00000000 00000000  1000        0 1662497 2 ffff91e6a9fcbc00 0
@@ -274,7 +277,7 @@ func newUDPSocketFromLine(line string) (*udpSocket, error) {
 	return &socket, nil
 }
 
-// newUnixSocketFromLine parses line in /proc/net/unix format and returns UnixSocket object and error
+// newUnixSocketFromLine parses a UnixSocket from a line in /proc/net/unix
 func newUnixSocketFromLine(line string) (*unixSocket, error) {
 	// Num               RefCount Protocol Flags    Type St Inode Path
 	// ffff91e759dfb800: 00000002 00000000 00010000 0001 01 16163 /tmp/sddm-auth3949710e-7c3f-4aa2-b5fc-25cc34a7f31e
