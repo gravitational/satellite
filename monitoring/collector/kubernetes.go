@@ -20,7 +20,6 @@ import (
 	"github.com/gravitational/satellite/monitoring"
 	"github.com/gravitational/trace"
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -67,7 +66,6 @@ func (k *KubernetesCollector) Collect(ch chan<- prometheus.Metric) error {
 
 	for _, item := range nodes.Items {
 		for _, condition := range item.Status.Conditions {
-			log.Debugf("node item: %v", item)
 			if condition.Type != v1.NodeReady {
 				continue
 			}
