@@ -62,24 +62,31 @@ func NewDockerCollector() (*DockerCollector, error) {
 	}, nil
 }
 
-// Collect implements the prometheus.Collector interface
+// Collect is called by the Prometheus registry when collecting metrics.
 func (d *DockerCollector) Collect(ch chan<- prometheus.Metric) error {
-	healthy, err := d.healtStatus()
+	var metric prometheus.Metric
+
+	healthy, err := d.healthStatus()
 	if err != nil {
 		return trace.Wrap(err)
 	}
 	if healthy {
-		ch <- d.dockerUp.mustNewConstMetric(1.0)
-		return nil
+		if metric, err = d.dockerUp.newConstMetric(1.0); err != nil {
+			return trace.Wrap(err, "failed to create prometheus metric: %v", err)
+		}
+	} else {
+		if metric, err = d.dockerUp.newConstMetric(0.0); err != nil {
+			return trace.Wrap(err, "failed to create prometheus metric: %v", err)
+		}
 	}
 
-	ch <- d.dockerUp.mustNewConstMetric(0.0)
+	ch <- metric
 	return nil
 }
 
 // healthStatus determines status of docker service
-// by checking url http://docker/version from daemon socket
-func (d *DockerCollector) healtStatus() (bool, error) {
+// by fetching the docker's version HTTP endpoint from daemon socket
+func (d *DockerCollector) healthStatus() (bool, error) {
 	resp, err := d.client.Get(d.client.Endpoint("version"), url.Values{})
 	if err != nil {
 		return false, trace.Wrap(err, "HTTP request failed: %v", err)
