@@ -49,7 +49,10 @@ func NewClient(addr string) (*client, error) {
 
 // Status reports the health status of the serf cluster.
 func (r *client) Status(ctx context.Context) (*pb.SystemStatus, error) {
-	resp, err := r.AgentClient.Status(ctx, &pb.StatusRequest{})
+	opts := []grpc.CallOptions{
+		grpc.FailFast(false),
+	}
+	resp, err := r.AgentClient.Status(ctx, &pb.StatusRequest{}, opts...)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -58,7 +61,10 @@ func (r *client) Status(ctx context.Context) (*pb.SystemStatus, error) {
 
 // LocalStatus reports the health status of the local serf node.
 func (r *client) LocalStatus(ctx context.Context) (*pb.NodeStatus, error) {
-	resp, err := r.AgentClient.LocalStatus(ctx, &pb.LocalStatusRequest{})
+	opts := []grpc.CallOptions{
+		grpc.FailFast(false),
+	}
+	resp, err := r.AgentClient.LocalStatus(ctx, &pb.LocalStatusRequest{}, opts...)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
