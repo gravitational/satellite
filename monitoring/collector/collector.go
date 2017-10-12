@@ -50,7 +50,9 @@ var (
 	)
 )
 
-// MetricsCollector implements the prometheus.Collector interface.
+// MetricsCollector groups collectors that collect various system
+// metrics and additionally exposes metrics about the duration
+// of each scrape as well as whether the scrapes were successful.
 type MetricsCollector struct {
 	configEtcd monitoring.ETCDConfig
 	collectors map[string]Collector
@@ -128,8 +130,8 @@ func execute(name string, c Collector, ch chan<- prometheus.Metric) {
 	}
 }
 
-// Collector is the interface implemented by anything that can be
-// used by Prometheus to collect metrics.
+// Collector defines an interface for collecting specific facts about
+// a system and expose them to prometheus on the provided channel as metrics.
 type Collector interface {
 	// Collect collects metrics and exposes them to the prometheus registry
 	// on the specified channel. Returns an error if collection fails
