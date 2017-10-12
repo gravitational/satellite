@@ -152,11 +152,12 @@ func run() error {
 		}
 		err = runAgent(agentConfig, monitoringConfig, toAddrList(*cagentInitialCluster))
 	case cstatus.FullCommand():
-		status(*cstatusRPCPort, *cstatusLocal, *cstatusPrettyPrint)
+		_, err = status(*cstatusRPCPort, *cstatusLocal, *cstatusPrettyPrint)
 	case cchecks.FullCommand():
-		localChecks()
+		err = localChecks()
 	case cversion.FullCommand():
 		version.Print()
+		err = nil
 	}
 
 	return trace.Wrap(err)

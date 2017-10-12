@@ -8,11 +8,12 @@ import (
 	"github.com/gravitational/satellite/monitoring"
 )
 
-func localChecks() {
+func localChecks() error {
 	ch := monitoring.BasicCheckers()
 	var r health.Probes
 
 	ch.Check(context.TODO(), &r)
 
 	fmt.Printf("%+v\n", r)
+	return nil
 }

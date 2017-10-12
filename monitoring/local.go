@@ -26,6 +26,7 @@ func BasicCheckers() *compositeChecker {
 			NewBrNetfilterChecker(),
 			DefaultProcessChecker(),
 			DefaultPortChecker(),
+			DefaultBootConfigParams(),
 		},
 	}
 }
