@@ -23,7 +23,7 @@ func NewIPForwardChecker() *SysctlChecker {
 		Param:           "net.ipv4.ip_forward",
 		Expected:        "1",
 		OnMissing:       "ipv4 forwarding status unknown",
-		OnValueMismatch: "ipv4 forwarding off",
+		OnValueMismatch: "ipv4 forwarding is off, see https://www.gravitational.com/docs/faq/#ipv4-forwarding",
 	}
 }
 
@@ -33,7 +33,7 @@ func NewBrNetfilterChecker() *SysctlChecker {
 		CheckerName:     "br-netfilter",
 		Param:           "net.bridge.bridge-nf-call-iptables",
 		Expected:        "1",
-		OnMissing:       "br_netfilter module is either not loaded, or sysctl net.bridge.bridge-nf-call-iptables is not set",
-		OnValueMismatch: "kubernetes requires net.bridge.bridge-nf-call-iptables sysctl set to 1",
+		OnMissing:       "br_netfilter module is either not loaded, or sysctl net.bridge.bridge-nf-call-iptables is not set, see https://www.gravitational.com/docs/faq/#bridge-driver",
+		OnValueMismatch: "kubernetes requires net.bridge.bridge-nf-call-iptables sysctl set to 1, https://www.gravitational.com/docs/faq/#bridge-driver",
 	}
 }

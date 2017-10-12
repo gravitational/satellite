@@ -83,7 +83,7 @@ func (c *ProcessChecker) Check(ctx context.Context, r health.Reporter) {
 
 	r.Add(&pb.Probe{
 		Checker: processCheckerID,
-		Detail:  fmt.Sprintf("conflicting programs: %v", prohibited.Slice()),
+		Detail:  fmt.Sprintf("potentially conflicting programs running: %v, note this is an issue only before Telekube is installed", prohibited.Slice()),
 		Status:  pb.Probe_Failed,
 	})
 

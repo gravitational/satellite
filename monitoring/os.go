@@ -52,6 +52,7 @@ func DefaultOSChecker() *OSChecker {
 			OSRelease{"rhel", "7.4"},
 			OSRelease{"centos", "7.2"},
 			OSRelease{"centos", "7.3"},
+			OSRelease{"centos", "7"},
 			OSRelease{"ubuntu", "16.04"},
 			OSRelease{"ubuntu-core", "16"},
 		},
