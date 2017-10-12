@@ -73,12 +73,6 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/drael/GOnetstat"
-  packages = ["."]
-  revision = "a08125f5157d481dd0d0355c021467bd8c84eb6d"
-
-[[projects]]
-  branch = "master"
   name = "github.com/dustin/go-humanize"
   packages = ["."]
   revision = "79e699ccd02f240a1f1fbbdcee7e64c1c12e41aa"
@@ -269,6 +263,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/kylelemons/godebug"
+  packages = ["diff"]
+  revision = "d65d576e9348f5982d7f6d83682b694e731a45c6"
+
+[[projects]]
+  branch = "master"
   name = "github.com/mailru/easyjson"
   packages = ["buffer","jlexer","jwriter"]
   revision = "2f5df55504ebc322e4d52d34df6a1f5b503bf26d"
@@ -426,6 +426,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "9371bc614c66dc74b1b2293100bc9636d7b11bf07188e74b0df0361c0c499333"
+  inputs-digest = "573b0572a8c5c972bbed4102fe330a3a82bf3f458d469ad29df9bc4f9ba2c1fa"
   solver-name = "gps-cdcl"
   solver-version = 1

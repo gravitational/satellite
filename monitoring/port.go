@@ -1,9 +1,12 @@
 /*
 Copyright 2017 Gravitational, Inc.
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
+
     http://www.apache.org/licenses/LICENSE-2.0
+
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -20,7 +23,7 @@ import (
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
-	netstat "github.com/drael/GOnetstat"
+	"github.com/gravitational/trace"
 )
 
 const (
@@ -78,18 +81,18 @@ func (c *PortChecker) Name() string {
 	return portCheckerID
 }
 
-func (c *PortChecker) checkProcess(proto string, proc netstat.Process, reporter health.Reporter) bool {
+func (c *PortChecker) checkProcess(proto string, proc process, reporter health.Reporter) bool {
 	conflicts := false
 	for _, r := range c.Ranges {
 		if r.Protocol != proto {
 			continue
 		}
-		if uint64(proc.Port) >= r.From && uint64(proc.Port) <= r.To {
+		if uint64(proc.localAddr().port) >= r.From && uint64(proc.localAddr().port) <= r.To {
 			conflicts = true
 			reporter.Add(&pb.Probe{
 				Checker: portCheckerID,
-				Detail: fmt.Sprintf("a conflicting program %q(pid=%s) is occupying port %s/%d(%s)",
-					proc.Name, proc.Pid, proto, proc.Port, proc.State),
+				Detail: fmt.Sprintf("a conflicting program %q(pid=%v) is occupying port %v/%d(%v)",
+					proc.name, proc.pid, proto, proc.localAddr().port, proc.state()),
 				Status: pb.Probe_Failed})
 		}
 	}
@@ -98,9 +101,26 @@ func (c *PortChecker) checkProcess(proto string, proc netstat.Process, reporter 
 
 // Check will scan current open ports and report every conflict detected
 func (c *PortChecker) Check(ctx context.Context, reporter health.Reporter) {
-	used := map[string][]netstat.Process{
-		protoTCP: netstat.Tcp(),
-		protoUDP: netstat.Udp()}
+	collector, err := newPortCollector()
+	if err != nil {
+		reporter.Add(NewProbeFromErr(hostCheckerID, "querying connections", trace.Wrap(err)))
+		return
+	}
+	procsTCP, err := collector.tcp()
+	if err != nil {
+		reporter.Add(NewProbeFromErr(hostCheckerID, "querying tcp connections", trace.Wrap(err)))
+		return
+	}
+
+	procsUDP, err := collector.udp()
+	if err != nil {
+		reporter.Add(NewProbeFromErr(hostCheckerID, "querying udp connections", trace.Wrap(err)))
+		return
+	}
+
+	used := map[string][]process{
+		protoTCP: procsTCP,
+		protoUDP: procsUDP}
 	conflicts := false
 
 	for proto, processes := range used {
