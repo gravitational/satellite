@@ -18,7 +18,6 @@ package agent
 
 import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-	"github.com/gravitational/trace"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -54,7 +53,7 @@ func (r *client) Status(ctx context.Context) (*pb.SystemStatus, error) {
 	}
 	resp, err := r.AgentClient.Status(ctx, &pb.StatusRequest{}, opts...)
 	if err != nil {
-		return nil, ConvertGrpcError(err)
+		return nil, ConvertGRPCError(err)
 	}
 	return resp.Status, nil
 }
@@ -66,7 +65,7 @@ func (r *client) LocalStatus(ctx context.Context) (*pb.NodeStatus, error) {
 	}
 	resp, err := r.AgentClient.LocalStatus(ctx, &pb.LocalStatusRequest{}, opts...)
 	if err != nil {
-		return nil, ConvertGrpcError(err)
+		return nil, ConvertGRPCError(err)
 	}
 	return resp.Status, nil
 }

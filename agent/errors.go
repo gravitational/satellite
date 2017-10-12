@@ -6,15 +6,15 @@ import (
 	grpcerrors "google.golang.org/grpc/codes"
 )
 
-// ConvertGrpcError maps grpc error to one of trace type classes.
+// ConvertGRPCError maps grpc error to one of trace type classes.
 // Returns original error if no mapping is possible
-func ConvertGrpcError(err error) error {
+func ConvertGRPCError(err error) error {
 	if err == nil {
 		return nil
 	}
 
 	switch grpc.Code(trace.Unwrap(err)) {
-	case grpcerrors.InvalidArgument, grpcerrors.OutOfRange, grpcerrors.Unimplemented:
+	case grpcerrors.InvalidArgument, grpcerrors.OutOfRange:
 		return trace.BadParameter(err.Error())
 	case grpcerrors.DeadlineExceeded:
 		return trace.LimitExceeded(err.Error())
