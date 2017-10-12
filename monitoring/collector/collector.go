@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	namespace             = "planet"
+	namespace             = "satellite"
 	collectMetricsTimeout = 5 * time.Second
 	// schedulerConfigPath is the path to kube-scheduler configuration file
 	schedulerConfigPath = "/etc/kubernetes/scheduler.kubeconfig"
