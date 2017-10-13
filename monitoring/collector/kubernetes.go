@@ -17,6 +17,9 @@ limitations under the License.
 package collector
 
 import (
+	"fmt"
+	"strconv"
+
 	"github.com/gravitational/satellite/monitoring"
 	"github.com/gravitational/trace"
 	"github.com/prometheus/client_golang/prometheus"
@@ -26,6 +29,10 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	kube "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
+)
+
+const (
+	kubernetesApiserverName = "kubernetes"
 )
 
 // KubernetesCollector collects metrics about Kubernetes state
@@ -39,6 +46,22 @@ func NewKubernetesCollector(kubeAddr string) (*KubernetesCollector, error) {
 	client, err := monitoring.ConnectToKube(kubeAddr, schedulerConfigPath)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to connect to kubernetes apiserver: %s", kubeAddr)
+	}
+
+	service, err := client.Services(v1.NamespaceDefault).Get(kubernetesApiserverName, metav1.GetOptions{})
+	if err != nil {
+		return nil, trace.Wrap(err, "failed to query kubernetes apiserver service: %v", err)
+	}
+
+	if len(service.Spec.Ports) == 0 {
+		return nil, trace.BadParameter("kubernetes service spec does not define any port")
+	}
+	port := strconv.FormatInt(int64(service.Spec.Ports[0].Port), 10)
+	apiserverAddr := fmt.Sprintf("https://%v:%v", service.Spec.ClusterIP, port)
+
+	client, err = monitoring.ConnectToKube(apiserverAddr, schedulerConfigPath)
+	if err != nil {
+		return nil, trace.Wrap(err, "failed to connect to kubernetes apiserver: %s", apiserverAddr)
 	}
 
 	return &KubernetesCollector{
@@ -59,6 +82,7 @@ func (k *KubernetesCollector) Collect(ch chan<- prometheus.Metric) error {
 		LabelSelector: labels.Everything().String(),
 		FieldSelector: fields.Everything().String(),
 	}
+
 	nodes, err := k.client.Nodes().List(listOptions)
 	if err != nil {
 		return trace.Wrap(err, "failed to query nodes: %v", err)
