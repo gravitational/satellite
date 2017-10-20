@@ -23,3 +23,7 @@ import (
 func GetStorageDriverBootConfigParams(drv string) health.Checker {
 	return nil
 }
+
+func BasicCheckers() health.Checker {
+	return nil
+}
