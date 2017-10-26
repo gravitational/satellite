@@ -67,6 +67,12 @@ type Config struct {
 	// IP is required for proper inter-communication between agents.
 	RPCAddrs []string
 
+	// CertFile specifies the path to TLS certificate file
+	CertFile string
+
+	// KeyFile specifies the path to TLS certificate key file
+	KeyFile string
+
 	// RPC address of local serf node.
 	SerfRPCAddr string
 
@@ -88,6 +94,10 @@ type Config struct {
 
 // New creates an instance of an agent based on configuration options given in config.
 func New(config *Config) (Agent, error) {
+	if err := config.Check(); err != nil {
+		return nil, trace.Wrap(err)
+	}
+
 	clientConfig := &serf.Config{
 		Addr: config.SerfRPCAddr,
 	}
@@ -95,45 +105,61 @@ func New(config *Config) (Agent, error) {
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to connect to serf")
 	}
+
 	if config.Tags == nil {
 		config.Tags = make(map[string]string)
 	}
+
 	err = client.UpdateTags(config.Tags, nil)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to update serf agent tags")
 	}
+
 	metricsListener, err := net.Listen("tcp", config.MetricsAddr)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to serve prometheus metrics")
 	}
-	var listeners []net.Listener
-	defer func() {
-		if err != nil {
-			for _, listener := range listeners {
-				listener.Close()
-			}
-		}
-	}()
-	for _, addr := range config.RPCAddrs {
-		listener, err := net.Listen("tcp", addr)
-		if err != nil {
-			return nil, trace.Wrap(err)
-		}
-		listeners = append(listeners, listener)
-	}
+
 	clock := clockwork.NewRealClock()
 	agent := &agent{
 		serfClient:      client,
 		name:            config.Name,
 		cache:           config.Cache,
-		dialRPC:         defaultDialRPC,
+		dialRPC:         defaultDialRPC(config.CertFile),
 		statusClock:     clock,
 		recycleClock:    clock,
 		localStatus:     emptyNodeStatus(config.Name),
 		metricsListener: metricsListener,
 	}
-	agent.rpc = newRPCServer(agent, listeners)
+
+	agent.rpc, err = newRPCServer(agent, config.CertFile, config.KeyFile, config.RPCAddrs)
+	if err != nil {
+		return nil, trace.Wrap(err, "failed to create RPC server")
+	}
 	return agent, nil
+}
+
+// Check validates this configuration object
+func (r Config) Check() error {
+	var errors []error
+
+	if r.CertFile == "" {
+		errors = append(errors, trace.BadParameter("certificate must be provided"))
+	}
+
+	if r.KeyFile == "" {
+		errors = append(errors, trace.BadParameter("certificate key must be provided"))
+	}
+
+	if r.Name == "" {
+		errors = append(errors, trace.BadParameter("agent name cannot be empty"))
+	}
+
+	if len(r.RPCAddrs) == 0 {
+		errors = append(errors, trace.BadParameter("at least one RPC address must be provided"))
+	}
+
+	return trace.NewAggregate(errors...)
 }
 
 type agent struct {

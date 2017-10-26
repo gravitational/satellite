@@ -70,12 +70,15 @@ func run() error {
 		cagentInfluxUsername = cagent.Flag("influxdb-user", "Username to use for connection").OverrideDefaultFromEnvar(EnvInfluxUser).String()
 		cagentInfluxPassword = cagent.Flag("influxdb-password", "Password to use for connection").OverrideDefaultFromEnvar(EnvInfluxPassword).String()
 		cagentInfluxURL      = cagent.Flag("influxdb-url", "URL of the InfluxDB endpoint").OverrideDefaultFromEnvar(EnvInfluxURL).String()
+		cagentCertFile       = cagent.Flag("cert-file", "TLS certificate for server RPC").ExistingFile()
+		cagentKeyFile        = cagent.Flag("key-file", "TLS certificate key for server RPC").ExistingFile()
 
 		// `status` command
 		cstatus            = app.Command("status", "Query cluster status")
 		cstatusRPCPort     = cstatus.Flag("rpc-port", "Local agent RPC port").Default("7575").Int()
 		cstatusPrettyPrint = cstatus.Flag("pretty", "Pretty-print the output").Bool()
 		cstatusLocal       = cstatus.Flag("local", "Query the status of the local node").Bool()
+		cstatusCertFile    = cstatus.Flag("cert-file", "Client certificate for RPC").ExistingFile()
 
 		// checks command
 		cchecks = app.Command("checks", "Run local compatibility checks")
@@ -135,6 +138,8 @@ func run() error {
 			MetricsAddr: *cagentMetricsAddr,
 			Tags:        *cagentTags,
 			Cache:       multiplex.New(cache, backends...),
+			CertFile:    *cagentCertFile,
+			KeyFile:     *cagentKeyFile,
 		}
 		monitoringConfig := &config{
 			role:                 agent.Role(agentRole),
@@ -152,7 +157,7 @@ func run() error {
 		}
 		err = runAgent(agentConfig, monitoringConfig, toAddrList(*cagentInitialCluster))
 	case cstatus.FullCommand():
-		_, err = status(*cstatusRPCPort, *cstatusLocal, *cstatusPrettyPrint)
+		_, err = status(*cstatusRPCPort, *cstatusLocal, *cstatusPrettyPrint, *cstatusCertFile)
 	case cchecks.FullCommand():
 		err = localChecks()
 	case cversion.FullCommand():
