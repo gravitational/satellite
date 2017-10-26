@@ -468,7 +468,7 @@ func (r *testChecker) Check(ctx context.Context, reporter health.Reporter) {
 	})
 }
 
-// openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650
+// openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650, CN=agent
 var certFile = []byte(`-----BEGIN CERTIFICATE-----
 MIIDjTCCAnWgAwIBAgIJAJ6LjB36T/bKMA0GCSqGSIb3DQEBCwUAMF0xCzAJBgNV
 BAYTAlVTMQ0wCwYDVQQIDARUZXN0MQ0wCwYDVQQHDARUZXN0MREwDwYDVQQKDAhB
