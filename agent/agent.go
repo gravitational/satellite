@@ -17,7 +17,10 @@ limitations under the License.
 package agent
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"runtime/debug"
@@ -27,13 +30,14 @@ import (
 	"github.com/gravitational/satellite/agent/cache"
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-	"github.com/gravitational/trace"
-	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/credentials"
 )
 
 // Agent is the interface to interact with the monitoring agent.
@@ -66,6 +70,9 @@ type Config struct {
 	// Localhost is a convenience for local communication.  Cluster-visible
 	// IP is required for proper inter-communication between agents.
 	RPCAddrs []string
+
+	// CAFile specifies the path to TLS certificate authority certificate file
+	CAFile string
 
 	// CertFile specifies the path to TLS certificate file
 	CertFile string
@@ -120,19 +127,24 @@ func New(config *Config) (Agent, error) {
 		return nil, trace.Wrap(err, "failed to serve prometheus metrics")
 	}
 
+	tlsConfig, err := NewTLSConfig(config.CAFile, config.CertFile, config.KeyFile)
+	if err != nil {
+		return nil, trace.Wrap(err, "failed to build TLS configuration")
+	}
+
 	clock := clockwork.NewRealClock()
 	agent := &agent{
 		serfClient:      client,
 		name:            config.Name,
 		cache:           config.Cache,
-		dialRPC:         defaultDialRPC(config.CertFile),
+		dialRPC:         defaultDialRPC(credentials.NewTLS(tlsConfig)),
 		statusClock:     clock,
 		recycleClock:    clock,
 		localStatus:     emptyNodeStatus(config.Name),
 		metricsListener: metricsListener,
 	}
 
-	agent.rpc, err = newRPCServer(agent, config.CertFile, config.KeyFile, config.RPCAddrs)
+	agent.rpc, err = newRPCServer(agent, *tlsConfig, config.RPCAddrs)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to create RPC server")
 	}
@@ -142,6 +154,10 @@ func New(config *Config) (Agent, error) {
 // Check validates this configuration object
 func (r Config) Check() error {
 	var errors []error
+
+	if r.CAFile == "" {
+		errors = append(errors, trace.BadParameter("CA certificate must be provided"))
+	}
 
 	if r.CertFile == "" {
 		errors = append(errors, trace.BadParameter("certificate must be provided"))
@@ -160,6 +176,27 @@ func (r Config) Check() error {
 	}
 
 	return trace.NewAggregate(errors...)
+}
+
+// NewTLSConfig creates new TLS configuration from the speicfied set of certificate/key files
+func NewTLSConfig(caFile, certFile, keyFile string) (*tls.Config, error) {
+	caBytes, err := ioutil.ReadFile(caFile)
+	if err != nil {
+		return nil, trace.ConvertSystemError(err)
+	}
+
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(caBytes) {
+		return nil, trace.BadParameter("failed to append CA certificates")
+	}
+
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, err
+	}
+
+	tlsConfig := tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: pool}
+	return &tlsConfig, nil
 }
 
 type agent struct {

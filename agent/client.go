@@ -38,20 +38,9 @@ type client struct {
 	conn *grpc.ClientConn
 }
 
-// NewClient creates a agent RPC client to the given address
-// using the specified client certificate certFile
-func NewClient(addr, certFile string) (*client, error) {
-	creds, err := credentials.NewClientTLSFromFile(certFile, "")
-	if err != nil {
-		return nil, trace.Wrap(err, "failed to read certificate")
-	}
-
-	return NewClientWithCreds(addr, creds)
-}
-
-// NewClientWithCreds creates a new agent RPC client to the given address
+// NewClient creates a new agent RPC client to the given address
 // using specified credentials creds
-func NewClientWithCreds(addr string, creds credentials.TransportCredentials) (*client, error) {
+func NewClient(addr string, creds credentials.TransportCredentials) (*client, error) {
 	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to dial")
