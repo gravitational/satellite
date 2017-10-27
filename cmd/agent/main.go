@@ -79,7 +79,7 @@ func run() error {
 		cstatusRPCPort     = cstatus.Flag("rpc-port", "Local agent RPC port").Default("7575").Int()
 		cstatusPrettyPrint = cstatus.Flag("pretty", "Pretty-print the output").Bool()
 		cstatusLocal       = cstatus.Flag("local", "Query the status of the local node").Bool()
-		cstatusCertFile    = cstatus.Flag("cert-file", "Client SSL certificate file for RPC").ExistingFile()
+		cstatusCertFile    = cstatus.Flag("cert-file", "Client SSL certificate file for RPC. This should be the CA certificate if the server certificates are signed by a CA").ExistingFile()
 
 		// checks command
 		cchecks = app.Command("checks", "Run local compatibility checks")
