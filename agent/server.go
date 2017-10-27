@@ -70,15 +70,15 @@ func (r *server) LocalStatus(ctx context.Context, req *pb.LocalStatusRequest) (r
 }
 
 // newRPCServer creates an agent RPC endpoint for each provided listener.
-func newRPCServer(agent *agent, certFile, keyFile string, rpcAddrs []string) (*server, error) {
+func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []string) (*server, error) {
 	creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to read certificate/key from %v/%v", certFile, keyFile)
 	}
 
-	healthzHandler, err := newHealthHandler(certFile)
+	healthzHandler, err := newHealthHandler(caFile)
 	if err != nil {
-		return nil, trace.Wrap(err, "failed to read certificate from %v", certFile)
+		return nil, trace.Wrap(err, "failed to read CA certificate from %v", caFile)
 	}
 
 	backend := grpc.NewServer(grpc.Creds(creds))
