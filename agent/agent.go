@@ -67,6 +67,9 @@ type Config struct {
 	// IP is required for proper inter-communication between agents.
 	RPCAddrs []string
 
+	// CAFile specifies the path to TLS Certificate Authority file
+	CAFile string
+
 	// CertFile specifies the path to TLS certificate file
 	CertFile string
 
@@ -125,14 +128,14 @@ func New(config *Config) (Agent, error) {
 		serfClient:      client,
 		name:            config.Name,
 		cache:           config.Cache,
-		dialRPC:         defaultDialRPC(config.CertFile),
+		dialRPC:         defaultDialRPC(config.CAFile),
 		statusClock:     clock,
 		recycleClock:    clock,
 		localStatus:     emptyNodeStatus(config.Name),
 		metricsListener: metricsListener,
 	}
 
-	agent.rpc, err = newRPCServer(agent, config.CertFile, config.KeyFile, config.RPCAddrs)
+	agent.rpc, err = newRPCServer(agent, config.CAFile, config.CertFile, config.KeyFile, config.RPCAddrs)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to create RPC server")
 	}
@@ -142,6 +145,10 @@ func New(config *Config) (Agent, error) {
 // Check validates this configuration object
 func (r Config) Check() error {
 	var errors []error
+
+	if r.CAFile == "" {
+		errors = append(errors, trace.BadParameter("certificate authority file must be provided"))
+	}
 
 	if r.CertFile == "" {
 		errors = append(errors, trace.BadParameter("certificate must be provided"))

@@ -315,7 +315,8 @@ func (r *AgentSuite) newRemoteNode(node string, rpcPort int, members []serf.Memb
 	err := agent.Start()
 	c.Assert(err, IsNil)
 
-	server, err := newRPCServer(agent, r.certFile, r.keyFile, []string{addr})
+	// Use the same CA certificate for client and server
+	server, err := newRPCServer(agent, r.certFile, r.certFile, r.keyFile, []string{addr})
 	c.Assert(err, IsNil)
 
 	agent.rpc = server

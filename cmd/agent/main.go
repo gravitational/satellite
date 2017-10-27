@@ -70,15 +70,16 @@ func run() error {
 		cagentInfluxUsername = cagent.Flag("influxdb-user", "Username to use for connection").OverrideDefaultFromEnvar(EnvInfluxUser).String()
 		cagentInfluxPassword = cagent.Flag("influxdb-password", "Password to use for connection").OverrideDefaultFromEnvar(EnvInfluxPassword).String()
 		cagentInfluxURL      = cagent.Flag("influxdb-url", "URL of the InfluxDB endpoint").OverrideDefaultFromEnvar(EnvInfluxURL).String()
-		cagentCertFile       = cagent.Flag("cert-file", "TLS certificate for server RPC").ExistingFile()
-		cagentKeyFile        = cagent.Flag("key-file", "TLS certificate key for server RPC").ExistingFile()
+		cagentCAFile         = cagent.Flag("ca-file", "SSL CA certificate for verifying server certificates").ExistingFile()
+		cagentCertFile       = cagent.Flag("cert-file", "SSL certificate for server RPC").ExistingFile()
+		cagentKeyFile        = cagent.Flag("key-file", "SSL certificate key for server RPC").ExistingFile()
 
 		// `status` command
 		cstatus            = app.Command("status", "Query cluster status")
 		cstatusRPCPort     = cstatus.Flag("rpc-port", "Local agent RPC port").Default("7575").Int()
 		cstatusPrettyPrint = cstatus.Flag("pretty", "Pretty-print the output").Bool()
 		cstatusLocal       = cstatus.Flag("local", "Query the status of the local node").Bool()
-		cstatusCertFile    = cstatus.Flag("cert-file", "Client certificate for RPC").ExistingFile()
+		cstatusCertFile    = cstatus.Flag("cert-file", "Client SSL certificate file for RPC. This should be the CA certificate if the server certificates are signed by a CA").ExistingFile()
 
 		// checks command
 		cchecks = app.Command("checks", "Run local compatibility checks")
@@ -138,6 +139,7 @@ func run() error {
 			MetricsAddr: *cagentMetricsAddr,
 			Tags:        *cagentTags,
 			Cache:       multiplex.New(cache, backends...),
+			CAFile:      *cagentCAFile,
 			CertFile:    *cagentCertFile,
 			KeyFile:     *cagentKeyFile,
 		}
