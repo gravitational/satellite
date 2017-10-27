@@ -25,8 +25,8 @@ import (
 	"github.com/gravitational/satellite/agent"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/trace"
-
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/credentials"
 )
 
 // statusTimeout is the maximum time status query is blocked.
@@ -39,11 +39,17 @@ const statusTimeout = 5 * time.Second
 // Returns true if the status query was successful, false - otherwise.
 // The output is prettified if prettyPrint is true.
 func status(RPCPort int, local, prettyPrint bool, certFile string) (ok bool, err error) {
-	RPCAddr := fmt.Sprintf("127.0.0.1:%d", RPCPort)
-	client, err := agent.NewClient(RPCAddr, certFile)
+	creds, err := credentials.NewClientTLSFromFile(certFile, "")
 	if err != nil {
 		return false, trace.Wrap(err)
 	}
+
+	RPCAddr := fmt.Sprintf("127.0.0.1:%d", RPCPort)
+	client, err := agent.NewClient(RPCAddr, creds)
+	if err != nil {
+		return false, trace.Wrap(err)
+	}
+
 	var statusJson []byte
 	var statusBlob interface{}
 	ctx, cancel := context.WithTimeout(context.Background(), statusTimeout)

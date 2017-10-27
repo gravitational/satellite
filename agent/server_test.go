@@ -18,11 +18,10 @@ package agent
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -39,7 +38,7 @@ import (
 func TestAgent(t *testing.T) { TestingT(t) }
 
 type AgentSuite struct {
-	certFile, keyFile string
+	tlsConfig *tls.Config
 }
 
 var _ = Suite(&AgentSuite{})
@@ -50,11 +49,14 @@ func (r *AgentSuite) SetUpSuite(c *C) {
 		log.SetLevel(log.DebugLevel)
 	}
 
-	dir := c.MkDir()
-	r.certFile = filepath.Join(dir, "server.crt")
-	r.keyFile = filepath.Join(dir, "server.key")
-	c.Assert(ioutil.WriteFile(r.certFile, certFile, sharedReadWriteMask), IsNil)
-	c.Assert(ioutil.WriteFile(r.keyFile, keyFile, sharedReadWriteMask), IsNil)
+	// dir := c.MkDir()
+	// r.certFile = filepath.Join(dir, "server.crt")
+	// r.keyFile = filepath.Join(dir, "server.key")
+	// c.Assert(ioutil.WriteFile(r.certFile, certFile, sharedReadWriteMask), IsNil)
+	// c.Assert(ioutil.WriteFile(r.keyFile, keyFile, sharedReadWriteMask), IsNil)
+	var err error
+	r.tlsConfig, err = newTestTLSConfig(certFile, keyFile)
+	c.Assert(err, IsNil)
 }
 
 func (_ *AgentSuite) TestSetsSystemStatusFromMemberStatuses(c *C) {
@@ -315,12 +317,30 @@ func (r *AgentSuite) newRemoteNode(node string, rpcPort int, members []serf.Memb
 	err := agent.Start()
 	c.Assert(err, IsNil)
 
-	server, err := newRPCServer(agent, r.certFile, r.keyFile, []string{addr})
+	server, err := newRPCServer(agent, *r.tlsConfig, []string{addr})
 	c.Assert(err, IsNil)
 
 	agent.rpc = server
 
 	return agent
+}
+
+// newAgent creates a new agent instance.
+func (r *AgentSuite) newAgent(node string, rpcPort int, members []serf.Member,
+	checkers []health.Checker, statusClock, recycleClock clockwork.Clock, c *C) *agent {
+	if recycleClock == nil {
+		recycleClock = clockwork.NewFakeClock()
+	}
+	return &agent{
+		name:         node,
+		serfClient:   &testSerfClient{members: members},
+		dialRPC:      testDialRPC(rpcPort, r.tlsConfig),
+		cache:        &testCache{c: c, SystemStatus: &pb.SystemStatus{Status: pb.SystemStatus_Unknown}},
+		Checkers:     checkers,
+		statusClock:  statusClock,
+		recycleClock: recycleClock,
+		localStatus:  emptyNodeStatus(node),
+	}
 }
 
 // newMember creates a new value describing a member of a serf cluster.
@@ -410,36 +430,14 @@ func (_ *testServer) Stop() {}
 
 // testDialRPC is a test implementation of the dialRPC interface,
 // that creates an RPC client bound to localhost.
-func testDialRPC(port int, certFile string) dialRPC {
+func testDialRPC(port int, tlsConfig *tls.Config) dialRPC {
 	return func(member *serf.Member) (*client, error) {
 		addr := fmt.Sprintf(":%d", port)
-		creds, err := credentials.NewClientTLSFromFile(certFile, "agent")
-		if err != nil {
-			return nil, err
-		}
-		client, err := NewClientWithCreds(addr, creds)
+		client, err := NewClient(addr, credentials.NewTLS(tlsConfig))
 		if err != nil {
 			return nil, err
 		}
 		return client, err
-	}
-}
-
-// newAgent creates a new agent instance.
-func (r *AgentSuite) newAgent(node string, rpcPort int, members []serf.Member,
-	checkers []health.Checker, statusClock, recycleClock clockwork.Clock, c *C) *agent {
-	if recycleClock == nil {
-		recycleClock = clockwork.NewFakeClock()
-	}
-	return &agent{
-		name:         node,
-		serfClient:   &testSerfClient{members: members},
-		dialRPC:      testDialRPC(rpcPort, r.certFile),
-		cache:        &testCache{c: c, SystemStatus: &pb.SystemStatus{Status: pb.SystemStatus_Unknown}},
-		Checkers:     checkers,
-		statusClock:  statusClock,
-		recycleClock: recycleClock,
-		localStatus:  emptyNodeStatus(node),
 	}
 }
 
@@ -466,6 +464,16 @@ func (r *testChecker) Check(ctx context.Context, reporter health.Reporter) {
 		Checker: r.name,
 		Status:  pb.Probe_Running,
 	})
+}
+
+func newTestTLSConfig(certBytes, keyBytes []byte) (*tls.Config, error) {
+	cert, err := tls.X509KeyPair(certBytes, keyBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	tlsConfig := tls.Config{ServerName: "agent", Certificates: []tls.Certificate{cert}, InsecureSkipVerify: true}
+	return &tlsConfig, nil
 }
 
 // openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650, CN=agent

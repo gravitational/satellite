@@ -17,9 +17,12 @@ limitations under the License.
 package agent
 
 import (
+	"crypto/tls"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
@@ -70,15 +73,11 @@ func (r *server) LocalStatus(ctx context.Context, req *pb.LocalStatusRequest) (r
 }
 
 // newRPCServer creates an agent RPC endpoint for each provided listener.
-func newRPCServer(agent *agent, certFile, keyFile string, rpcAddrs []string) (*server, error) {
-	creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
+func newRPCServer(agent *agent, tlsConfig tls.Config, rpcAddrs []string) (*server, error) {
+	creds := credentials.NewTLS(&tlsConfig)
+	healthzHandler, err := newHealthHandler(creds)
 	if err != nil {
-		return nil, trace.Wrap(err, "failed to read certificate/key from %v/%v", certFile, keyFile)
-	}
-
-	healthzHandler, err := newHealthHandler(certFile)
-	if err != nil {
-		return nil, trace.Wrap(err, "failed to read certificate from %v", certFile)
+		return nil, trace.Wrap(err, "failed to create healthz handler")
 	}
 
 	backend := grpc.NewServer(grpc.Creds(creds))
@@ -89,7 +88,7 @@ func newRPCServer(agent *agent, certFile, keyFile string, rpcAddrs []string) (*s
 	handler := grpcHandlerFunc(server, healthzHandler)
 
 	for _, addr := range rpcAddrs {
-		go http.ListenAndServeTLS(addr, certFile, keyFile, handler)
+		go listenAndServeTLS(addr, tlsConfig, handler)
 	}
 
 	return server, nil
@@ -97,9 +96,10 @@ func newRPCServer(agent *agent, certFile, keyFile string, rpcAddrs []string) (*s
 
 // newHealthHandler creates a http.Handler that returns cluster status
 // from an HTTPS endpoint listening on the same RPC port as the agent.
-func newHealthHandler(certFile string) (http.HandlerFunc, error) {
+// func newHealthHandler(certFile string) (http.HandlerFunc, error) {
+func newHealthHandler(creds credentials.TransportCredentials) (http.HandlerFunc, error) {
 	addr := fmt.Sprintf("127.0.0.1:%v", RPCPort)
-	client, err := NewClient(addr, certFile)
+	client, err := NewClient(addr, creds)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -122,9 +122,9 @@ func newHealthHandler(certFile string) (http.HandlerFunc, error) {
 
 // defaultDialRPC is a default RPC client factory function.
 // It creates a new client based on address details from the specific serf member.
-func defaultDialRPC(certFile string) dialRPC {
+func defaultDialRPC(creds credentials.TransportCredentials) dialRPC {
 	return func(member *serf.Member) (*client, error) {
-		return NewClient(fmt.Sprintf("%s:%d", member.Addr.String(), RPCPort), certFile)
+		return NewClient(fmt.Sprintf("%s:%d", member.Addr.String(), RPCPort), creds)
 	}
 }
 
@@ -139,4 +139,33 @@ func grpcHandlerFunc(rpcServer *server, other http.Handler) http.Handler {
 			other.ServeHTTP(w, r)
 		}
 	})
+}
+
+func listenAndServeTLS(addr string, tlsConfig tls.Config, handler http.Handler) error {
+	server := &http.Server{Addr: addr, Handler: handler, TLSConfig: &tlsConfig}
+
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	return server.ServeTLS(tcpKeepAliveListener{listener.(*net.TCPListener)}, "", "")
+}
+
+// tcpKeepAliveListener sets TCP keep-alive timeouts on accepted
+// connections. It's used by listenAndServeTLS so
+// dead TCP connections (e.g. closing laptop mid-download) eventually
+// go away. Verbatim copy from net.http#server.go
+type tcpKeepAliveListener struct {
+	*net.TCPListener
+}
+
+func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
+	tc, err := ln.AcceptTCP()
+	if err != nil {
+		return
+	}
+	tc.SetKeepAlive(true)
+	tc.SetKeepAlivePeriod(3 * time.Minute)
+	return tc, nil
 }
