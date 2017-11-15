@@ -32,28 +32,37 @@ import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/utils"
 
-	"github.com/gravitational/trace"
-
 	sigar "github.com/cloudfoundry/gosigar"
 	"github.com/dustin/go-humanize"
+	"github.com/gravitational/trace"
 	syscall "golang.org/x/sys/unix"
 )
 
-// StorageChecker verifies volume matches requirements
+// NewStorageChecker creates a new instance of the volume checker
+// using the specified checker as configuration
+func NewStorageChecker(checker StorageChecker) *StorageChecker {
+	if checker.osInterface == nil {
+		checker.osInterface = &realOS{}
+	}
+	return &checker
+}
+
+// StorageChecker verifies volume requirements
 type StorageChecker struct {
 	// Path represents volume to be checked
 	Path string
 	// WillBeCreated when true, then all checks will be applied to first existing dir, or fail otherwise
 	WillBeCreated bool
-	// path is normalized path, representing parent directory
-	// in case Path does not exist yet
-	path string
 	// MinBytesPerSecond is minimum write speed for probe to succeed
 	MinBytesPerSecond uint64
 	// Filesystems define list of supported filesystems, or any if empty
 	Filesystems []string
 	// MinFreeBytes define minimum free volume capacity
 	MinFreeBytes uint64
+	// path refers to the parent directory
+	// in case Path does not exist yet
+	path string
+	osInterface
 }
 
 const (
@@ -104,17 +113,17 @@ func (c *StorageChecker) evalPath() error {
 			return trace.BadParameter("%s does not exist", c.Path)
 		}
 
-		if err == nil && fi.IsDir() {
-			c.path = p
-			return nil
-		} else if err == nil && !fi.IsDir() {
+		if err == nil {
+			if fi.IsDir() {
+				c.path = p
+				return nil
+			}
 			return trace.BadParameter("%s is not a directory", p)
 		}
 
 		parent := filepath.Dir(p)
 		if parent == p {
-			// shouldn't happen: root reached and it's not a dir
-			return trace.BadParameter("%s is root and is not a dir", p)
+			return trace.BadParameter("%s is root and is not a directory", p)
 		}
 		p = parent
 	}
@@ -125,7 +134,7 @@ func (c *StorageChecker) checkFsType(ctx context.Context, reporter health.Report
 		return nil
 	}
 
-	mnt, err := fsFromPath(c.path)
+	mnt, err := fsFromPath(c.path, c.osInterface)
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -143,44 +152,12 @@ func (c *StorageChecker) checkFsType(ctx context.Context, reporter health.Report
 	return nil
 }
 
-type childPathFirst []sigar.FileSystem
-
-func (a childPathFirst) Len() int           { return len(a) }
-func (a childPathFirst) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a childPathFirst) Less(i, j int) bool { return strings.HasPrefix(a[i].DirName, a[j].DirName) }
-
-func fsFromPath(path string) (*sigar.FileSystem, error) {
-	cleanpath, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
-
-	mounts := sigar.FileSystemList{}
-	err = mounts.Get()
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
-
-	sort.Sort(childPathFirst(mounts.List))
-
-	for _, mnt := range mounts.List {
-		if strings.HasPrefix(cleanpath, mnt.DirName) {
-			return &mnt, nil
-		}
-	}
-
-	return nil, trace.BadParameter("failed to locate filesystem for %s", path)
-}
-
 func (c *StorageChecker) checkCapacity(ctx context.Context, reporter health.Reporter) error {
-	var stat syscall.Statfs_t
-
-	err := syscall.Statfs(c.path, &stat)
+	avail, err := c.diskCapacity(c.path)
 	if err != nil {
 		return trace.Wrap(err)
 	}
 
-	avail := uint64(stat.Bsize) * stat.Bavail
 	if avail < c.MinFreeBytes {
 		reporter.Add(&pb.Probe{
 			Checker: c.Name(),
@@ -198,36 +175,10 @@ func (c *StorageChecker) checkWriteSpeed(ctx context.Context, reporter health.Re
 		return
 	}
 
-	var file *os.File
-	file, err = ioutil.TempFile(c.path, "probe")
-	if err != nil {
-		return trace.ConvertSystemError(err)
-	}
-
-	defer func() {
-		err = trace.NewAggregate(
-			trace.ConvertSystemError(file.Close()),
-			trace.ConvertSystemError(os.Remove(file.Name())))
-	}()
-
-	start := time.Now()
-	for i := 0; i < cycles; i++ {
-		buf := make([]byte, blockSize)
-		_, err = file.Write(buf)
-		if err != nil {
-			return trace.Wrap(err)
-		}
-		if ctx.Err() != nil {
-			return trace.Wrap(ctx.Err())
-		}
-	}
-	err = file.Sync()
+	bps, err := c.diskSpeed(ctx, c.path, "probe")
 	if err != nil {
 		return trace.Wrap(err)
 	}
-
-	elapsed := time.Since(start).Seconds()
-	bps := uint64(blockSize * cycles / elapsed)
 
 	if bps >= c.MinBytesPerSecond {
 		return nil
@@ -239,4 +190,113 @@ func (c *StorageChecker) checkWriteSpeed(ctx context.Context, reporter health.Re
 		Status: pb.Probe_Failed,
 	})
 	return nil
+}
+
+type childPathFirst []sigar.FileSystem
+
+func (a childPathFirst) Len() int           { return len(a) }
+func (a childPathFirst) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a childPathFirst) Less(i, j int) bool { return strings.HasPrefix(a[i].DirName, a[j].DirName) }
+
+func fsFromPath(path string, mountInfo mountInfo) (*sigar.FileSystem, error) {
+	cleanpath, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	mounts, err := mountInfo.mounts()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	sort.Sort(childPathFirst(mounts))
+
+	for _, mnt := range mounts {
+		// Ignore rootfs mount to find the actual filesystem path is mounted on
+		if strings.HasPrefix(cleanpath, mnt.DirName) && mnt.SysTypeName != "rootfs" {
+			return &mnt, nil
+		}
+	}
+
+	return nil, trace.BadParameter("failed to locate filesystem for %s", path)
+}
+
+// mounts returns the list of active mounts on the system.
+// mounts implements mountInfo
+func (r *realMounts) mounts() ([]sigar.FileSystem, error) {
+	err := (*sigar.FileSystemList)(r).Get()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	return r.List, nil
+}
+
+type realOS struct {
+	realMounts
+}
+
+func (r realOS) diskSpeed(ctx context.Context, path, prefix string) (bps uint64, err error) {
+	file, err := ioutil.TempFile(path, prefix)
+	if err != nil {
+		return 0, trace.ConvertSystemError(err)
+	}
+	defer file.Close()
+
+	start := time.Now()
+
+	buf := make([]byte, blockSize)
+	err = writeN(ctx, file, buf, cycles)
+	if err != nil {
+		return 0, trace.ConvertSystemError(err)
+	}
+
+	if err = file.Sync(); err != nil {
+		return 0, trace.ConvertSystemError(err)
+	}
+
+	elapsed := time.Since(start).Seconds()
+	bps = uint64(blockSize * cycles / elapsed)
+
+	if err = os.Remove(file.Name()); err != nil {
+		return 0, trace.ConvertSystemError(err)
+	}
+	return bps, nil
+}
+
+func (r realOS) diskCapacity(path string) (bytesAvail uint64, err error) {
+	var stat syscall.Statfs_t
+
+	err = syscall.Statfs(path, &stat)
+	if err != nil {
+		return 0, trace.Wrap(err)
+	}
+
+	bytesAvail = uint64(stat.Bsize) * stat.Bavail
+	return bytesAvail, nil
+}
+
+func writeN(ctx context.Context, file *os.File, buf []byte, n int) error {
+	for i := 0; i < n; i++ {
+		_, err := file.Write(buf)
+		if err != nil {
+			return trace.ConvertSystemError(err)
+		}
+		if ctx.Err() != nil {
+			return trace.Wrap(ctx.Err())
+		}
+	}
+	return nil
+}
+
+type realMounts sigar.FileSystemList
+
+type mountInfo interface {
+	mounts() ([]sigar.FileSystem, error)
+}
+
+type osInterface interface {
+	mountInfo
+	diskSpeed(ctx context.Context, path, name string) (bps uint64, err error)
+	diskCapacity(path string) (bytes uint64, err error)
 }

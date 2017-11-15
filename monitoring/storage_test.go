@@ -20,12 +20,12 @@ import (
 	"context"
 	"fmt"
 	"path"
-	"testing"
 	"time"
 
 	"github.com/gravitational/satellite/agent/health"
 
-	"github.com/stretchr/testify/require"
+	sigar "github.com/cloudfoundry/gosigar"
+	. "gopkg.in/check.v1"
 )
 
 const (
@@ -33,50 +33,79 @@ const (
 	shallFail    = false
 )
 
-func TestStorage(t *testing.T) {
-	tmp, err := fsFromPath("/tmp")
-	require.NoError(t, err)
+type StorageSuite struct{}
 
-	t.Logf("%+v", tmp)
+var _ = Suite(&StorageSuite{})
+
+func (_ *StorageSuite) TestStorage(c *C) {
+	mounts := mountList{
+		sigar.FileSystem{DevName: "tmpfs", DirName: "/tmp", SysTypeName: "tmpfs"},
+	}
+
+	tmp, err := fsFromPath("/tmp", mounts)
+	c.Assert(err, IsNil)
+
+	c.Logf("%+v", tmp)
+
+	NewStorageChecker(StorageChecker{
+		Path:        "/tmp",
+		osInterface: testOS{mountList: mounts},
+	}).probe(c, "no conditions", shallSucceed)
 
 	StorageChecker{
-		Path: "/tmp",
-	}.probe(t, "no conditions", shallSucceed)
-
-	StorageChecker{
-		Path:              path.Join("/tmp", "do-not-exist"),
+		Path:              path.Join("/tmp", "does-not-exist"),
 		WillBeCreated:     true,
 		Filesystems:       []string{tmp.SysTypeName},
-		MinFreeBytes:      uint64(1e16),
-		MinBytesPerSecond: uint64(1e16),
-	}.probe(t, "unreasonable requirements", shallFail)
+		MinFreeBytes:      uint64(1024),
+		MinBytesPerSecond: uint64(1024),
+		osInterface:       testOS{mountList: mounts, bytesPerSecond: 512, bytesAvail: 512},
+	}.probe(c, "unreasonable requirements", shallFail)
 
 	StorageChecker{
-		Path:              path.Join("/tmp", "do-not-exist"),
+		Path:              path.Join("/tmp", "does-not-exist"),
 		WillBeCreated:     true,
 		Filesystems:       []string{tmp.SysTypeName},
-		MinFreeBytes:      uint64(1e5),
-		MinBytesPerSecond: uint64(1e5),
-	}.probe(t, "reasonable requirements", shallSucceed)
+		MinFreeBytes:      uint64(1024),
+		MinBytesPerSecond: uint64(1024),
+		osInterface:       testOS{mountList: mounts, bytesPerSecond: 2048, bytesAvail: 2048},
+	}.probe(c, "reasonable requirements", shallSucceed)
 
 	StorageChecker{
 		Path:          path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
 		WillBeCreated: true,
 		Filesystems:   []string{"no-such-fs"},
-	}.probe(t, "fs type mismatch", shallFail)
+		osInterface:   testOS{mountList: mounts},
+	}.probe(c, "fs type mismatch", shallFail)
 
 	StorageChecker{
 		Path:          path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
 		WillBeCreated: false,
-	}.probe(t, "missing folder", shallFail)
+		osInterface:   testOS{mountList: mounts},
+	}.probe(c, "missing folder", shallFail)
 
 	StorageChecker{
 		Path:          path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
 		WillBeCreated: true,
-	}.probe(t, "create if missing", shallSucceed)
+		osInterface:   testOS{mountList: mounts},
+	}.probe(c, "create if missing", shallSucceed)
 }
 
-func (ch StorageChecker) probe(t *testing.T, msg string, success bool) {
+func (_ *StorageSuite) TestMatchesFilesystem(c *C) {
+	mounts := mountList{
+		sigar.FileSystem{DevName: "rootfs", DirName: "/", SysTypeName: "rootfs", Options: "rw"},
+		sigar.FileSystem{DevName: "/dev/mapper/VolGroup00-LogVol00", DirName: "/", SysTypeName: "xfs"},
+		sigar.FileSystem{DevName: "sysfs", DirName: "/sys", SysTypeName: "sysfs", Options: "rw,seclabel,nosuid,nodev,noexec,relatime"},
+	}
+
+	StorageChecker{
+		Path:          "/var/lib/data",
+		WillBeCreated: true,
+		Filesystems:   []string{"xfs", "ext4"},
+		osInterface:   testOS{mountList: mounts},
+	}.probe(c, "discards rootfs", shallSucceed)
+}
+
+func (ch StorageChecker) probe(c *C, msg string, success bool) {
 	var probes health.Probes
 
 	ch.Check(context.TODO(), &probes)
@@ -86,13 +115,36 @@ func (ch StorageChecker) probe(t *testing.T, msg string, success bool) {
 		return
 	}
 
-	if success != (len(failed) == 0) {
-		t.Fail()
-	}
-
-	t.Logf("%q failed probes:\n", msg)
+	c.Logf("%q failed probes:\n", msg)
 	for i, probe := range failed {
-		t.Logf("[%d] %s: %s %s\n",
+		c.Logf("[%d] %s: %s %s\n",
 			i+1, probe.Checker, probe.Detail, probe.Error)
 	}
+
+	if success != (len(failed) == 0) {
+		c.Fail()
+	}
 }
+
+type testOS struct {
+	mountList
+	bytesPerSecond
+	bytesAvail
+}
+
+func (r mountList) mounts() ([]sigar.FileSystem, error) {
+	return r, nil
+}
+
+type mountList []sigar.FileSystem
+
+func (r bytesPerSecond) diskSpeed(context.Context, string, string) (uint64, error) {
+	return uint64(r), nil
+}
+
+func (r bytesAvail) diskCapacity(string) (uint64, error) {
+	return uint64(r), nil
+}
+
+type bytesPerSecond uint64
+type bytesAvail uint64
