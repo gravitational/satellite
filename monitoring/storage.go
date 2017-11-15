@@ -153,7 +153,7 @@ func (c *StorageChecker) checkFsType(ctx context.Context, reporter health.Report
 }
 
 func (c *StorageChecker) checkCapacity(ctx context.Context, reporter health.Reporter) error {
-	avail, err := c.capacity(c.path)
+	avail, err := c.diskCapacity(c.path)
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -175,7 +175,7 @@ func (c *StorageChecker) checkWriteSpeed(ctx context.Context, reporter health.Re
 		return
 	}
 
-	bps, err := c.testSpeed(ctx, c.path, "probe")
+	bps, err := c.diskSpeed(ctx, c.path, "probe")
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -236,7 +236,7 @@ type realOS struct {
 	realMounts
 }
 
-func (r realOS) testSpeed(ctx context.Context, path, prefix string) (bps uint64, err error) {
+func (r realOS) diskSpeed(ctx context.Context, path, prefix string) (bps uint64, err error) {
 	file, err := ioutil.TempFile(path, prefix)
 	if err != nil {
 		return 0, trace.ConvertSystemError(err)
@@ -245,7 +245,7 @@ func (r realOS) testSpeed(ctx context.Context, path, prefix string) (bps uint64,
 
 	start := time.Now()
 
-	buf := make([]byte, int64(blockSize))
+	buf := make([]byte, blockSize)
 	err = writeN(ctx, file, buf, cycles)
 	if err != nil {
 		return 0, trace.ConvertSystemError(err)
@@ -264,7 +264,7 @@ func (r realOS) testSpeed(ctx context.Context, path, prefix string) (bps uint64,
 	return bps, nil
 }
 
-func (r realOS) capacity(path string) (bytesAvail uint64, err error) {
+func (r realOS) diskCapacity(path string) (bytesAvail uint64, err error) {
 	var stat syscall.Statfs_t
 
 	err = syscall.Statfs(path, &stat)
@@ -297,6 +297,6 @@ type mountInfo interface {
 
 type osInterface interface {
 	mountInfo
-	testSpeed(ctx context.Context, path, name string) (bps uint64, err error)
-	capacity(path string) (bytes uint64, err error)
+	diskSpeed(ctx context.Context, path, name string) (bps uint64, err error)
+	diskCapacity(path string) (bytes uint64, err error)
 }

@@ -52,42 +52,42 @@ func (_ *StorageSuite) TestStorage(c *C) {
 		osInterface: testOS{mountList: mounts},
 	}).probe(c, "no conditions", shallSucceed)
 
-	NewStorageChecker(StorageChecker{
+	StorageChecker{
 		Path:              path.Join("/tmp", "does-not-exist"),
 		WillBeCreated:     true,
 		Filesystems:       []string{tmp.SysTypeName},
 		MinFreeBytes:      uint64(1024),
 		MinBytesPerSecond: uint64(1024),
 		osInterface:       testOS{mountList: mounts, bytesPerSecond: 512, bytesAvail: 512},
-	}).probe(c, "unreasonable requirements", shallFail)
+	}.probe(c, "unreasonable requirements", shallFail)
 
-	NewStorageChecker(StorageChecker{
+	StorageChecker{
 		Path:              path.Join("/tmp", "does-not-exist"),
 		WillBeCreated:     true,
 		Filesystems:       []string{tmp.SysTypeName},
 		MinFreeBytes:      uint64(1024),
 		MinBytesPerSecond: uint64(1024),
 		osInterface:       testOS{mountList: mounts, bytesPerSecond: 2048, bytesAvail: 2048},
-	}).probe(c, "reasonable requirements", shallSucceed)
+	}.probe(c, "reasonable requirements", shallSucceed)
 
-	NewStorageChecker(StorageChecker{
+	StorageChecker{
 		Path:          path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
 		WillBeCreated: true,
 		Filesystems:   []string{"no-such-fs"},
 		osInterface:   testOS{mountList: mounts},
-	}).probe(c, "fs type mismatch", shallFail)
+	}.probe(c, "fs type mismatch", shallFail)
 
-	NewStorageChecker(StorageChecker{
+	StorageChecker{
 		Path:          path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
 		WillBeCreated: false,
 		osInterface:   testOS{mountList: mounts},
-	}).probe(c, "missing folder", shallFail)
+	}.probe(c, "missing folder", shallFail)
 
-	NewStorageChecker(StorageChecker{
+	StorageChecker{
 		Path:          path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
 		WillBeCreated: true,
 		osInterface:   testOS{mountList: mounts},
-	}).probe(c, "create if missing", shallSucceed)
+	}.probe(c, "create if missing", shallSucceed)
 }
 
 func (_ *StorageSuite) TestMatchesFilesystem(c *C) {
@@ -97,12 +97,12 @@ func (_ *StorageSuite) TestMatchesFilesystem(c *C) {
 		sigar.FileSystem{DevName: "sysfs", DirName: "/sys", SysTypeName: "sysfs", Options: "rw,seclabel,nosuid,nodev,noexec,relatime"},
 	}
 
-	NewStorageChecker(StorageChecker{
+	StorageChecker{
 		Path:          "/var/lib/data",
 		WillBeCreated: true,
 		Filesystems:   []string{"xfs", "ext4"},
 		osInterface:   testOS{mountList: mounts},
-	}).probe(c, "discards rootfs", shallSucceed)
+	}.probe(c, "discards rootfs", shallSucceed)
 }
 
 func (ch StorageChecker) probe(c *C, msg string, success bool) {
@@ -138,11 +138,11 @@ func (r mountList) mounts() ([]sigar.FileSystem, error) {
 
 type mountList []sigar.FileSystem
 
-func (r bytesPerSecond) testSpeed(context.Context, string, string) (uint64, error) {
+func (r bytesPerSecond) diskSpeed(context.Context, string, string) (uint64, error) {
 	return uint64(r), nil
 }
 
-func (r bytesAvail) capacity(string) (uint64, error) {
+func (r bytesAvail) diskCapacity(string) (uint64, error) {
 	return uint64(r), nil
 }
 
