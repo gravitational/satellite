@@ -116,7 +116,12 @@ func newHealthHandler(certFile string) (http.HandlerFunc, error) {
 			return
 		}
 
-		roundtrip.ReplyJSON(w, http.StatusOK, status)
+		httpStatus := http.StatusOK
+		if isDegraded(*status) {
+			httpStatus = http.StatusServiceUnavailable
+		}
+
+		roundtrip.ReplyJSON(w, httpStatus, status)
 	}, nil
 }
 
