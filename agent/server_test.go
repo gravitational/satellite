@@ -18,17 +18,24 @@ package agent
 
 import (
 	"context"
+	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 	"time"
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/lib/test"
 
+	"github.com/gravitational/roundtrip"
 	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
 	log "github.com/sirupsen/logrus"
@@ -169,6 +176,45 @@ func (_ *AgentSuite) TestSetsOkSystemStatus(c *C) {
 // TestAgentProvidesStatus validates the communication between several agents
 // to exchange health status information.
 func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
+	var agentTestCases = []struct {
+		comment  string
+		status   pb.SystemStatus_Type
+		members  [2]serf.Member
+		checkers [][]health.Checker
+		rpcPort  int
+	}{
+		{
+			comment: "Degraded due to a failed checker",
+			status:  pb.SystemStatus_Degraded,
+			members: [2]serf.Member{
+				newMember("master", "alive"),
+				newMember("node", "alive"),
+			},
+			checkers: [][]health.Checker{{healthyTest, failedTest}, {healthyTest, healthyTest}},
+			rpcPort:  7676,
+		},
+		{
+			comment: "Degraded due to a missing master node",
+			status:  pb.SystemStatus_Degraded,
+			members: [2]serf.Member{
+				newMember("node-1", "alive"),
+				newMember("node-2", "alive"),
+			},
+			checkers: [][]health.Checker{{healthyTest, healthyTest}, {healthyTest, healthyTest}},
+			rpcPort:  7677,
+		},
+		{
+			comment: "Running with all systems running",
+			status:  pb.SystemStatus_Running,
+			members: [2]serf.Member{
+				newMember("master", "alive"),
+				newMember("node", "alive"),
+			},
+			checkers: [][]health.Checker{{healthyTest, healthyTest}, {healthyTest, healthyTest}},
+			rpcPort:  7678,
+		},
+	}
+
 	for _, testCase := range agentTestCases {
 		comment := Commentf(testCase.comment)
 		clock := clockwork.NewFakeClock()
@@ -247,52 +293,57 @@ func (r *AgentSuite) TestIsMember(c *C) {
 	c.Assert(agent.IsMember(), Equals, true)
 }
 
-var healthyTest = &testChecker{
-	name: "healthy service",
-}
+func (r *AgentSuite) TestReflectStatusInStatusCode(c *C) {
+	// setup
+	member := newMember("master", "alive")
+	cluster := []serf.Member{member}
+	checkers := []health.Checker{healthyTest, failedTest}
+	clock := clockwork.NewFakeClock()
+	expected := pb.SystemStatus{
+		Status: pb.SystemStatus_Degraded,
+		Nodes: []*pb.NodeStatus{
+			&pb.NodeStatus{Name: "master", Status: pb.NodeStatus_Degraded,
+				MemberStatus: &pb.MemberStatus{
+					Name:   "master",
+					Addr:   "<nil>:0",
+					Status: pb.MemberStatus_Alive,
+					Tags:   map[string]string{"role": "master"},
+				},
+				Probes: []*pb.Probe{
+					&pb.Probe{Checker: "failing service", Error: errInvalidState.Error(), Status: pb.Probe_Failed},
+					&pb.Probe{Checker: "healthy service", Status: pb.Probe_Running},
+				},
+			},
+		},
+	}
+	rpcPort := 7575
 
-var failedTest = &testChecker{
-	name: "failing service",
-	err:  errInvalidState,
-}
+	// exercise
+	agent := r.newRemoteNode(member.Name, rpcPort, cluster, checkers, clock, c)
+	defer agent.Close()
 
-var agentTestCases = []struct {
-	comment  string
-	status   pb.SystemStatus_Type
-	members  [2]serf.Member
-	checkers [][]health.Checker
-	rpcPort  int
-}{
-	{
-		comment: "Degraded due to a failed checker",
-		status:  pb.SystemStatus_Degraded,
-		members: [2]serf.Member{
-			newMember("master", "alive"),
-			newMember("node", "alive"),
-		},
-		checkers: [][]health.Checker{{healthyTest, failedTest}, {healthyTest, healthyTest}},
-		rpcPort:  7676,
-	},
-	{
-		comment: "Degraded due to a missing master node",
-		status:  pb.SystemStatus_Degraded,
-		members: [2]serf.Member{
-			newMember("node-1", "alive"),
-			newMember("node-2", "alive"),
-		},
-		checkers: [][]health.Checker{{healthyTest, healthyTest}, {healthyTest, healthyTest}},
-		rpcPort:  7677,
-	},
-	{
-		comment: "Running with all systems running",
-		status:  pb.SystemStatus_Running,
-		members: [2]serf.Member{
-			newMember("master", "alive"),
-			newMember("node", "alive"),
-		},
-		checkers: [][]health.Checker{{healthyTest, healthyTest}, {healthyTest, healthyTest}},
-		rpcPort:  7678,
-	},
+	// wait until agent has started waiting to collect statuses
+	clock.BlockUntil(1)
+	clock.Advance(statusUpdateTimeout + time.Second)
+	// wait for status update loop to finish
+	clock.BlockUntil(1)
+
+	client, err := httpClient(fmt.Sprintf("https://127.0.0.1:%v", rpcPort))
+	c.Assert(err, IsNil)
+
+	resp, err := client.Get(client.Endpoint(""), url.Values{})
+	c.Assert(err, IsNil)
+	c.Assert(resp.Code(), Equals, http.StatusServiceUnavailable)
+
+	// verify
+	var status pb.SystemStatus
+	err = json.Unmarshal(resp.Bytes(), &status)
+	c.Assert(err, IsNil)
+
+	// reset the variable timestamp
+	expected.Timestamp = status.Timestamp
+	sort.Sort(byChecker(status.Nodes[0].Probes))
+	c.Assert(status, test.DeepCompare, expected)
 }
 
 // newLocalNode creates a new instance of the local agent - agent used to make status queries.
@@ -324,6 +375,31 @@ func (r *AgentSuite) newRemoteNode(node string, rpcPort int, members []serf.Memb
 	return agent
 }
 
+// newAgent creates a new agent instance.
+func (r *AgentSuite) newAgent(node string, rpcPort int, members []serf.Member,
+	checkers []health.Checker, statusClock, recycleClock clockwork.Clock, c *C) *agent {
+	if recycleClock == nil {
+		recycleClock = clockwork.NewFakeClock()
+	}
+	return &agent{
+		name:         node,
+		serfClient:   &testSerfClient{members: members},
+		dialRPC:      testDialRPC(rpcPort, r.certFile),
+		cache:        &testCache{c: c, SystemStatus: &pb.SystemStatus{Status: pb.SystemStatus_Unknown}},
+		Checkers:     checkers,
+		statusClock:  statusClock,
+		recycleClock: recycleClock,
+		localStatus:  emptyNodeStatus(node),
+	}
+}
+
+func httpClient(url string) (*roundtrip.Client, error) {
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	return roundtrip.NewClient(url, "", roundtrip.HTTPClient(&http.Client{Transport: tr}))
+}
+
 // newMember creates a new value describing a member of a serf cluster.
 func newMember(name string, status string) serf.Member {
 	result := serf.Member{
@@ -335,6 +411,15 @@ func newMember(name string, status string) serf.Member {
 		result.Tags["role"] = string(RoleMaster)
 	}
 	return result
+}
+
+var healthyTest = &testChecker{
+	name: "healthy service",
+}
+
+var failedTest = &testChecker{
+	name: "failing service",
+	err:  errInvalidState,
 }
 
 // testSerfClient implements serfClient
@@ -426,24 +511,6 @@ func testDialRPC(port int, certFile string) dialRPC {
 	}
 }
 
-// newAgent creates a new agent instance.
-func (r *AgentSuite) newAgent(node string, rpcPort int, members []serf.Member,
-	checkers []health.Checker, statusClock, recycleClock clockwork.Clock, c *C) *agent {
-	if recycleClock == nil {
-		recycleClock = clockwork.NewFakeClock()
-	}
-	return &agent{
-		name:         node,
-		serfClient:   &testSerfClient{members: members},
-		dialRPC:      testDialRPC(rpcPort, r.certFile),
-		cache:        &testCache{c: c, SystemStatus: &pb.SystemStatus{Status: pb.SystemStatus_Unknown}},
-		Checkers:     checkers,
-		statusClock:  statusClock,
-		recycleClock: recycleClock,
-		localStatus:  emptyNodeStatus(node),
-	}
-}
-
 var errInvalidState = errors.New("invalid state")
 
 // testChecker implements a health.Checker interface for the tests.
@@ -469,57 +536,78 @@ func (r *testChecker) Check(ctx context.Context, reporter health.Reporter) {
 	})
 }
 
-// openssl req -new -x509 -sha256 -key server.key -out server.crt -days 3650, CN=agent
+func (r byChecker) Len() int           { return len(r) }
+func (r byChecker) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
+func (r byChecker) Less(i, j int) bool { return r[i].Checker < r[j].Checker }
+
+type byChecker []*pb.Probe
+
+// openssl req -new -out server.csr -key server.key -config san.cnf
+// openssl x509 -req -days 3650 -in server.csr -signkey server.key -out server.crt -extensions req_ext -extfile san.cnf
+// san.cnf:
+// [req]
+// req_extensions=req_ext
+// prompt=no
+// distinguished_name=dn
+// [dn]
+// C=US
+// ST=Test
+// L=Test
+// O=Acme LLC
+// CN=agent
+// [req_ext]
+// subjectAltName=@alt_names
+// [alt_names]
+// DNS.1=agent
+// IP.1=127.0.0.1
 var certFile = []byte(`-----BEGIN CERTIFICATE-----
-MIIDjTCCAnWgAwIBAgIJAJ6LjB36T/bKMA0GCSqGSIb3DQEBCwUAMF0xCzAJBgNV
+MIIDOTCCAiGgAwIBAgIJAJkeMEm1V6iYMA0GCSqGSIb3DQEBCwUAME4xCzAJBgNV
 BAYTAlVTMQ0wCwYDVQQIDARUZXN0MQ0wCwYDVQQHDARUZXN0MREwDwYDVQQKDAhB
-Y21lIEluYzENMAsGA1UECwwEVGVzdDEOMAwGA1UEAwwFYWdlbnQwHhcNMTcxMDI2
-MTUzMjU1WhcNMjcxMDI0MTUzMjU1WjBdMQswCQYDVQQGEwJVUzENMAsGA1UECAwE
-VGVzdDENMAsGA1UEBwwEVGVzdDERMA8GA1UECgwIQWNtZSBJbmMxDTALBgNVBAsM
-BFRlc3QxDjAMBgNVBAMMBWFnZW50MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIB
-CgKCAQEArU+zyHtvQp5ReFcd2ozM54KJS0F6AYyqynikB+YeJzpW6jtNl1ZUjJPz
-hzBY37yw3D6XwKyn8jZ/XVJHxKBWXA1IPWYXA4OGR4aIIDFgHFCGMRGayHKe1HSZ
-fnGVtBfECtilnekDb0FD7ClDjs4FMoumkY2WfL8M12te/Ns44ZQax1Yh+vcuWRlK
-2Ixcqj4+10kvVsc2eBEiWp9b+TVvsi4zh2MkSTiWgY3QW/Z0aeWqkedmW9AWacKc
-XAyqb66zfqKt987Rd6ltq5XfQDScqqAgSooj/tJ6t+bx/kLG8mbTTKS90ZXOnl2r
-947lxyokbO36k7wwddXGQyZDEWFt8QIDAQABo1AwTjAdBgNVHQ4EFgQUoPfCCLwQ
-HyJdy9YoGcVV9iF1x14wHwYDVR0jBBgwFoAUoPfCCLwQHyJdy9YoGcVV9iF1x14w
-DAYDVR0TBAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEACJK/WyOeaXSe+l/0k/on
-5UDrzl7nAH2DGM8hx8DONDy18lucJ/rkcoWQ04WeZkDUOfKFQXUOnApeEoh8qivl
-ZCvBexfJVtZZIVhz5vlZhMIQ8AQsJuIv17F7Ch6C8Cw60nJ4n0eo1h6J3XKFmgHn
-NtmRd3zbn+szmZT4ondzHBQF3aH89hm1zMLPJLx3HZnKPeXwCq+eox5/zK3qrJmM
-QxI91x30QwxYPRHVygYBU2oHr7sWBYxlhZnvRG1uC2+mlUJtvJhlwsgQuBsTKrKQ
-a7wdQWVFansjp4s1c4K/z1QpczEv8y5E2yH5ngatrbv0xHQCtQ1WjPCk177DoNwa
-KA==
+Y21lIExMQzEOMAwGA1UEAwwFYWdlbnQwHhcNMTcxMTE0MjE1OTI5WhcNMjcxMTEy
+MjE1OTI5WjBOMQswCQYDVQQGEwJVUzENMAsGA1UECAwEVGVzdDENMAsGA1UEBwwE
+VGVzdDERMA8GA1UECgwIQWNtZSBMTEMxDjAMBgNVBAMMBWFnZW50MIIBIjANBgkq
+hkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxyBjYyMJ6DQXerhK7VhUna6iVXr+dXBe
+delPqox3ZnfGiuOcm70xPwJW0yeDndvHNc21i12cI86pv3g8YNnH6IKqYY7uyD3C
+Cpa0AE2Tt3C0Iowc6HPQQzUeAfAomh4M1LZzSaPKbtVvAcApOGG9ZJxw4NS1tVeq
+pBC+k4ZYzdzy5b4bqugw/6uxM7kND/7jzDB3zLyxqPpwd58mHI+RTWkNSeIuJmi9
+09njqMO6q8lypEDXdikX0PL5Mph9Dr2i3uV3lGJWk/QHov/AuN2DsubdeYH3udIu
+pKDmy89s7uX8aqdgeF4c21vwsZ1htHcWBAKXaHuDptgPFAq/C+gbTQIDAQABoxow
+GDAWBgNVHREEDzANggVhZ2VudIcEfwAAATANBgkqhkiG9w0BAQsFAAOCAQEAgHDT
+Rgq8K/i56L9tc5a+uRqnv9b1xyg9z2Brk7L6TFGtZBoExe1I9FVlHY9EbnE11xp0
+FPlpoDjk+giwOclwnFFIZGmjKFiyWslrvxNT3sSAFwbL42y//u9ddszxez4S09kt
+g9huQ1wgMGe1E2EsO2XSCSG+NAHrW/FFX09DB/l25b0GqpOSXG//ztiVXYdVYIjl
+r6tb7YzYC2U5ssdeNow//EzpuDWv/TPG35UWEMuK+8ruisSASDZC/0exUBOkGn8W
+PC6DCBH+wA8cbO7V6CguMZN0rNapnXOjyYyjPCazKxCftHNMVg90BGQjwyXTbnIj
+rzz+3PuKaaMFNJhMJA==
 -----END CERTIFICATE-----`)
 
 // openssl genrsa -out server.key 2048
 var keyFile = []byte(`-----BEGIN RSA PRIVATE KEY-----
-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
+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
 -----END RSA PRIVATE KEY-----`)
 
 const sharedReadWriteMask = 0666

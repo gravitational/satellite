@@ -63,3 +63,11 @@ func nodeToSystemStatus(status pb.NodeStatus_Type) pb.SystemStatus_Type {
 		return pb.SystemStatus_Unknown
 	}
 }
+
+func isDegraded(status pb.SystemStatus) bool {
+	switch status.Status {
+	case pb.SystemStatus_Unknown, pb.SystemStatus_Degraded:
+		return true
+	}
+	return false
+}
