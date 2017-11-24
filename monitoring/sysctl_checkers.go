@@ -27,8 +27,8 @@ func NewIPForwardChecker() *SysctlChecker {
 	}
 }
 
-// NewBrNetfilterChecker will check if br_netfilter module has established bridge networking
-func NewBrNetfilterChecker() *SysctlChecker {
+// NewBridgeNetfilterChecker checks if kernel bridge netfilter module is enabled
+func NewBridgeNetfilterChecker() *SysctlChecker {
 	return &SysctlChecker{
 		CheckerName:     "br-netfilter",
 		Param:           "net.bridge.bridge-nf-call-iptables",

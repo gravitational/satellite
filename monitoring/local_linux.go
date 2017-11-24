@@ -27,7 +27,7 @@ func BasicCheckers() *compositeChecker {
 		checkers: []health.Checker{
 			DefaultOSChecker(),
 			NewIPForwardChecker(),
-			NewBrNetfilterChecker(),
+			NewBridgeNetfilterChecker(),
 			DefaultProcessChecker(),
 			DefaultPortChecker(),
 			DefaultBootConfigParams(),
