@@ -138,8 +138,6 @@ type Module struct {
 	Name string
 	// Instances specifies the number of instances this module has loaded
 	Instances int
-	// DependsOn lists module's dependencies on other modules
-	DependsOn []string
 }
 
 // parseModule parses module information from a single line of /proc/modules
@@ -157,20 +155,10 @@ func parseModule(moduleS string) (*Module, error) {
 		return nil, trace.BadParameter("invalid instances field: expected integer, but got %q", instanceS)
 	}
 
-	var dependencies []string
-	if columns[3] != "-" {
-		dependencies = strings.Split(columns[3], ",")
-		// Last item is empty after the first
-		if numDeps := len(dependencies); numDeps != 0 && dependencies[numDeps-1] == "" {
-			dependencies = dependencies[:numDeps-1]
-		}
-	}
-
 	return &Module{
 		ModuleState: ModuleState(columns[4]),
 		Name:        columns[0],
 		Instances:   int(instances),
-		DependsOn:   dependencies,
 	}, nil
 }
 
