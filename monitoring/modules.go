@@ -28,24 +28,23 @@ import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
 	"github.com/gravitational/trace"
-	log "github.com/sirupsen/logrus"
 )
 
-// NewModuleChecker creates a new kernel module checker
-func NewModuleChecker(names ...string) ModuleChecker {
-	return ModuleChecker{
-		Modules:      names,
-		moduleGetter: moduleGetterFunc(LoadModules),
+// NewKernelModuleChecker creates a new kernel module checker
+func NewKernelModuleChecker(names ...string) KernelModuleChecker {
+	return KernelModuleChecker{
+		Modules:    names,
+		getModules: ReadModules,
 	}
 }
 
 // Name returns name of the checker
-func (r ModuleChecker) Name() string {
-	return "module-check"
+func (r KernelModuleChecker) Name() string {
+	return kernelModuleCheckerID
 }
 
 // Check determines if the modules specified with r.Modules have been loaded
-func (r ModuleChecker) Check(ctx context.Context, reporter health.Reporter) {
+func (r KernelModuleChecker) Check(ctx context.Context, reporter health.Reporter) {
 	err := r.check(ctx, reporter)
 	if err != nil {
 		reporter.Add(NewProbeFromErr(r.Name(), "", trace.Wrap(err)))
@@ -54,16 +53,16 @@ func (r ModuleChecker) Check(ctx context.Context, reporter health.Reporter) {
 	reporter.Add(&pb.Probe{Checker: r.Name(), Status: pb.Probe_Running})
 }
 
-func (r ModuleChecker) check(ctx context.Context, reporter health.Reporter) error {
-	modules, err := r.moduleGetter.Modules()
+func (r KernelModuleChecker) check(ctx context.Context, reporter health.Reporter) error {
+	modules, err := r.getModules()
 	if err != nil {
 		return trace.Wrap(err)
 	}
 
 	var errors []error
 	for _, module := range r.Modules {
-		if !modules.HasLoaded(module) {
-			errors = append(errors, trace.NotFound("module %q not loaded", module))
+		if !modules.WasLoaded(module) {
+			errors = append(errors, trace.NotFound("kernel module %q not loaded", module))
 		}
 	}
 
@@ -73,22 +72,22 @@ func (r ModuleChecker) check(ctx context.Context, reporter health.Reporter) erro
 	return trace.NewAggregate(errors...)
 }
 
-// ModuleChecker checks if the specified set of kernel modules ara loaded
-type ModuleChecker struct {
+// KernelModuleChecker checks if the specified set of kernel modules are loaded
+type KernelModuleChecker struct {
 	// Modules lists required kernel modules
-	Modules []string
-	moduleGetter
+	Modules    []string
+	getModules moduleGetterFunc
 }
 
-// LoadModules loads list of kernel modules from /proc/modules
-func LoadModules() (Modules, error) {
+// ReadModules reads list of kernel modules from /proc/modules
+func ReadModules() (Modules, error) {
 	f, err := os.Open("/proc/modules")
 	if err != nil {
 		return nil, trace.ConvertSystemError(err)
 	}
 	defer f.Close()
 
-	modules, err := LoadModulesFrom(f)
+	modules, err := ReadModulesFrom(f)
 	if err != nil {
 		return nil, trace.ConvertSystemError(err)
 	}
@@ -96,18 +95,18 @@ func LoadModules() (Modules, error) {
 	return modules, nil
 }
 
-// LoadModulesFrom loads list of kernel modules from the specified reader
-func LoadModulesFrom(r io.Reader) (modules Modules, err error) {
+// ReadModulesFrom reads list of kernel modules from the specified reader.
+func ReadModulesFrom(r io.Reader) (modules Modules, err error) {
 	s := bufio.NewScanner(r)
 
+	modules = Modules{}
 	for s.Scan() {
 		line := s.Text()
 		module, err := parseModule(line)
 		if err != nil {
-			log.Warnf("failed to parse module, skip line %q", line)
-			continue
+			return nil, trace.Wrap(err)
 		}
-		modules = append(modules, *module)
+		modules[module.Name] = *module
 	}
 
 	if s.Err() != nil {
@@ -117,23 +116,14 @@ func LoadModulesFrom(r io.Reader) (modules Modules, err error) {
 	return modules, nil
 }
 
-// HasLoaded determines whether module names are loaded.
-// names should not have duplicates
-func (r Modules) HasLoaded(names ...string) bool {
-L:
-	for _, module := range r {
-		for i, name := range names {
-			if module.Name == name && module.IsLoaded() {
-				names = append(names[:i], names[i+1:]...)
-				continue L
-			}
-		}
-	}
-	return len(names) == 0
+// WasLoaded determines whether module name is loaded.
+func (r Modules) WasLoaded(name string) bool {
+	_, loaded := r[name]
+	return loaded
 }
 
 // Modules lists kernel modules
-type Modules []Module
+type Modules map[string]Module
 
 // IsLoaded determines if this module is loaded
 func (r Module) IsLoaded() bool {
@@ -196,14 +186,8 @@ const (
 	ModuleStateUnloading = "Unloading"
 )
 
-func (r moduleGetterFunc) Modules() (Modules, error) {
-	return r()
-}
-
 type moduleGetterFunc func() (Modules, error)
 
-type moduleGetter interface {
-	Modules() (Modules, error)
-}
+const kernelModuleCheckerID = "kernel-module"
 
 var moduleColumns = []string{"name", "memory_size", "instances", "dependencies", "state", "memory_offset"}
