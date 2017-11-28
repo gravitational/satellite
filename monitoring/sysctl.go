@@ -40,6 +40,8 @@ type SysctlChecker struct {
 	OnMissing string
 	// OnValueMismatch is description when parameter value is not equal to expected
 	OnValueMismatch string
+	// SkipNotFound will skip reporting a sysctl that is not found on the system
+	SkipNotFound bool
 }
 
 // Name returns name of checker
@@ -68,7 +70,9 @@ func (c *SysctlChecker) Check(ctx context.Context, reporter health.Reporter) {
 	}
 
 	if trace.IsNotFound(err) {
-		reporter.Add(NewProbeFromErr(c.CheckerName, c.OnMissing, trace.Wrap(err)))
+		if !c.SkipNotFound {
+			reporter.Add(NewProbeFromErr(c.CheckerName, c.OnMissing, trace.Wrap(err)))
+		}
 		return
 	}
 

@@ -28,6 +28,7 @@ func BasicCheckers() *compositeChecker {
 			DefaultOSChecker(),
 			NewIPForwardChecker(),
 			NewBridgeNetfilterChecker(),
+			NewMayDetachMountsChecker(),
 			DefaultProcessChecker(),
 			DefaultPortChecker(),
 			DefaultBootConfigParams(),
