@@ -48,7 +48,7 @@ func NewMayDetachMountsChecker() *SysctlChecker {
 		CheckerName:     "may-detach-mounts",
 		Param:           "fs.may_detach_mounts",
 		Expected:        "1",
-		OnValueMismatch: "On RHEL 7.4 or newer based kernels, fs.may_detach_mounts should be set to 1 or pods may get stuck in the Terminating state",
+		OnValueMismatch: "fs.may_detach_mounts should be set to 1 or pods may get stuck in the Terminating state, see https://www.gravitational.com/docs/faq/#kubernetes-pods-stuck-in-terminating-state",
 		SkipNotFound:    true, // It appears that this setting may not appear in non RHEL or older kernels, so don't fire the alert if we don't find the setting
 	}
 }
