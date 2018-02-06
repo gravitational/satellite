@@ -30,30 +30,27 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func newPortCollector() (*portCollector, error) {
-	procs, err := procfs.AllProcs()
+func newPortCollector(fetchProcs procsFetcher) (*portCollector, error) {
+	procs, err := fetchProcs()
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to query running processes")
 	}
-	inodes, err := mapAllProcs(procs)
-	if err != nil {
-		return nil, trace.Wrap(err, "failed to query open sockets")
-	}
+	inodes := mapAllProcs(procs)
 	return &portCollector{inodes}, nil
 }
 
-func (r *portCollector) tcp() (ret []process, err error) {
-	sockets, err := getTCPSockets(procNetTCP)
-	if err != nil {
-		return nil, trace.Wrap(err, "failed to query tcp connections")
+func (r *portCollector) tcp(fetchSockets ...tcpSocketFetcher) (ret []process, err error) {
+	var sockets []tcpSocket
+	for _, fn := range fetchSockets {
+		tcps, err := fn()
+		if err != nil && !trace.IsNotFound(err) {
+			// Ignore if not enabled
+			return nil, trace.Wrap(err, "failed to query tcp connections")
+		}
+		sockets = append(sockets, tcps...)
 	}
 
-	sockets6, err := getTCPSockets(procNetTCP6)
-	if err != nil {
-		return nil, trace.Wrap(err, "failed to query tcp6 connections")
-	}
-
-	for _, socket := range append(sockets, sockets6...) {
+	for _, socket := range sockets {
 		proc, err := r.findProcessByInode(socket.inode())
 		if err != nil {
 			log.Warn(err.Error())
@@ -67,18 +64,18 @@ func (r *portCollector) tcp() (ret []process, err error) {
 	return ret, nil
 }
 
-func (r *portCollector) udp() (ret []process, err error) {
-	sockets, err := getUDPSockets(procNetUDP)
-	if err != nil {
-		return nil, trace.Wrap(err, "failed to query udp connections")
+func (r *portCollector) udp(fetchSockets ...udpSocketFetcher) (ret []process, err error) {
+	var sockets []udpSocket
+	for _, fn  := range fetchSockets {
+		udps, err := fn()
+		if err != nil && !trace.IsNotFound(err) {
+			// Ignore if not enabled
+			return nil, trace.Wrap(err, "failed to query udp connections")
+		}
+		sockets = append(sockets, udps...)
 	}
 
-	sockets6, err := getUDPSockets(procNetUDP6)
-	if err != nil {
-		return nil, trace.Wrap(err, "failed to query udp6 connections")
-	}
-
-	for _, socket := range append(sockets, sockets6...) {
+	for _, socket := range sockets {
 		proc, err := r.findProcessByInode(socket.inode())
 		if err != nil {
 			log.Warn(err.Error())
@@ -118,6 +115,12 @@ type portCollector struct {
 	inodes map[string]pid
 }
 
+func fetchAllProcs() (procfs.Procs, error) {
+	return procfs.AllProcs()
+}
+
+type procsFetcher func() (procfs.Procs, error)
+
 type process struct {
 	name string
 	pid  pid
@@ -150,7 +153,7 @@ func (r udpSocket) state() socketState {
 
 // getTCPSockets interprets the file specified with fpath formatted as /proc/net/tcp{,6}
 // and returns a list of TCPSockets
-func getTCPSockets(fpath string) (ret []tcpSocket, err error) {
+func getTCPSocketsFromPath(fpath string) (ret []tcpSocket, err error) {
 	err = parseSocketFile(fpath, func(line string) error {
 		socket, err := newTCPSocketFromLine(line)
 		if err != nil {
@@ -167,7 +170,7 @@ func getTCPSockets(fpath string) (ret []tcpSocket, err error) {
 
 // getUDPSockets interprets the file specified with fpath formatted as /proc/net/udp{,6}
 // and returns a list of UDPPSockets
-func getUDPSockets(fpath string) (ret []udpSocket, err error) {
+func getUDPSocketsFromPath(fpath string) (ret []udpSocket, err error) {
 	err = parseSocketFile(fpath, func(line string) error {
 		socket, err := newUDPSocketFromLine(line)
 		if err != nil {
@@ -182,9 +185,31 @@ func getUDPSockets(fpath string) (ret []udpSocket, err error) {
 	return ret, nil
 }
 
+type tcpSocketFetcher func() ([]tcpSocket, error)
+type udpSocketFetcher func() ([]udpSocket, error)
+type unixSocketFetcher func() ([]unixSocket, error)
+
+func getTCPSockets() ([]tcpSocket, error) {
+	return getTCPSocketsFromPath(procNetTCP)
+}
+func getTCP6Sockets() ([]tcpSocket, error) {
+	return getTCPSocketsFromPath(procNetTCP6)
+}
+
+func getUDPSockets() ([]udpSocket, error) {
+	return getUDPSocketsFromPath(procNetUDP)
+}
+func getUDP6Sockets() ([]udpSocket, error) {
+	return getUDPSocketsFromPath(procNetUDP6)
+}
+
+func getUnixSockets() ([]unixSocket, error) {
+	return getUnixSocketsFromPath(procNetUnix)
+}
+
 // getUnixSockets interprets the file specified with fpath formatted as /proc/net/unix
 // and returns a list of UnixPSockets
-func getUnixSockets(fpath string) (ret []unixSocket, err error) {
+func getUnixSocketsFromPath(fpath string) (ret []unixSocket, err error) {
 	err = parseSocketFile(fpath, func(line string) error {
 		socket, err := newUnixSocketFromLine(line)
 		if err != nil {
@@ -201,10 +226,10 @@ func getUnixSockets(fpath string) (ret []unixSocket, err error) {
 
 func parseSocketFile(fpath string, parse socketparser) error {
 	fp, err := os.Open(fpath)
-	defer fp.Close()
 	if err != nil {
 		return trace.ConvertSystemError(err)
 	}
+	defer fp.Close()
 	lineScanner := bufio.NewScanner(fp)
 	lineScanner.Scan() // Drop header line
 	for lineScanner.Scan() {
@@ -303,16 +328,16 @@ func hexToIP(in []byte) net.IP {
 
 // mapAllProcs builds a mapping of inode values to running processes.
 // It will skip processes it does not have access to.
-func mapAllProcs(procs []procfs.Proc) (inodes map[string]pid, err error) {
+func mapAllProcs(procs []procfs.Proc) (inodes map[string]pid) {
 	inodes = make(map[string]pid, len(procs))
 	for _, proc := range procs {
-		err = mapPidToInode(pid(proc.PID), inodes)
+		err := mapPidToInode(pid(proc.PID), inodes)
 		if err != nil {
 			log.Warnf("failed to associate sockets with process %v: %v", proc.PID, err)
 			continue
 		}
 	}
-	return inodes, nil
+	return inodes
 }
 
 // mapPidToInode associates the process given with pid with the sockets it has opened

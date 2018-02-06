@@ -20,6 +20,8 @@ import (
 	"net"
 
 	"github.com/gravitational/satellite/lib/test"
+
+	"github.com/prometheus/procfs"
 	. "gopkg.in/check.v1"
 )
 
@@ -35,27 +37,27 @@ func (_ *S) TestParseSocketFile(c *C) {
 }
 
 func (_ *S) TestGetTCPSockets(c *C) {
-	sockets, err := getTCPSockets("fixtures/tcp")
+	sockets, err := getTCPSocketsFromPath("fixtures/tcp")
 	c.Assert(err, IsNil)
 	c.Assert(sockets, Not(IsNil))
 
-	sockets, err = getTCPSockets("fixtures/tcp6")
+	sockets, err = getTCPSocketsFromPath("fixtures/tcp6")
 	c.Assert(err, IsNil)
 	c.Assert(sockets, Not(IsNil))
 }
 
 func (_ *S) TestGetUDPSockets(c *C) {
-	sockets, err := getUDPSockets("fixtures/udp")
+	sockets, err := getUDPSocketsFromPath("fixtures/udp")
 	c.Assert(err, IsNil)
 	c.Assert(sockets, Not(IsNil))
 
-	sockets, err = getUDPSockets("fixtures/udp6")
+	sockets, err = getUDPSocketsFromPath("fixtures/udp6")
 	c.Assert(err, IsNil)
 	c.Assert(sockets, Not(IsNil))
 }
 
 func (_ *S) TestGetUnixSockets(c *C) {
-	sockets, err := getUnixSockets("fixtures/unix")
+	sockets, err := getUnixSocketsFromPath("fixtures/unix")
 	c.Assert(err, IsNil)
 	c.Assert(sockets, Not(IsNil))
 }
@@ -140,6 +142,29 @@ func (_ *S) TestUnixSocketFromLine(c *C) {
 		Inode:    11188,
 		RefCount: 3,
 	})
+}
+
+func (_ *S) TestDoesNotFailForNonExistingStacks(c *C) {
+	fetchTCP := func() ([]tcpSocket, error) {
+		return getTCPSocketsFromPath("non-existing/tcp")
+	}
+	fetchUDP := func() ([]udpSocket, error) {
+		return getUDPSocketsFromPath("non-existing/udp")
+	}
+	fetchProcs := func() (procfs.Procs, error) {
+		return nil, nil
+	}
+
+	collector, err := newPortCollector(fetchProcs)
+	c.Assert(err, IsNil)
+
+	procsTCP, err := collector.tcp(fetchTCP)
+	c.Assert(err, IsNil)
+	c.Assert(procsTCP, DeepEquals, []process(nil))
+
+	procsUDP, err := collector.udp(fetchUDP)
+	c.Assert(err, IsNil)
+	c.Assert(procsUDP, DeepEquals, []process(nil))
 }
 
 func tcpAddr(addrS string, c *C) net.TCPAddr {
