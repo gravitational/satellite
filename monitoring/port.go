@@ -101,18 +101,19 @@ func (c *PortChecker) checkProcess(proto string, proc process, reporter health.R
 
 // Check will scan current open ports and report every conflict detected
 func (c *PortChecker) Check(ctx context.Context, reporter health.Reporter) {
-	collector, err := newPortCollector()
+	collector, err := newPortCollector(fetchAllProcs)
 	if err != nil {
 		reporter.Add(NewProbeFromErr(hostCheckerID, "querying connections", trace.Wrap(err)))
 		return
 	}
-	procsTCP, err := collector.tcp()
+
+	procsTCP, err := collector.tcp(getTCPSockets, getTCP6Sockets)
 	if err != nil {
 		reporter.Add(NewProbeFromErr(hostCheckerID, "querying tcp connections", trace.Wrap(err)))
 		return
 	}
 
-	procsUDP, err := collector.udp()
+	procsUDP, err := collector.udp(getUDPSockets, getUDP6Sockets)
 	if err != nil {
 		reporter.Add(NewProbeFromErr(hostCheckerID, "querying udp connections", trace.Wrap(err)))
 		return
@@ -120,7 +121,8 @@ func (c *PortChecker) Check(ctx context.Context, reporter health.Reporter) {
 
 	used := map[string][]process{
 		protoTCP: procsTCP,
-		protoUDP: procsUDP}
+		protoUDP: procsUDP,
+	}
 	conflicts := false
 
 	for proto, processes := range used {
@@ -134,5 +136,6 @@ func (c *PortChecker) Check(ctx context.Context, reporter health.Reporter) {
 	}
 	reporter.Add(&pb.Probe{
 		Checker: portCheckerID,
-		Status:  pb.Probe_Running})
+		Status:  pb.Probe_Running,
+	})
 }
