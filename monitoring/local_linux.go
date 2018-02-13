@@ -25,7 +25,6 @@ func BasicCheckers() *compositeChecker {
 	return &compositeChecker{
 		name: "local",
 		checkers: []health.Checker{
-			DefaultOSChecker(),
 			NewIPForwardChecker(),
 			NewBridgeNetfilterChecker(),
 			NewMayDetachMountsChecker(),
