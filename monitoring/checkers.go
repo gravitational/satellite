@@ -100,3 +100,9 @@ func SystemdHealth() health.Checker {
 func InterPodCommunication(kubeAddr, nettestImage string) health.Checker {
 	return NewInterPodChecker(kubeAddr, nettestImage)
 }
+
+func (_ noopChecker) Name() string                           { return "noop" }
+func (_ noopChecker) Check(context.Context, health.Reporter) {}
+
+// noopChecker is a checker that does nothing
+type noopChecker struct{}
