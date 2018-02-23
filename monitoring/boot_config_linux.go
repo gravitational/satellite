@@ -34,16 +34,16 @@ import (
 
 // NewBootConfigParamChecker returns a new checker that verifies
 // kernel configuration options
-func NewBootConfigParamChecker(params ...BootConfigParam) *BootConfigParamChecker {
-	return &BootConfigParamChecker{
+func NewBootConfigParamChecker(params ...BootConfigParam) health.Checker {
+	return &bootConfigParamChecker{
 		Params:              params,
 		kernelVersionReader: realKernelVersionReader,
 		bootConfigReader:    realBootConfigReader,
 	}
 }
 
-// BootConfigParamChecker checks whether parameters provided are specified in linux boot configuration file
-type BootConfigParamChecker struct {
+// bootConfigParamChecker checks whether parameters provided are specified in linux boot configuration file
+type bootConfigParamChecker struct {
 	// Params is array of parameters to check for
 	Params []BootConfigParam
 	kernelVersionReader
@@ -59,12 +59,12 @@ type BootConfigParam struct {
 }
 
 // Name returns name of the checker
-func (c *BootConfigParamChecker) Name() string {
+func (c *bootConfigParamChecker) Name() string {
 	return bootConfigParamID
 }
 
 // Check parses boot config files and validates whether parameters provided are set
-func (c *BootConfigParamChecker) Check(ctx context.Context, reporter health.Reporter) {
+func (c *bootConfigParamChecker) Check(ctx context.Context, reporter health.Reporter) {
 	release, err := c.kernelVersionReader()
 	if err != nil {
 		reporter.Add(NewProbeFromErr(bootConfigParamID,
@@ -132,7 +132,7 @@ func (c *BootConfigParamChecker) Check(ctx context.Context, reporter health.Repo
 }
 
 // DefaultBootConfigParams returns standard kernel configs required for running kubernetes
-func DefaultBootConfigParams() *BootConfigParamChecker {
+func DefaultBootConfigParams() health.Checker {
 	return NewBootConfigParamChecker(
 		BootConfigParam{Name: "CONFIG_NET_NS"},
 		BootConfigParam{Name: "CONFIG_PID_NS"},
@@ -170,7 +170,7 @@ func DefaultBootConfigParams() *BootConfigParamChecker {
 }
 
 // GetStorageDriverBootConfigParams returns config params required for a given filesystem
-func GetStorageDriverBootConfigParams(drv string) *BootConfigParamChecker {
+func GetStorageDriverBootConfigParams(drv string) health.Checker {
 	var params []BootConfigParam
 
 	switch drv {
@@ -183,7 +183,7 @@ func GetStorageDriverBootConfigParams(drv string) *BootConfigParamChecker {
 		params = append(params, BootConfigParam{Name: "CONFIG_OVERLAY_FS"})
 	}
 
-	return &BootConfigParamChecker{Params: params}
+	return NewBootConfigParamChecker(params...)
 }
 
 // KernelConstraintFunc is a function to determine if the kernel version

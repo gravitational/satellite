@@ -47,28 +47,28 @@ import (
 // NewOSChecker(OSRelease{Name: "Ubuntu", VersionID: "16"})
 //
 // will match all 16.x ubuntu distribution releases.
-func NewOSChecker(releases ...OSRelease) *OSChecker {
-	return &OSChecker{
+func NewOSChecker(releases ...OSRelease) health.Checker {
+	return &osReleaseChecker{
 		Releases:   releases,
 		getRelease: getRealOSRelease,
 	}
 }
 
-// OSChecker validates host OS based on
+// osReleaseChecker validates host OS based on
 // https://www.freedesktop.org/software/systemd/man/os-release.html
-type OSChecker struct {
+type osReleaseChecker struct {
 	// Releases lists all supported releases
 	Releases   []OSRelease
 	getRelease osReleaseGetter
 }
 
 // Name returns name of the checker
-func (c *OSChecker) Name() string {
+func (c *osReleaseChecker) Name() string {
 	return osCheckerID
 }
 
 // Check checks current OS and release is within supported list
-func (c *OSChecker) Check(ctx context.Context, reporter health.Reporter) {
+func (c *osReleaseChecker) Check(ctx context.Context, reporter health.Reporter) {
 	info, err := c.getRelease()
 	if err != nil {
 		reporter.Add(NewProbeFromErr(osCheckerID,

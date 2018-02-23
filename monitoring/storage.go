@@ -40,15 +40,15 @@ import (
 
 // NewStorageChecker creates a new instance of the volume checker
 // using the specified checker as configuration
-func NewStorageChecker(checker StorageChecker) *StorageChecker {
-	if checker.osInterface == nil {
-		checker.osInterface = &realOS{}
+func NewStorageChecker(config StorageConfig) health.Checker {
+	return &storageChecker{
+		StorageConfig: config,
+		osInterface:   &realOS{},
 	}
-	return &checker
 }
 
-// StorageChecker verifies volume requirements
-type StorageChecker struct {
+// StorageConfig describes checker configuration
+type StorageConfig struct {
 	// Path represents volume to be checked
 	Path string
 	// WillBeCreated when true, then all checks will be applied to first existing dir, or fail otherwise
@@ -59,6 +59,12 @@ type StorageChecker struct {
 	Filesystems []string
 	// MinFreeBytes define minimum free volume capacity
 	MinFreeBytes uint64
+}
+
+// storageChecker verifies volume requirements
+type storageChecker struct {
+	// Config describes the checker configuration
+	StorageConfig
 	// path refers to the parent directory
 	// in case Path does not exist yet
 	path string
@@ -73,11 +79,11 @@ const (
 )
 
 // Name returns name of the checker
-func (c *StorageChecker) Name() string {
+func (c *storageChecker) Name() string {
 	return fmt.Sprintf("%s(%s)", storageWriteCheckerID, c.Path)
 }
 
-func (c *StorageChecker) Check(ctx context.Context, reporter health.Reporter) {
+func (c *storageChecker) Check(ctx context.Context, reporter health.Reporter) {
 	err := c.check(ctx, reporter)
 	if err != nil {
 		reporter.Add(NewProbeFromErr(c.Name(), "internal error", trace.Wrap(err)))
@@ -86,7 +92,7 @@ func (c *StorageChecker) Check(ctx context.Context, reporter health.Reporter) {
 	}
 }
 
-func (c *StorageChecker) check(ctx context.Context, reporter health.Reporter) error {
+func (c *storageChecker) check(ctx context.Context, reporter health.Reporter) error {
 	err := c.evalPath()
 	if err != nil {
 		return trace.Wrap(err)
@@ -100,7 +106,7 @@ func (c *StorageChecker) check(ctx context.Context, reporter health.Reporter) er
 // cleanPath returns fully evaluated path with symlinks resolved
 // if path doesn't exist but should be created, then it returns
 // first available parent directory, and checks will be applied to it
-func (c *StorageChecker) evalPath() error {
+func (c *storageChecker) evalPath() error {
 	p := c.Path
 	for {
 		fi, err := os.Stat(p)
@@ -129,7 +135,7 @@ func (c *StorageChecker) evalPath() error {
 	}
 }
 
-func (c *StorageChecker) checkFsType(ctx context.Context, reporter health.Reporter) error {
+func (c *storageChecker) checkFsType(ctx context.Context, reporter health.Reporter) error {
 	if len(c.Filesystems) == 0 {
 		return nil
 	}
@@ -152,7 +158,7 @@ func (c *StorageChecker) checkFsType(ctx context.Context, reporter health.Report
 	return nil
 }
 
-func (c *StorageChecker) checkCapacity(ctx context.Context, reporter health.Reporter) error {
+func (c *storageChecker) checkCapacity(ctx context.Context, reporter health.Reporter) error {
 	avail, err := c.diskCapacity(c.path)
 	if err != nil {
 		return trace.Wrap(err)
@@ -170,7 +176,7 @@ func (c *StorageChecker) checkCapacity(ctx context.Context, reporter health.Repo
 	return nil
 }
 
-func (c *StorageChecker) checkWriteSpeed(ctx context.Context, reporter health.Reporter) (err error) {
+func (c *storageChecker) checkWriteSpeed(ctx context.Context, reporter health.Reporter) (err error) {
 	if c.MinBytesPerSecond == 0 {
 		return
 	}
