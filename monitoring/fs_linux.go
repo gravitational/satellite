@@ -37,7 +37,7 @@ import (
 // The checker is not meant to be run periodically but once before the Docker has been set up.
 //
 // See https://github.com/moby/moby/blob/v1.13.0-rc4/docs/deprecated.md#backing-filesystem-without-d_type-support-for-overlayoverlay2
-func NewDTypeChecker(path string) dtypeChecker {
+func NewDTypeChecker(path string) health.Checker {
 	return dtypeChecker(path)
 }
 
@@ -57,8 +57,9 @@ func (r dtypeChecker) Check(ctx context.Context, reporter health.Reporter) {
 	if !supports {
 		reporter.Add(&pb.Probe{
 			Checker: r.Name(),
-			Detail:  fmt.Sprintf("filesystem on %v does not support d_type. The overlay and overlay2 Docker storage drivers do not work as expected if the backing filesystem does not support d_type", string(r)),
-			Status:  pb.Probe_Failed,
+			Detail: fmt.Sprintf("filesystem on %v does not support d_type, "+
+				"see https://www.gravitational.com/docs/faq/#d_type-support-in-filesystem", string(r)),
+			Status: pb.Probe_Failed,
 		})
 	} else {
 		reporter.Add(&pb.Probe{Checker: r.Name(), Status: pb.Probe_Running})

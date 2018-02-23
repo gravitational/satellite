@@ -119,8 +119,10 @@ func (_ *MonitoringSuite) TestVerifiesModules(c *C) {
 
 	// exercise / verify
 	for _, testCase := range testCases {
-		checker := NewKernelModuleChecker(testCase.modules...)
-		checker.getModules = moduleReader(modulesData)
+		checker := kernelModuleChecker{
+			Modules:    testCase.modules,
+			getModules: moduleReader(modulesData),
+		}
 		var reporter health.Probes
 		checker.Check(context.TODO(), &reporter)
 		c.Assert(reporter, test.DeepCompare, testCase.probes, Commentf(testCase.comment))

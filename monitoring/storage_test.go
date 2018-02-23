@@ -47,46 +47,58 @@ func (_ *StorageSuite) TestStorage(c *C) {
 
 	c.Logf("%+v", tmp)
 
-	NewStorageChecker(StorageChecker{
-		Path:        "/tmp",
+	storageChecker{
+		StorageConfig: StorageConfig{
+			Path: "/tmp",
+		},
 		osInterface: testOS{mountList: mounts},
-	}).probe(c, "no conditions", shallSucceed)
+	}.probe(c, "no conditions", shallSucceed)
 
-	StorageChecker{
-		Path:              path.Join("/tmp", "does-not-exist"),
-		WillBeCreated:     true,
-		Filesystems:       []string{tmp.SysTypeName},
-		MinFreeBytes:      uint64(1024),
-		MinBytesPerSecond: uint64(1024),
-		osInterface:       testOS{mountList: mounts, bytesPerSecond: 512, bytesAvail: 512},
+	storageChecker{
+		StorageConfig: StorageConfig{
+			Path:              path.Join("/tmp", "does-not-exist"),
+			WillBeCreated:     true,
+			Filesystems:       []string{tmp.SysTypeName},
+			MinFreeBytes:      uint64(1024),
+			MinBytesPerSecond: uint64(1024),
+		},
+		osInterface: testOS{mountList: mounts, bytesPerSecond: 512, bytesAvail: 512},
 	}.probe(c, "unreasonable requirements", shallFail)
 
-	StorageChecker{
-		Path:              path.Join("/tmp", "does-not-exist"),
-		WillBeCreated:     true,
-		Filesystems:       []string{tmp.SysTypeName},
-		MinFreeBytes:      uint64(1024),
-		MinBytesPerSecond: uint64(1024),
-		osInterface:       testOS{mountList: mounts, bytesPerSecond: 2048, bytesAvail: 2048},
+	storageChecker{
+		StorageConfig: StorageConfig{
+			Path:              path.Join("/tmp", "does-not-exist"),
+			WillBeCreated:     true,
+			Filesystems:       []string{tmp.SysTypeName},
+			MinFreeBytes:      uint64(1024),
+			MinBytesPerSecond: uint64(1024),
+		},
+		osInterface: testOS{mountList: mounts, bytesPerSecond: 2048, bytesAvail: 2048},
 	}.probe(c, "reasonable requirements", shallSucceed)
 
-	StorageChecker{
-		Path:          path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
-		WillBeCreated: true,
-		Filesystems:   []string{"no-such-fs"},
-		osInterface:   testOS{mountList: mounts},
+	storageChecker{
+		StorageConfig: StorageConfig{
+			Path:          path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
+			WillBeCreated: true,
+			Filesystems:   []string{"no-such-fs"},
+		},
+		osInterface: testOS{mountList: mounts},
 	}.probe(c, "fs type mismatch", shallFail)
 
-	StorageChecker{
-		Path:          path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
-		WillBeCreated: false,
-		osInterface:   testOS{mountList: mounts},
+	storageChecker{
+		StorageConfig: StorageConfig{
+			Path:          path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
+			WillBeCreated: false,
+		},
+		osInterface: testOS{mountList: mounts},
 	}.probe(c, "missing folder", shallFail)
 
-	StorageChecker{
-		Path:          path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
-		WillBeCreated: true,
-		osInterface:   testOS{mountList: mounts},
+	storageChecker{
+		StorageConfig: StorageConfig{
+			Path:          path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
+			WillBeCreated: true,
+		},
+		osInterface: testOS{mountList: mounts},
 	}.probe(c, "create if missing", shallSucceed)
 }
 
@@ -97,15 +109,17 @@ func (_ *StorageSuite) TestMatchesFilesystem(c *C) {
 		sigar.FileSystem{DevName: "sysfs", DirName: "/sys", SysTypeName: "sysfs", Options: "rw,seclabel,nosuid,nodev,noexec,relatime"},
 	}
 
-	StorageChecker{
-		Path:          "/var/lib/data",
-		WillBeCreated: true,
-		Filesystems:   []string{"xfs", "ext4"},
-		osInterface:   testOS{mountList: mounts},
+	storageChecker{
+		StorageConfig: StorageConfig{
+			Path:          "/var/lib/data",
+			WillBeCreated: true,
+			Filesystems:   []string{"xfs", "ext4"},
+		},
+		osInterface: testOS{mountList: mounts},
 	}.probe(c, "discards rootfs", shallSucceed)
 }
 
-func (ch StorageChecker) probe(c *C, msg string, success bool) {
+func (ch storageChecker) probe(c *C, msg string, success bool) {
 	var probes health.Probes
 
 	ch.Check(context.TODO(), &probes)

@@ -65,8 +65,10 @@ func (*MonitoringSuite) TestValidatesOS(c *C) {
 
 	// exercise / verify
 	for _, testCase := range testCases {
-		checker := NewOSChecker(testCase.releases...)
-		checker.getRelease = testCase.getRelease
+		checker := &osReleaseChecker{
+			Releases:   testCase.releases,
+			getRelease: testCase.getRelease,
+		}
 		var reporter health.Probes
 		checker.Check(context.TODO(), &reporter)
 		c.Assert(reporter, test.DeepCompare, testCase.probes, Commentf(testCase.comment))

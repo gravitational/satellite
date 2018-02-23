@@ -70,8 +70,10 @@ func (*MonitoringSuite) TestValidatesCGroupMounts(c *C) {
 
 	// exercise / verify
 	for _, testCase := range testCases {
-		checker := NewCGroupChecker(testCase.cgroups...)
-		checker.getMounts = mountsReader(testCgroups)
+		checker := cgroupChecker{
+			cgroups:   testCase.cgroups,
+			getMounts: mountsReader(testCgroups),
+		}
 		var reporter health.Probes
 		checker.Check(context.TODO(), &reporter)
 		c.Assert(reporter, test.DeepCompare, testCase.probes, Commentf(testCase.comment))

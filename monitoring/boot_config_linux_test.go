@@ -115,9 +115,11 @@ func (*MonitoringSuite) TestValidatesBootConfig(c *C) {
 
 	// exercise / verify
 	for _, testCase := range testCases {
-		checker := NewBootConfigParamChecker(testCase.params...)
-		checker.kernelVersionReader = testCase.kernelVersionReader
-		checker.bootConfigReader = testCase.bootConfigReader
+		checker := &bootConfigParamChecker{
+			Params:              testCase.params,
+			kernelVersionReader: testCase.kernelVersionReader,
+			bootConfigReader:    testCase.bootConfigReader,
+		}
 		var reporter health.Probes
 		checker.Check(context.TODO(), &reporter)
 		c.Assert(reporter, test.DeepCompare, testCase.probes, Commentf(testCase.comment))

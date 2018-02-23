@@ -31,29 +31,29 @@ import (
 // NewCGroupChecker creates a new checker to verify existence
 // of cgroup mounts given with cgroups.
 // The checker should be executed in the host mount namespace.
-func NewCGroupChecker(cgroups ...string) CGroupChecker {
-	return CGroupChecker{
+func NewCGroupChecker(cgroups ...string) health.Checker {
+	return cgroupChecker{
 		cgroups:   cgroups,
 		getMounts: listProcMounts,
 	}
 }
 
-// CGroupChecker is a checker that verifies existence
+// cgroupChecker is a checker that verifies existence
 // of a set of cgroup mounts
-type CGroupChecker struct {
+type cgroupChecker struct {
 	cgroups   []string
 	getMounts mountGetterFunc
 }
 
 // Name returns name of the checker
 // Implements health.Checker
-func (r CGroupChecker) Name() string {
+func (r cgroupChecker) Name() string {
 	return cgroupCheckerID
 }
 
 // Check verifies existence of cgroup mounts given in r.cgroups.
 // Implements health.Checker
-func (r CGroupChecker) Check(ctx context.Context, reporter health.Reporter) {
+func (r cgroupChecker) Check(ctx context.Context, reporter health.Reporter) {
 	mounts, err := r.getMounts()
 	if err != nil {
 		reporter.Add(NewProbeFromErr(r.Name(), "", trace.Wrap(err)))

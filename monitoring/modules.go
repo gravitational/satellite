@@ -31,20 +31,20 @@ import (
 )
 
 // NewKernelModuleChecker creates a new kernel module checker
-func NewKernelModuleChecker(names ...string) KernelModuleChecker {
-	return KernelModuleChecker{
+func NewKernelModuleChecker(names ...string) health.Checker {
+	return kernelModuleChecker{
 		Modules:    names,
 		getModules: ReadModules,
 	}
 }
 
 // Name returns name of the checker
-func (r KernelModuleChecker) Name() string {
+func (r kernelModuleChecker) Name() string {
 	return kernelModuleCheckerID
 }
 
 // Check determines if the modules specified with r.Modules have been loaded
-func (r KernelModuleChecker) Check(ctx context.Context, reporter health.Reporter) {
+func (r kernelModuleChecker) Check(ctx context.Context, reporter health.Reporter) {
 	err := r.check(ctx, reporter)
 	if err != nil {
 		reporter.Add(NewProbeFromErr(r.Name(), "", trace.Wrap(err)))
@@ -53,7 +53,7 @@ func (r KernelModuleChecker) Check(ctx context.Context, reporter health.Reporter
 	reporter.Add(&pb.Probe{Checker: r.Name(), Status: pb.Probe_Running})
 }
 
-func (r KernelModuleChecker) check(ctx context.Context, reporter health.Reporter) error {
+func (r kernelModuleChecker) check(ctx context.Context, reporter health.Reporter) error {
 	modules, err := r.getModules()
 	if err != nil {
 		return trace.Wrap(err)
@@ -72,8 +72,8 @@ func (r KernelModuleChecker) check(ctx context.Context, reporter health.Reporter
 	return trace.NewAggregate(errors...)
 }
 
-// KernelModuleChecker checks if the specified set of kernel modules are loaded
-type KernelModuleChecker struct {
+// kernelModuleChecker checks if the specified set of kernel modules are loaded
+type kernelModuleChecker struct {
 	// Modules lists required kernel modules
 	Modules    []string
 	getModules moduleGetterFunc
