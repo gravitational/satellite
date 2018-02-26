@@ -18,12 +18,6 @@ limitations under the License.
 
 package monitoring
 
-import (
-	"context"
-
-	"github.com/gravitational/satellite/agent/health"
-)
-
 // DefaultBootConfigParams is a no-op on this system
 func DefaultBootConfigParams() noopChecker {
 	return noopChecker{}
