@@ -25,6 +25,7 @@ import (
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/test"
+	"github.com/gravitational/trace"
 
 	. "gopkg.in/check.v1"
 )
@@ -56,10 +57,33 @@ func (*MonitoringSuite) TestValidatesOS(c *C) {
 			getRelease: testGetOSRelease(OSRelease{ID: "debian", VersionID: "9.3"}),
 			probes: health.Probes{&pb.Probe{
 				Checker: osCheckerID,
-				Status:  pb.Probe_Failed,
 				Detail:  "debian 9.3 is not supported",
+				Status:  pb.Probe_Failed,
 			}},
 			comment: "missing requirement",
+		},
+		{
+			releases:   staticOSReleases(),
+			getRelease: testGetOSRelease(OSRelease{ID: "debian", VersionID: "9.3"}),
+			probes:     health.Probes{&pb.Probe{Checker: osCheckerID, Status: pb.Probe_Running}},
+			comment:    "no error for empty requirements",
+		},
+		{
+			releases:   staticOSReleases("fedora", "25"),
+			getRelease: testFailingGetOSRelease(trace.NotFound("file or directory not found")),
+			probes:     health.Probes{&pb.Probe{Checker: osCheckerID, Status: pb.Probe_Running}},
+			comment:    "skip test if OS no distribution files are available",
+		},
+		{
+			releases:   staticOSReleases("debian", "9"),
+			getRelease: testFailingGetOSRelease(trace.AccessDenied("permission denied")),
+			probes: health.Probes{&pb.Probe{
+				Checker: osCheckerID,
+				Detail:  "failed to validate OS distribution",
+				Error:   "permission denied, failed to query OS version",
+				Status:  pb.Probe_Failed,
+			}},
+			comment: "fail if error prevents from reading the file (other than not found)",
 		},
 	}
 
@@ -95,7 +119,7 @@ func (*MonitoringSuite) TestReadsReleaseInfo(c *C) {
 				release: testReader(testOSRelease),
 				version: testReader(testOSVersion),
 			},
-			expected: OSRelease{ID: "centos", VersionID: "7.4.1708"},
+			expected: OSRelease{ID: "centos", VersionID: "7.4.1708", Like: []string{"rhel", "fedora"}},
 			comment:  "version is updated",
 		},
 	}
@@ -119,6 +143,12 @@ func (*MonitoringSuite) TestFailsOnNoReleaseFiles(c *C) {
 func testGetOSRelease(release OSRelease) osReleaseGetter {
 	return func() (*OSRelease, error) {
 		return &release, nil
+	}
+}
+
+func testFailingGetOSRelease(err error) osReleaseGetter {
+	return func() (*OSRelease, error) {
+		return nil, err
 	}
 }
 

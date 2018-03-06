@@ -45,22 +45,41 @@ type CheckerRepository interface {
 
 // Reporter defines an obligation to report structured errors.
 type Reporter interface {
-	// Add adds an health probe for a specific node.
+	// Add adds a health probe for a specific node.
 	Add(probe *pb.Probe)
 	// Status retrieves the collected status after executing all checks.
 	GetProbes() []*pb.Probe
+	// NumProbes returns the number of probes this reporter contains
+	NumProbes() int
+}
+
+// AddFrom copies probes from src to dst
+func AddFrom(dst, src Reporter) {
+	for _, probe := range src.GetProbes() {
+		dst.Add(probe)
+	}
 }
 
 // Probes is a list of probes.
 // It implements the Reporter interface.
 type Probes []*pb.Probe
 
+// Add adds a health probe for a specific node.
+// Implements Reporter
 func (r *Probes) Add(probe *pb.Probe) {
 	*r = append(*r, probe)
 }
 
+// Status retrieves the collected status after executing all checks.
+// Implements Reporter
 func (r Probes) GetProbes() []*pb.Probe {
 	return []*pb.Probe(r)
+}
+
+// NumProbes returns the number of probes this reporter contains
+// Implements Reporter
+func (r Probes) NumProbes() int {
+	return len(r)
 }
 
 // GetFailed returns all probes that reported an error

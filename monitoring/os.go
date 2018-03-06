@@ -32,4 +32,14 @@ type OSRelease struct {
 	ID string
 	// VersionID is the release version i.e. 16.04 for Ubuntu
 	VersionID string
+	// Like specifies the list of root OS distributions this
+	// distribution is a descendant of
+	Like []string
+}
+
+// GetOSRelease deteremines the OS distribution release information.
+//
+// It only supports Linux.
+func GetOSRelease() (*OSRelease, error) {
+	return nil, trace.BadParameter("not implemented")
 }

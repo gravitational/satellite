@@ -50,8 +50,13 @@ import (
 func NewOSChecker(releases ...OSRelease) health.Checker {
 	return &osReleaseChecker{
 		Releases:   releases,
-		getRelease: getRealOSRelease,
+		getRelease: GetOSRelease,
 	}
+}
+
+// GetOSRelease deteremines the OS distribution release information
+func GetOSRelease() (info *OSRelease, err error) {
+	return getOSReleaseFromFiles(releases, versions)
 }
 
 // osReleaseChecker validates host OS based on
@@ -69,29 +74,41 @@ func (c *osReleaseChecker) Name() string {
 
 // Check checks current OS and release is within supported list
 func (c *osReleaseChecker) Check(ctx context.Context, reporter health.Reporter) {
+	var probes health.Probes
+	err := c.check(ctx, &probes)
+	if err != nil && !trace.IsNotFound(err) {
+		reporter.Add(NewProbeFromErr(c.Name(), "failed to validate OS distribution", err))
+		return
+	}
+
+	health.AddFrom(reporter, &probes)
+	if probes.NumProbes() != 0 {
+		return
+	}
+
+	reporter.Add(NewSuccessProbe(c.Name()))
+}
+
+func (c *osReleaseChecker) check(ctx context.Context, reporter health.Reporter) error {
 	info, err := c.getRelease()
 	if err != nil {
-		reporter.Add(NewProbeFromErr(osCheckerID,
-			"failed to query OS version",
-			trace.Wrap(err)))
-		return
+		return trace.Wrap(err, "failed to query OS version")
 	}
 
 	for _, release := range c.Releases {
 		if versionsMatch(release, *info) {
-			reporter.Add(&pb.Probe{
-				Checker: osCheckerID,
-				Status:  pb.Probe_Running,
-			})
-			return
+			return nil
 		}
 	}
 
-	reporter.Add(&pb.Probe{
-		Checker: osCheckerID,
-		Detail:  fmt.Sprintf("%s %s is not supported", info.ID, info.VersionID),
-		Status:  pb.Probe_Failed,
-	})
+	if len(c.Releases) != 0 {
+		reporter.Add(&pb.Probe{
+			Checker: osCheckerID,
+			Detail:  fmt.Sprintf("%s %s is not supported", info.ID, info.VersionID),
+			Status:  pb.Probe_Failed,
+		})
+	}
+	return nil
 }
 
 // OSRelease is used to represent a certain OS release
@@ -101,15 +118,14 @@ type OSRelease struct {
 	ID string
 	// VersionID is the release version i.e. 16.04 for Ubuntu
 	VersionID string
+	// Like specifies the list of root OS distributions this
+	// distribution is a descendant of: `debian` for Ubuntu or `fedora` for RHEL
+	Like []string
 }
 
 // Name returns a name/version for this OS info, e.g. "centos 7.1"
 func (r OSRelease) Name() string {
 	return fmt.Sprintf("%v %v", r.ID, r.VersionID)
-}
-
-func getRealOSRelease() (info *OSRelease, err error) {
-	return getOSReleaseFromFiles(releases, versions)
 }
 
 func getOSReleaseFromFiles(releases, versions []string) (info *OSRelease, err error) {
@@ -179,6 +195,9 @@ const (
 	fieldReleaseID = "ID"
 	// fieldVersionID specifies the name of the field with OS distribution version ID
 	fieldVersionID = "VERSION_ID"
+	// fieldLike specifies the descent of this distribution as a list of OS
+	// distribution names
+	fieldLike = "ID_LIKE"
 )
 
 var (
@@ -288,6 +307,8 @@ func parseGenericRelease(rc io.ReadCloser) (info *OSRelease, err error) {
 		switch parts[0] {
 		case fieldReleaseID:
 			info.ID = value
+		case fieldLike:
+			info.Like = strings.Split(value, " ")
 		case fieldVersionID:
 			info.VersionID = value
 		}
@@ -352,7 +373,7 @@ func openFirst(paths ...string) (io.ReadCloser, error) {
 		f, err := file(path)
 		if err != nil {
 			if !trace.IsNotFound(err) {
-				log.Warnf("Failed to read %q: %v", path, err)
+				log.Warnf("Failed to read %q: %v.", path, err)
 			}
 			continue
 		}

@@ -29,36 +29,23 @@ import (
 	"github.com/mitchellh/go-ps"
 )
 
-// ProcessChecker is checking aginst known list of conflicting processes
+// ProcessChecker is a checker to verify that none of the specified
+// processes are executing
 type ProcessChecker struct {
-	// ProcessNames contains list of processes which should not be running at the time of check
+	// ProcessNames lists processes which are not expected
+	// to be running
 	ProcessNames []string
 }
 
-const processCheckerID = "process-checker"
-
-// DefaultProcessChecker returns checker which will ensure no conflicting program is running
-func DefaultProcessChecker() *ProcessChecker {
-	return &ProcessChecker{[]string{
-		"dockerd",
-		"lxd",
-		"dnsmasq",
-		"kube-apiserver",
-		"kube-scheduler",
-		"kube-controller-manager",
-		"kube-proxy",
-		"kubelet",
-		"planet",
-		"teleport",
-	}}
-}
-
-// Name returns checker name
+// Name returns checker name.
+// Implements health.Checker
 func (c *ProcessChecker) Name() string {
 	return processCheckerID
 }
 
-// Check will query current process list and report for each conflicting program found
+// Check verifies that none of the processes specified in c.ProcessNames
+// are executing on host.
+// Implements health.Checker
 func (c *ProcessChecker) Check(ctx context.Context, r health.Reporter) {
 	running, err := ps.Processes()
 	if err != nil {
@@ -88,3 +75,5 @@ func (c *ProcessChecker) Check(ctx context.Context, r health.Reporter) {
 	})
 
 }
+
+const processCheckerID = "process-checker"
