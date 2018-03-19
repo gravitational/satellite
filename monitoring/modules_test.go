@@ -93,27 +93,65 @@ func (_ *MonitoringSuite) TestHasModules(c *C) {
 	}
 }
 
-func (_ *MonitoringSuite) TestVerifiesModules(c *C) {
+func (_ *MonitoringSuite) TestValidatesModules(c *C) {
 	var testCases = []struct {
 		modules []string
+		reader  moduleGetterFunc
 		probes  health.Probes
 		comment string
 	}{
 		{
 			modules: []string{"ebtables", "br_netfilter"},
+			reader:  moduleReader(modulesData),
 			probes:  health.Probes{&pb.Probe{Checker: kernelModuleCheckerID, Status: pb.Probe_Running}},
 			comment: "running",
 		},
 		{
 			modules: []string{"required"},
+			reader:  moduleReader(modulesData),
 			probes: health.Probes{
 				&pb.Probe{
 					Checker: kernelModuleCheckerID,
-					Error:   `kernel module "required" not loaded`,
+					Detail:  `kernel module "required" not loaded`,
 					Status:  pb.Probe_Failed,
 				},
 			},
 			comment: "missing module",
+		},
+		{
+			modules: nil,
+			reader:  moduleReader(modulesData),
+			probes: health.Probes{
+				&pb.Probe{
+					Checker: kernelModuleCheckerID,
+					Status:  pb.Probe_Running,
+				},
+			},
+			comment: "skip test for empty requirements",
+		},
+		{
+			modules: []string{"required"},
+			reader:  testFailingModuleReader(trace.NotFound("file or directory not found")),
+			probes: health.Probes{
+				&pb.Probe{
+					Checker: kernelModuleCheckerID,
+					Status:  pb.Probe_Running,
+				},
+			},
+			comment: "skip test if no modules file available",
+		},
+		{
+			modules: []string{"required"},
+			reader:  testFailingModuleReader(trace.AccessDenied("permission denied")),
+			probes: health.Probes{
+				&pb.Probe{
+					Checker: kernelModuleCheckerID,
+					Detail:  "failed to validate kernel modules",
+					Error:   "permission denied",
+					Status:  pb.Probe_Failed,
+				},
+			},
+			comment: "fail if error prevents from reading the file (other than not found)",
 		},
 	}
 
@@ -121,7 +159,7 @@ func (_ *MonitoringSuite) TestVerifiesModules(c *C) {
 	for _, testCase := range testCases {
 		checker := kernelModuleChecker{
 			Modules:    testCase.modules,
-			getModules: moduleReader(modulesData),
+			getModules: testCase.reader,
 		}
 		var reporter health.Probes
 		checker.Check(context.TODO(), &reporter)
@@ -132,6 +170,12 @@ func (_ *MonitoringSuite) TestVerifiesModules(c *C) {
 func moduleReader(data []byte) func() (Modules, error) {
 	return func() (Modules, error) {
 		return ReadModulesFrom(bytes.NewReader(data))
+	}
+}
+
+func testFailingModuleReader(err error) func() (Modules, error) {
+	return func() (Modules, error) {
+		return nil, err
 	}
 }
 

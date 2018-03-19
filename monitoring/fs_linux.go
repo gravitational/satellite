@@ -48,22 +48,37 @@ func (r dtypeChecker) Name() string {
 
 // Check determines if the filesystem mounted on r supports d_type
 func (r dtypeChecker) Check(ctx context.Context, reporter health.Reporter) {
-	supports, err := supportsDType(string(r))
-	if err != nil {
-		reporter.Add(NewProbeFromErr(r.Name(), "internal error", trace.Wrap(err)))
+	var probes health.Probes
+	if err := r.check(ctx, &probes); err != nil {
+		reporter.Add(NewProbeFromErr(r.Name(),
+			"failed to determine d_type support in filesystem", err))
 		return
 	}
 
-	if !supports {
-		reporter.Add(&pb.Probe{
-			Checker: r.Name(),
-			Detail: fmt.Sprintf("filesystem on %v does not support d_type, "+
-				"see https://www.gravitational.com/docs/faq/#d_type-support-in-filesystem", string(r)),
-			Status: pb.Probe_Failed,
-		})
-	} else {
-		reporter.Add(&pb.Probe{Checker: r.Name(), Status: pb.Probe_Running})
+	health.AddFrom(reporter, &probes)
+	if probes.NumProbes() != 0 {
+		return
 	}
+
+	reporter.Add(NewSuccessProbe(r.Name()))
+}
+
+func (r dtypeChecker) check(ctx context.Context, reporter health.Reporter) error {
+	supports, err := supportsDType(string(r))
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	if supports {
+		return nil
+	}
+	reporter.Add(&pb.Probe{
+		Checker: r.Name(),
+		Detail: fmt.Sprintf("filesystem on %v does not support d_type, "+
+			"see https://www.gravitational.com/docs/faq/#d_type-support-in-filesystem", string(r)),
+		Status: pb.Probe_Failed,
+	})
+	return nil
 }
 
 type dtypeChecker string

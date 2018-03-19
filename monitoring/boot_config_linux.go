@@ -29,6 +29,7 @@ import (
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+
 	"github.com/gravitational/trace"
 )
 
@@ -65,108 +66,18 @@ func (c *bootConfigParamChecker) Name() string {
 
 // Check parses boot config files and validates whether parameters provided are set
 func (c *bootConfigParamChecker) Check(ctx context.Context, reporter health.Reporter) {
-	release, err := c.kernelVersionReader()
-	if err != nil {
-		reporter.Add(NewProbeFromErr(bootConfigParamID,
-			"failed to determine kernel version",
-			trace.Wrap(err)))
+	var probes health.Probes
+	if err := c.check(ctx, &probes); err != nil {
+		reporter.Add(NewProbeFromErr(c.Name(), "failed to validate boot configuration", err))
 		return
 	}
 
-	kernelVersion, err := parseKernelVersion(release)
-	if err != nil {
-		reporter.Add(NewProbeFromErr(bootConfigParamID,
-			"failed to determine kernel version",
-			trace.Wrap(err)))
+	health.AddFrom(reporter, &probes)
+	if probes.NumProbes() != 0 {
 		return
 	}
 
-	r, err := c.bootConfigReader(release)
-	if trace.IsNotFound(err) {
-		reporter.Add(NewProbeFromErr(bootConfigParamID,
-			"boot config unavailable, checks skipped", err))
-		return
-	}
-	if err != nil {
-		reporter.Add(NewProbeFromErr(bootConfigParamID,
-			"failed to parse boot config file",
-			trace.Wrap(err)))
-		return
-	}
-
-	cfg, err := parseBootConfig(r)
-	if err != nil {
-		reporter.Add(NewProbeFromErr(bootConfigParamID,
-			"failed to parse boot config file",
-			trace.Wrap(err)))
-		return
-	}
-
-	failed := false
-	for _, param := range c.Params {
-		if param.KernelConstraint != nil &&
-			!param.KernelConstraint(*kernelVersion) {
-			// Skip if the kernel condition is not satisfied
-			continue
-		}
-		if _, ok := cfg[param.Name]; ok {
-			continue
-		}
-
-		reporter.Add(&pb.Probe{
-			Checker: bootConfigParamID,
-			Detail: fmt.Sprintf("required kernel boot config parameter %s missing",
-				param.Name),
-			Status: pb.Probe_Failed,
-		})
-		failed = true
-	}
-
-	if failed {
-		return
-	}
-	reporter.Add(&pb.Probe{
-		Checker: bootConfigParamID,
-		Status:  pb.Probe_Running,
-	})
-}
-
-// DefaultBootConfigParams returns standard kernel configs required for running kubernetes
-func DefaultBootConfigParams() health.Checker {
-	return NewBootConfigParamChecker(
-		BootConfigParam{Name: "CONFIG_NET_NS"},
-		BootConfigParam{Name: "CONFIG_PID_NS"},
-		BootConfigParam{Name: "CONFIG_IPC_NS"},
-		BootConfigParam{Name: "CONFIG_UTS_NS"},
-		BootConfigParam{Name: "CONFIG_CGROUPS"},
-		BootConfigParam{Name: "CONFIG_CGROUP_CPUACCT"},
-		BootConfigParam{Name: "CONFIG_CGROUP_DEVICE"},
-		BootConfigParam{Name: "CONFIG_CGROUP_FREEZER"},
-		BootConfigParam{Name: "CONFIG_CGROUP_SCHED"},
-		BootConfigParam{Name: "CONFIG_CPUSETS"},
-		BootConfigParam{Name: "CONFIG_MEMCG"},
-		BootConfigParam{Name: "CONFIG_KEYS"},
-		BootConfigParam{Name: "CONFIG_VETH"},
-		BootConfigParam{Name: "CONFIG_BRIDGE"},
-		BootConfigParam{Name: "CONFIG_BRIDGE_NETFILTER"},
-		BootConfigParam{Name: "CONFIG_NF_NAT_IPV4"},
-		BootConfigParam{Name: "CONFIG_IP_NF_FILTER"},
-		BootConfigParam{Name: "CONFIG_IP_NF_TARGET_MASQUERADE"},
-		BootConfigParam{Name: "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE"},
-		BootConfigParam{Name: "CONFIG_NETFILTER_XT_MATCH_CONNTRACK"},
-		BootConfigParam{Name: "CONFIG_NETFILTER_XT_MATCH_IPVS"},
-		BootConfigParam{Name: "CONFIG_IP_NF_NAT"},
-		BootConfigParam{Name: "CONFIG_NF_NAT"},
-		BootConfigParam{Name: "CONFIG_NF_NAT_NEEDED"},
-		BootConfigParam{Name: "CONFIG_POSIX_MQUEUE"},
-		BootConfigParam{
-			// See: https://lists.gt.net/linux/kernel/2465684#2465684
-			//  and https://github.com/lxc/lxc/pull/1217
-			// CONFIG_DEVPTS_MULTIPLE_INSTANCES has been removed as of kernel 4.7
-			Name:             "CONFIG_DEVPTS_MULTIPLE_INSTANCES",
-			KernelConstraint: KernelVersionLessThan(KernelVersion{Release: 4, Major: 7}),
-		},
-	)
+	reporter.Add(NewSuccessProbe(bootConfigParamID))
 }
 
 // GetStorageDriverBootConfigParams returns config params required for a given filesystem
@@ -220,6 +131,52 @@ type KernelVersion struct {
 	Major int
 	// Minor specifies the minor version component
 	Minor int
+}
+
+// check verifies boot configuration on host.
+func (c *bootConfigParamChecker) check(ctx context.Context, reporter health.Reporter) error {
+	release, err := c.kernelVersionReader()
+	if err != nil {
+		return trace.Wrap(err, "failed to read kernel version")
+	}
+
+	kernelVersion, err := parseKernelVersion(release)
+	if err != nil {
+		return trace.Wrap(err, "failed to determine kernel version")
+	}
+
+	r, err := c.bootConfigReader(release)
+	if trace.IsNotFound(err) {
+		// Skip checks if boot configuration is not available
+		return nil
+	}
+	if err != nil {
+		return trace.Wrap(err, "failed to read boot configuration")
+	}
+
+	cfg, err := parseBootConfig(r)
+	if err != nil {
+		return trace.Wrap(err, "failed to parse boot configuration")
+	}
+
+	for _, param := range c.Params {
+		if param.KernelConstraint != nil &&
+			!param.KernelConstraint(*kernelVersion) {
+			// Skip if the kernel condition is not satisfied
+			continue
+		}
+		if _, ok := cfg[param.Name]; ok {
+			continue
+		}
+
+		reporter.Add(&pb.Probe{
+			Checker: bootConfigParamID,
+			Detail: fmt.Sprintf("required kernel boot config parameter %s missing",
+				param.Name),
+			Status: pb.Probe_Failed,
+		})
+	}
+	return nil
 }
 
 func realBootConfigReader(release string) (io.ReadCloser, error) {

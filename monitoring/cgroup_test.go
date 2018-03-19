@@ -22,6 +22,7 @@ import (
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/test"
+	"github.com/gravitational/trace"
 
 	. "gopkg.in/check.v1"
 )
@@ -48,11 +49,13 @@ func (*MonitoringSuite) TestValidatesCGroupMounts(c *C) {
 	var testCases = []struct {
 		cgroups []string
 		probes  health.Probes
+		reader  mountGetterFunc
 		comment string
 	}{
 		{
 			cgroups: []string{"cpu", "memory"},
 			probes:  health.Probes{&pb.Probe{Checker: cgroupCheckerID, Status: pb.Probe_Running}},
+			reader:  testMountsReader(testCgroups),
 			comment: "all mounts available",
 		},
 		{
@@ -64,7 +67,23 @@ func (*MonitoringSuite) TestValidatesCGroupMounts(c *C) {
 					Status:  pb.Probe_Failed,
 				},
 			},
+			reader:  testMountsReader(testCgroups),
 			comment: "missing cgroup mount",
+		},
+		{
+			cgroups: []string{"cpu", "memory", "blkio"},
+			probes: health.Probes{
+				&pb.Probe{Checker: cgroupCheckerID, Status: pb.Probe_Running},
+			},
+			reader:  testFailingMountsReader(trace.NotFound("file or directory not found")),
+			comment: "skip test if mounts file is not available",
+		},
+		{
+			probes: health.Probes{
+				&pb.Probe{Checker: cgroupCheckerID, Status: pb.Probe_Running},
+			},
+			reader:  testMountsReader(testCgroups),
+			comment: "no error with empty requirements",
 		},
 	}
 
@@ -72,7 +91,7 @@ func (*MonitoringSuite) TestValidatesCGroupMounts(c *C) {
 	for _, testCase := range testCases {
 		checker := cgroupChecker{
 			cgroups:   testCase.cgroups,
-			getMounts: mountsReader(testCgroups),
+			getMounts: testCase.reader,
 		}
 		var reporter health.Probes
 		checker.Check(context.TODO(), &reporter)
@@ -80,9 +99,15 @@ func (*MonitoringSuite) TestValidatesCGroupMounts(c *C) {
 	}
 }
 
-func mountsReader(data []byte) func() ([]mountPoint, error) {
+func testMountsReader(data []byte) func() ([]mountPoint, error) {
 	return func() ([]mountPoint, error) {
 		return parseProcMounts(data)
+	}
+}
+
+func testFailingMountsReader(err error) mountGetterFunc {
+	return func() ([]mountPoint, error) {
+		return nil, err
 	}
 }
 

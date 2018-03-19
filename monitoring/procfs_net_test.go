@@ -145,26 +145,20 @@ func (_ *S) TestUnixSocketFromLine(c *C) {
 }
 
 func (_ *S) TestDoesNotFailForNonExistingStacks(c *C) {
-	fetchTCP := func() ([]tcpSocket, error) {
+	fetchTCP := func() ([]socket, error) {
 		return getTCPSocketsFromPath("non-existing/tcp")
 	}
-	fetchUDP := func() ([]udpSocket, error) {
+	fetchUDP := func() ([]socket, error) {
 		return getUDPSocketsFromPath("non-existing/udp")
 	}
 	fetchProcs := func() (procfs.Procs, error) {
 		return nil, nil
 	}
 
-	collector, err := newPortCollector(fetchProcs)
+	procs, err := getPorts(fetchProcs, fetchTCP, fetchUDP)
 	c.Assert(err, IsNil)
 
-	procsTCP, err := collector.tcp(fetchTCP)
-	c.Assert(err, IsNil)
-	c.Assert(procsTCP, DeepEquals, []process(nil))
-
-	procsUDP, err := collector.udp(fetchUDP)
-	c.Assert(err, IsNil)
-	c.Assert(procsUDP, DeepEquals, []process(nil))
+	c.Assert(procs, DeepEquals, []process(nil))
 }
 
 func tcpAddr(addrS string, c *C) net.TCPAddr {

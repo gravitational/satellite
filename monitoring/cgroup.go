@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"github.com/gravitational/satellite/agent/health"
-	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/utils"
 
 	"github.com/gravitational/trace"
@@ -54,10 +53,25 @@ func (r cgroupChecker) Name() string {
 // Check verifies existence of cgroup mounts given in r.cgroups.
 // Implements health.Checker
 func (r cgroupChecker) Check(ctx context.Context, reporter health.Reporter) {
+	var probes health.Probes
+	err := r.check(ctx, &probes)
+	if err != nil && !trace.IsNotFound(err) {
+		reporter.Add(NewProbeFromErr(r.Name(), "failed to validate cgroup mounts", err))
+		return
+	}
+
+	health.AddFrom(reporter, &probes)
+	if probes.NumProbes() != 0 {
+		return
+	}
+
+	reporter.Add(NewSuccessProbe(r.Name()))
+}
+
+func (r cgroupChecker) check(ctx context.Context, reporter health.Reporter) error {
 	mounts, err := r.getMounts()
 	if err != nil {
-		reporter.Add(NewProbeFromErr(r.Name(), "", trace.Wrap(err)))
-		return
+		return trace.Wrap(err, "failed to read mounts file")
 	}
 
 	expectedCgroups := utils.NewStringSetFromSlice(r.cgroups)
@@ -75,10 +89,8 @@ func (r cgroupChecker) Check(ctx context.Context, reporter health.Reporter) {
 	if len(unmountedCgroups) > 0 {
 		reporter.Add(NewProbeFromErr(r.Name(), "",
 			trace.NotFound("Following CGroups have not been mounted: %q", unmountedCgroups)))
-		return
 	}
-
-	reporter.Add(&pb.Probe{Checker: r.Name(), Status: pb.Probe_Running})
+	return nil
 }
 
 // listProcMounts returns the set of active mounts by interpreting

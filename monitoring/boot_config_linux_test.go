@@ -19,12 +19,14 @@ package monitoring
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/test"
+	"github.com/gravitational/trace"
 
 	. "gopkg.in/check.v1"
 )
@@ -111,6 +113,54 @@ func (*MonitoringSuite) TestValidatesBootConfig(c *C) {
 			probes:              health.Probes{&pb.Probe{Checker: bootConfigParamID, Status: pb.Probe_Running}},
 			comment:             "parameter should be skipped due to kernel version",
 		},
+		{
+			params: []BootConfigParam{
+				BootConfigParam{
+					Name:             "CONFIG_PARAM4",
+					KernelConstraint: KernelVersionLessThan(KernelVersion{Release: 4, Major: 4}),
+				}},
+			kernelVersionReader: staticKernelVersion("4.5.0"),
+			bootConfigReader:    testBootConfigReader(testBootConfig),
+			probes:              health.Probes{&pb.Probe{Checker: bootConfigParamID, Status: pb.Probe_Running}},
+			comment:             "parameter should be skipped due to kernel version",
+		},
+		{
+			params:              staticParams("CONFIG_PARAM"),
+			kernelVersionReader: staticKernelVersion("4.5.0"),
+			bootConfigReader:    testBootConfigFailingReader(trace.NotFound("file or directory not found")),
+			probes:              health.Probes{&pb.Probe{Checker: bootConfigParamID, Status: pb.Probe_Running}},
+			comment:             "skip test if boot configuration is unavailable",
+		},
+		{
+			params:              staticParams("CONFIG_PARAM"),
+			kernelVersionReader: testFailingKernelVersion(fmt.Errorf("unknown error")),
+			probes: health.Probes{
+				&pb.Probe{
+					Checker: bootConfigParamID,
+					Detail:  "failed to validate boot configuration",
+					Error:   "failed to read kernel version",
+					Status:  pb.Probe_Failed,
+				}},
+			comment: "fails if kernel version cannot be determined",
+		},
+		{
+			params:              staticParams("CONFIG_PARAM4", "CONFIG_PARAM5"),
+			kernelVersionReader: staticKernelVersion("4.5.0"),
+			bootConfigReader:    testBootConfigReader(testBootConfig),
+			probes: health.Probes{
+				&pb.Probe{
+					Checker: bootConfigParamID,
+					Status:  pb.Probe_Failed,
+					Detail:  "required kernel boot config parameter CONFIG_PARAM4 missing",
+				},
+				&pb.Probe{
+					Checker: bootConfigParamID,
+					Status:  pb.Probe_Failed,
+					Detail:  "required kernel boot config parameter CONFIG_PARAM5 missing",
+				},
+			},
+			comment: "collect all failed probes",
+		},
 	}
 
 	// exercise / verify
@@ -132,9 +182,21 @@ func testBootConfigReader(config []byte) bootConfigReader {
 	}
 }
 
+func testBootConfigFailingReader(err error) bootConfigReader {
+	return func(string) (io.ReadCloser, error) {
+		return nil, err
+	}
+}
+
 func staticKernelVersion(version string) kernelVersionReader {
 	return func() (string, error) {
 		return version, nil
+	}
+}
+
+func testFailingKernelVersion(err error) kernelVersionReader {
+	return func() (string, error) {
+		return "", err
 	}
 }
 

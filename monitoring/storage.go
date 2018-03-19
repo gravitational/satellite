@@ -86,7 +86,8 @@ func (c *storageChecker) Name() string {
 func (c *storageChecker) Check(ctx context.Context, reporter health.Reporter) {
 	err := c.check(ctx, reporter)
 	if err != nil {
-		reporter.Add(NewProbeFromErr(c.Name(), "internal error", trace.Wrap(err)))
+		reporter.Add(NewProbeFromErr(c.Name(),
+			"failed to validate storage requirements", trace.Wrap(err)))
 	} else {
 		reporter.Add(&pb.Probe{Checker: c.Name(), Status: pb.Probe_Running})
 	}
