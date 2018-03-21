@@ -17,6 +17,8 @@ limitations under the License.
 */
 package monitoring
 
+import "github.com/gravitational/trace"
+
 // NewOSChecker returns a new checker to verify OS distribution
 // against the list of supported releases.
 //
