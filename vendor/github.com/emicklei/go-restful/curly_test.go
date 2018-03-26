@@ -158,17 +158,24 @@ func TestExtractParameters_Wildcard3(t *testing.T) {
 	}
 }
 
+func TestExtractParameters_Wildcard4(t *testing.T) {
+	params := doExtractParams("/static/{var:*}/sub", 3, "/static/test/sub", t)
+	if params["var"] != "test/sub" {
+		t.Errorf("parameter mismatch var: %s", params["var"])
+	}
+}
+
 // clear && go test -v -test.run TestCurly_ISSUE_34 ...restful
 func TestCurly_ISSUE_34(t *testing.T) {
 	ws1 := new(WebService).Path("/")
 	ws1.Route(ws1.GET("/{type}/{id}").To(curlyDummy))
 	ws1.Route(ws1.GET("/network/{id}").To(curlyDummy))
-	routes := CurlyRouter{}.selectRoutes(ws1, tokenizePath("/network/12"))
-	if len(routes) != 2 {
+	croutes := CurlyRouter{}.selectRoutes(ws1, tokenizePath("/network/12"))
+	if len(croutes) != 2 {
 		t.Fatal("expected 2 routes")
 	}
-	if routes[0].Path != "/network/{id}" {
-		t.Error("first is", routes[0].Path)
+	if got, want := croutes[0].route.Path, "/network/{id}"; got != want {
+		t.Errorf("got %v want %v", got, want)
 	}
 }
 
@@ -177,12 +184,12 @@ func TestCurly_ISSUE_34_2(t *testing.T) {
 	ws1 := new(WebService)
 	ws1.Route(ws1.GET("/network/{id}").To(curlyDummy))
 	ws1.Route(ws1.GET("/{type}/{id}").To(curlyDummy))
-	routes := CurlyRouter{}.selectRoutes(ws1, tokenizePath("/network/12"))
-	if len(routes) != 2 {
+	croutes := CurlyRouter{}.selectRoutes(ws1, tokenizePath("/network/12"))
+	if len(croutes) != 2 {
 		t.Fatal("expected 2 routes")
 	}
-	if routes[0].Path != "/network/{id}" {
-		t.Error("first is", routes[0].Path)
+	if got, want := croutes[0].route.Path, "/network/{id}"; got != want {
+		t.Errorf("got %v want %v", got, want)
 	}
 }
 

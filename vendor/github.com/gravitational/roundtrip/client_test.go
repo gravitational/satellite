@@ -70,7 +70,7 @@ func (s *ClientSuite) TestPostForm(c *C) {
 	c.Assert(string(out.Bytes()), Equals, "hello back")
 	c.Assert(u.String(), DeepEquals, "/v1/a/b")
 	c.Assert(form, DeepEquals, values)
-	c.Assert(method, Equals, "POST")
+	c.Assert(method, Equals, http.MethodPost)
 	c.Assert(user, DeepEquals, "user")
 	c.Assert(pass, DeepEquals, "pass")
 }
@@ -86,7 +86,7 @@ func (s *ClientSuite) TestAddAuth(c *C) {
 	defer srv.Close()
 
 	clt := newC(srv.URL, "v1", BasicAuth("user", "pass"))
-	req, err := http.NewRequest("GET", clt.Endpoint("a", "b"), nil)
+	req, err := http.NewRequest(http.MethodGet, clt.Endpoint("a", "b"), nil)
 	c.Assert(err, IsNil)
 	clt.SetAuthHeader(req.Header)
 	_, err = clt.HTTPClient().Do(req)
@@ -96,7 +96,7 @@ func (s *ClientSuite) TestAddAuth(c *C) {
 	c.Assert(pass, DeepEquals, "pass")
 }
 
-func (s *ClientSuite) TestPostJSON(c *C) {
+func (s *ClientSuite) TestPostPutPatchJSON(c *C) {
 	var data interface{}
 	var user, pass string
 	var method string
@@ -116,7 +116,7 @@ func (s *ClientSuite) TestPostJSON(c *C) {
 	_, err := clt.PostJSON(clt.Endpoint("a", "b"), values)
 
 	c.Assert(err, IsNil)
-	c.Assert(method, Equals, "POST")
+	c.Assert(method, Equals, http.MethodPost)
 	c.Assert(user, DeepEquals, "user")
 	c.Assert(pass, DeepEquals, "pass")
 	c.Assert(data, DeepEquals, values)
@@ -125,7 +125,16 @@ func (s *ClientSuite) TestPostJSON(c *C) {
 	_, err = clt.PutJSON(clt.Endpoint("a", "b"), values)
 
 	c.Assert(err, IsNil)
-	c.Assert(method, Equals, "PUT")
+	c.Assert(method, Equals, http.MethodPut)
+	c.Assert(user, DeepEquals, "user")
+	c.Assert(pass, DeepEquals, "pass")
+	c.Assert(data, DeepEquals, values)
+
+	values = map[string]interface{}{"hello": "there,patch"}
+	_, err = clt.PatchJSON(clt.Endpoint("a", "b"), values)
+
+	c.Assert(err, IsNil)
+	c.Assert(method, Equals, http.MethodPatch)
 	c.Assert(user, DeepEquals, "user")
 	c.Assert(pass, DeepEquals, "pass")
 	c.Assert(data, DeepEquals, values)
@@ -143,7 +152,7 @@ func (s *ClientSuite) TestDelete(c *C) {
 	clt := newC(srv.URL, "v1", BasicAuth("user", "pass"))
 	re, err := clt.Delete(clt.Endpoint("a", "b"))
 	c.Assert(err, IsNil)
-	c.Assert(method, Equals, "DELETE")
+	c.Assert(method, Equals, http.MethodDelete)
 	c.Assert(re.Code(), Equals, http.StatusOK)
 	c.Assert(user, DeepEquals, "user")
 	c.Assert(pass, DeepEquals, "pass")
@@ -164,7 +173,7 @@ func (s *ClientSuite) TestDeleteP(c *C) {
 	values := url.Values{"force": []string{"true"}}
 	re, err := clt.DeleteWithParams(clt.Endpoint("a", "b"), values)
 	c.Assert(err, IsNil)
-	c.Assert(method, Equals, "DELETE")
+	c.Assert(method, Equals, http.MethodDelete)
 	c.Assert(re.Code(), Equals, http.StatusOK)
 	c.Assert(user, DeepEquals, "user")
 	c.Assert(pass, DeepEquals, "pass")
@@ -183,7 +192,7 @@ func (s *ClientSuite) TestGet(c *C) {
 	clt := newC(srv.URL, "v1")
 	values := url.Values{"q": []string{"1", "2"}}
 	clt.Get(clt.Endpoint("a", "b"), values)
-	c.Assert(method, Equals, "GET")
+	c.Assert(method, Equals, http.MethodGet)
 	c.Assert(query, DeepEquals, values)
 }
 
@@ -414,7 +423,7 @@ func (s *ClientSuite) testPostMultipartForm(c *C, files []File, expected [][]byt
 	c.Assert(string(out.Bytes()), Equals, "hello back")
 	c.Assert(u.String(), DeepEquals, "/v1/a/b")
 
-	c.Assert(method, Equals, "POST")
+	c.Assert(method, Equals, http.MethodPost)
 	c.Assert(params, DeepEquals, values)
 	c.Assert(data, DeepEquals, expected)
 

@@ -7,7 +7,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-const TypeISBN uint16 = 0x0F01
+const TypeISBN uint16 = 0xFF00
 
 // A crazy new RR type :)
 type ISBN struct {
@@ -59,8 +59,6 @@ func TestPrivateText(t *testing.T) {
 	}
 	if rr.String() != testrecord {
 		t.Errorf("record string representation did not match original %#v != %#v", rr.String(), testrecord)
-	} else {
-		t.Log(rr.String())
 	}
 }
 
@@ -87,20 +85,19 @@ func TestPrivateByteSlice(t *testing.T) {
 	rr1, off1, err := dns.UnpackRR(buf[:off], 0)
 	if err != nil {
 		t.Errorf("got error unpacking ISBN: %v", err)
+		return
 	}
 
 	if off1 != off {
-		t.Errorf("Offset after unpacking differs: %d != %d", off1, off)
+		t.Errorf("offset after unpacking differs: %d != %d", off1, off)
 	}
 
 	if rr1.String() != testrecord {
-		t.Errorf("Record string representation did not match original %#v != %#v", rr1.String(), testrecord)
-	} else {
-		t.Log(rr1.String())
+		t.Errorf("record string representation did not match original %#v != %#v", rr1.String(), testrecord)
 	}
 }
 
-const TypeVERSION uint16 = 0x0F02
+const TypeVERSION uint16 = 0xFF01
 
 type VERSION struct {
 	x string
@@ -142,7 +139,7 @@ func (rd *VERSION) Len() int {
 }
 
 var smallzone = `$ORIGIN example.org.
-@ SOA	sns.dns.icann.org. noc.dns.icann.org. (
+@ 3600 IN SOA	sns.dns.icann.org. noc.dns.icann.org. (
 		2014091518 7200 3600 1209600 3600
 )
     A   1.2.3.4
@@ -165,6 +162,5 @@ func TestPrivateZoneParser(t *testing.T) {
 		if err := x.Error; err != nil {
 			t.Fatal(err)
 		}
-		t.Log(x.RR)
 	}
 }

@@ -1,107 +1,11 @@
 package memberlist
 
 import (
-	"errors"
 	"fmt"
-	"net"
 	"reflect"
 	"testing"
 	"time"
 )
-
-func TestGetPrivateIP(t *testing.T) {
-	ip, _, err := net.ParseCIDR("10.1.2.3/32")
-	if err != nil {
-		t.Fatalf("failed to parse private cidr: %v", err)
-	}
-
-	pubIP, _, err := net.ParseCIDR("8.8.8.8/32")
-	if err != nil {
-		t.Fatalf("failed to parse public cidr: %v", err)
-	}
-
-	tests := []struct {
-		addrs    []net.Addr
-		expected net.IP
-		err      error
-	}{
-		{
-			addrs: []net.Addr{
-				&net.IPAddr{
-					IP: ip,
-				},
-				&net.IPAddr{
-					IP: pubIP,
-				},
-			},
-			expected: ip,
-		},
-		{
-			addrs: []net.Addr{
-				&net.IPAddr{
-					IP: pubIP,
-				},
-			},
-			err: errors.New("No private IP address found"),
-		},
-		{
-			addrs: []net.Addr{
-				&net.IPAddr{
-					IP: ip,
-				},
-				&net.IPAddr{
-					IP: ip,
-				},
-				&net.IPAddr{
-					IP: pubIP,
-				},
-			},
-			err: errors.New("Multiple private IPs found. Please configure one."),
-		},
-	}
-
-	for _, test := range tests {
-		ip, err := GetPrivateIP(test.addrs)
-		switch {
-		case test.err != nil && err != nil:
-			if err.Error() != test.err.Error() {
-				t.Fatalf("unexpected error: %v != %v", test.err, err)
-			}
-		case (test.err == nil && err != nil) || (test.err != nil && err == nil):
-			t.Fatalf("unexpected error: %v != %v", test.err, err)
-		default:
-			if !test.expected.Equal(ip) {
-				t.Fatalf("unexpected ip: %v != %v", ip, test.expected)
-			}
-		}
-	}
-}
-
-func TestIsPrivateIP(t *testing.T) {
-	privateIPs := []string{
-		"10.1.2.3",
-		"100.115.110.19",
-		"127.0.0.1",
-		"169.254.1.254",
-		"172.16.45.100",
-		"192.168.1.1",
-	}
-	publicIPs := []string{
-		"8.8.8.8",
-		"208.67.222.222",
-	}
-
-	for _, privateIP := range privateIPs {
-		if !IsPrivateIP(privateIP) {
-			t.Fatalf("bad")
-		}
-	}
-	for _, publicIP := range publicIPs {
-		if IsPrivateIP(publicIP) {
-			t.Fatalf("bad")
-		}
-	}
-}
 
 func Test_hasPort(t *testing.T) {
 	cases := []struct {
@@ -252,29 +156,49 @@ func TestPushPullScale(t *testing.T) {
 func TestMoveDeadNodes(t *testing.T) {
 	nodes := []*nodeState{
 		&nodeState{
-			State: stateDead,
+			State:       stateDead,
+			StateChange: time.Now().Add(-20 * time.Second),
 		},
 		&nodeState{
-			State: stateAlive,
+			State:       stateAlive,
+			StateChange: time.Now().Add(-20 * time.Second),
+		},
+		// This dead node should not be moved, as its state changed
+		// less than the specified GossipToTheDead time ago
+		&nodeState{
+			State:       stateDead,
+			StateChange: time.Now().Add(-10 * time.Second),
 		},
 		&nodeState{
-			State: stateAlive,
+			State:       stateAlive,
+			StateChange: time.Now().Add(-20 * time.Second),
 		},
 		&nodeState{
-			State: stateDead,
+			State:       stateDead,
+			StateChange: time.Now().Add(-20 * time.Second),
 		},
 		&nodeState{
-			State: stateAlive,
+			State:       stateAlive,
+			StateChange: time.Now().Add(-20 * time.Second),
 		},
 	}
 
-	idx := moveDeadNodes(nodes)
-	if idx != 3 {
+	idx := moveDeadNodes(nodes, (15 * time.Second))
+	if idx != 4 {
 		t.Fatalf("bad index")
 	}
 	for i := 0; i < idx; i++ {
-		if nodes[i].State != stateAlive {
-			t.Fatalf("Bad state %d", i)
+		switch i {
+		case 2:
+			// Recently dead node remains at index 2,
+			// since nodes are swapped out to move to end.
+			if nodes[i].State != stateDead {
+				t.Fatalf("Bad state %d", i)
+			}
+		default:
+			if nodes[i].State != stateAlive {
+				t.Fatalf("Bad state %d", i)
+			}
 		}
 	}
 	for i := idx; i < len(nodes); i++ {

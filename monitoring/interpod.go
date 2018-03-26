@@ -25,9 +25,11 @@ import (
 
 	"github.com/gravitational/satellite/agent/health"
 	"github.com/gravitational/trace"
+	"github.com/kubernetes/kubernetes/staging/src/k8s.io/apiserver/pkg/storage/names"
 
 	"github.com/blang/semver"
 	log "github.com/sirupsen/logrus"
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -35,7 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/discovery"
 	kube "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api/v1"
+
 	"k8s.io/client-go/rest"
 )
 
@@ -83,7 +85,7 @@ func (r *interPodChecker) testInterPodCommunication(ctx context.Context, client 
 		return trace.Wrap(err, "service account has not yet been created - test postponed")
 	}
 
-	svc, err := client.Services(testNamespace).Create(&v1.Service{
+	svc, err := client.CoreV1().Services(testNamespace).Create(&v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: serviceName,
 			Labels: map[string]string{
@@ -106,7 +108,7 @@ func (r *interPodChecker) testInterPodCommunication(ctx context.Context, client 
 	}
 
 	cleanupService := func() {
-		if err = client.Services(testNamespace).Delete(svc.Name, &metav1.DeleteOptions{}); err != nil {
+		if err = client.CoreV1().Services(testNamespace).Delete(svc.Name, &metav1.DeleteOptions{}); err != nil {
 			log.Infof("failed to delete service %q: %v", svc.Name, err)
 		}
 	}
@@ -128,7 +130,7 @@ func (r *interPodChecker) testInterPodCommunication(ctx context.Context, client 
 
 	cleanupPods := func() {
 		for _, podName := range podNames {
-			if err = client.Pods(testNamespace).Delete(podName, nil); err != nil {
+			if err = client.CoreV1().Pods(testNamespace).Delete(podName, nil); err != nil {
 				log.Infof("failed to delete pod %q: %v", podName, err)
 			}
 		}
@@ -230,7 +232,7 @@ func waitTimeoutForPodRunningInNamespace(client *kube.Clientset, podName string,
 func waitForPodCondition(client *kube.Clientset, ns, podName, desc string, timeout time.Duration, condition podCondition) error {
 	log.Infof("waiting up to %v for pod %s status to be %s", timeout, podName, desc)
 	for start := time.Now(); time.Since(start) < timeout; time.Sleep(pollInterval) {
-		pod, err := client.Pods(ns).Get(podName, metav1.GetOptions{})
+		pod, err := client.CoreV1().Pods(ns).Get(podName, metav1.GetOptions{})
 		if err != nil {
 			log.Infof("get pod %s in namespace '%s' failed, ignoring for %v: %v",
 				podName, ns, pollInterval, err)
@@ -259,7 +261,7 @@ func launchNetTestPodPerNode(client *kube.Clientset, nodes *v1.NodeList, name, c
 	totalPods := len(nodes.Items)
 
 	for _, node := range nodes.Items {
-		pod, err := client.Pods(namespace).Create(&v1.Pod{
+		pod, err := client.CoreV1().Pods(namespace).Create(&v1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: name + "-",
 				Labels: map[string]string{
@@ -305,9 +307,9 @@ func podReady(pod *v1.Pod) bool {
 // createNamespaceIfNeeded creates a namespace if not already created.
 func createNamespaceIfNeeded(client *kube.Clientset, namespace string) error {
 	log.Infof("creating %s namespace", namespace)
-	if _, err := client.Namespaces().Get(namespace, metav1.GetOptions{}); err != nil {
+	if _, err := client.CoreV1().Namespaces().Get(namespace, metav1.GetOptions{}); err != nil {
 		log.Infof("%s namespace not found: %v", namespace, err)
-		_, err = client.Namespaces().Create(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}})
+		_, err = client.CoreV1().Namespaces().Create(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}})
 		if err != nil {
 			return trace.Wrap(err)
 		}
@@ -318,14 +320,15 @@ func createNamespaceIfNeeded(client *kube.Clientset, namespace string) error {
 // generateName generates a name for a kubernetes object.
 // The name generated is guaranteed to satisfy kubernetes requirements.
 func generateName(prefix string) string {
-	return v1.SimpleNameGenerator.GenerateName(prefix)
+	return names.SimpleNameGenerator.GenerateName(prefix)
+
 }
 
 // getServiceAccount retrieves the service account with the specified name
 // in the provided namespace.
 func getServiceAccount(c *kube.Clientset, ns, name string, shouldWait bool) (*v1.ServiceAccount, error) {
 	if !shouldWait {
-		return c.ServiceAccounts(ns).Get(name, metav1.GetOptions{})
+		return c.CoreV1().ServiceAccounts(ns).Get(name, metav1.GetOptions{})
 	}
 
 	const interval = time.Second
@@ -334,7 +337,7 @@ func getServiceAccount(c *kube.Clientset, ns, name string, shouldWait bool) (*v1
 	var err error
 	var user *v1.ServiceAccount
 	if err = wait.Poll(interval, timeout, func() (bool, error) {
-		user, err = c.ServiceAccounts(ns).Get(name, metav1.GetOptions{})
+		user, err = c.CoreV1().ServiceAccounts(ns).Get(name, metav1.GetOptions{})
 		if errors.IsNotFound(err) {
 			return false, nil
 		}
@@ -358,7 +361,7 @@ func waitForAllNodesSchedulable(ctx context.Context, c *kube.Clientset) (nodes *
 			ResourceVersion: "0",
 			FieldSelector:   fields.Set{"spec.unschedulable": "false"}.String(),
 		}
-		nodes, err = c.Nodes().List(opts)
+		nodes, err = c.CoreV1().Nodes().List(opts)
 		if err != nil {
 			log.Infof("unexpected error listing nodes: %v", err)
 			// ignore the error here - it will be retried.

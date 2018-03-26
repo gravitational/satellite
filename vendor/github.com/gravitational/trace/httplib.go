@@ -6,11 +6,6 @@ import (
 	"net/http"
 )
 
-const (
-	statusTooManyRequests = 429
-	statusTrustError      = 504
-)
-
 // WriteError sets up HTTP error response and writes it to writer w
 func WriteError(w http.ResponseWriter, err error) {
 	if IsAggregate(err) {
@@ -27,34 +22,30 @@ func WriteError(w http.ResponseWriter, err error) {
 			err = errors[0]
 		}
 	}
-	writeError(w, err)
+	replyJSON(w, ErrorToCode(err), err)
 }
 
-func writeError(w http.ResponseWriter, err error) {
-	if IsNotFound(err) {
-		replyJSON(
-			w, http.StatusNotFound, err)
-	} else if IsBadParameter(err) || IsOAuth2(err) {
-		replyJSON(
-			w, http.StatusBadRequest, err)
-	} else if IsCompareFailed(err) {
-		replyJSON(
-			w, http.StatusPreconditionFailed, err)
-	} else if IsAccessDenied(err) {
-		replyJSON(
-			w, http.StatusForbidden, err)
-	} else if IsAlreadyExists(err) {
-		replyJSON(
-			w, http.StatusConflict, err)
-	} else if IsLimitExceeded(err) {
-		replyJSON(
-			w, statusTooManyRequests, err)
-	} else if IsConnectionProblem(err) {
-		replyJSON(
-			w, http.StatusGatewayTimeout, err)
-	} else {
-		replyJSON(
-			w, http.StatusInternalServerError, err)
+// ErrorToCode returns an appropriate HTTP status code based on the provided error type
+func ErrorToCode(err error) int {
+	switch {
+	case IsAggregate(err):
+		return http.StatusGatewayTimeout
+	case IsNotFound(err):
+		return http.StatusNotFound
+	case IsBadParameter(err) || IsOAuth2(err):
+		return http.StatusBadRequest
+	case IsCompareFailed(err):
+		return http.StatusPreconditionFailed
+	case IsAccessDenied(err):
+		return http.StatusForbidden
+	case IsAlreadyExists(err):
+		return http.StatusConflict
+	case IsLimitExceeded(err):
+		return http.StatusTooManyRequests
+	case IsConnectionProblem(err):
+		return http.StatusGatewayTimeout
+	default:
+		return http.StatusInternalServerError
 	}
 }
 
@@ -74,7 +65,7 @@ func ReadError(statusCode int, re []byte) error {
 		e = &AccessDeniedError{Message: string(re)}
 	case http.StatusConflict:
 		e = &AlreadyExistsError{Message: string(re)}
-	case statusTooManyRequests:
+	case http.StatusTooManyRequests:
 		e = &LimitExceededError{Message: string(re)}
 	case http.StatusGatewayTimeout:
 		e = &ConnectionProblemError{Message: string(re)}

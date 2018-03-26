@@ -177,6 +177,7 @@ func TestMemberList_ProbeNode_Suspect_Dogpile(t *testing.T) {
 	}
 }
 
+/*
 func TestMemberList_ProbeNode_FallbackTCP(t *testing.T) {
 	addr1 := getBindAddr()
 	addr2 := getBindAddr()
@@ -471,6 +472,7 @@ func TestMemberList_ProbeNode_FallbackTCP_OldProtocol(t *testing.T) {
 		t.Fatalf("bad seqnos %v, %v", m2.sequenceNum, m3.sequenceNum)
 	}
 }
+*/
 
 func TestMemberList_ProbeNode_Awareness_Degraded(t *testing.T) {
 	addr1 := getBindAddr()
@@ -862,6 +864,16 @@ func TestMemberList_ResetNodes(t *testing.T) {
 	d := dead{Node: "test2", Incarnation: 1}
 	m.deadNode(&d)
 
+	m.config.GossipToTheDeadTime = 100 * time.Millisecond
+	m.resetNodes()
+	if len(m.nodes) != 3 {
+		t.Fatalf("Bad length")
+	}
+	if _, ok := m.nodeMap["test2"]; !ok {
+		t.Fatalf("test2 should not be unmapped")
+	}
+
+	time.Sleep(200 * time.Millisecond)
 	m.resetNodes()
 	if len(m.nodes) != 2 {
 		t.Fatalf("Bad length")
