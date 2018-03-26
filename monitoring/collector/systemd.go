@@ -39,12 +39,14 @@ var listOfServices = map[string]int{
 	"kube-controller-manager.service": 1,
 }
 
+// SystemdCollector collects metrics about systemd health
 type SystemdCollector struct {
 	dbusConn         *dbus.Conn
 	systemdState     typedDesc
 	systemdUnitState typedDesc
 }
 
+// NewSystemdCollector returns initialized SystemdCollector
 func NewSystemdCollector() (*SystemdCollector, error) {
 	conn, err := dbus.New()
 	if err != nil {
@@ -66,6 +68,7 @@ func NewSystemdCollector() (*SystemdCollector, error) {
 	}, nil
 }
 
+// Collect is called by the Prometheus registry when collecting metrics.
 func (s *SystemdCollector) Collect(ch chan<- prometheus.Metric) error {
 	systemdStatus, err := monitoring.IsSystemRunning()
 	if err != nil {
