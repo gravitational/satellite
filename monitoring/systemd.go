@@ -76,7 +76,7 @@ const (
 func (r systemdChecker) Name() string { return "systemd" }
 
 func (r systemdChecker) Check(ctx context.Context, reporter health.Reporter) {
-	systemStatus, err := isSystemRunning()
+	systemStatus, err := IsSystemRunning()
 	if err != nil {
 		reason := "failed to query system health"
 		reporter.Add(NewProbeFromErr(r.Name(), reason, trace.Wrap(err)))
@@ -128,7 +128,8 @@ func systemdStatus() ([]serviceStatus, error) {
 	return conditions, nil
 }
 
-func isSystemRunning() (SystemStatusType, error) {
+// IsSystemRunning return the state of systemd
+func IsSystemRunning() (SystemStatusType, error) {
 	output, err := exec.Command(systemStatusCmd[0], systemStatusCmd[1:]...).CombinedOutput()
 	if err != nil && !isExitError(err) {
 		return SystemStatusUnknown, trace.Wrap(err)

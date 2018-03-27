@@ -69,6 +69,11 @@ func NewMetricsCollector(configEtcd *monitoring.ETCDConfig, kubeAddr string, rol
 		return nil, trace.Wrap(err)
 	}
 
+	collectorSystemd, err := NewSystemdCollector()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
 	collectors := make(map[string]Collector)
 	if role == agent.RoleMaster {
 		collectorKubernetes, err := NewKubernetesCollector(kubeAddr)
@@ -80,6 +85,7 @@ func NewMetricsCollector(configEtcd *monitoring.ETCDConfig, kubeAddr string, rol
 	collectors["etcd"] = collectorEtcd
 	collectors["sysctl"] = NewSysctlCollector()
 	collectors["docker"] = collectorDocker
+	collectors["systemd"] = collectorSystemd
 	return &MetricsCollector{collectors: collectors}, nil
 }
 
