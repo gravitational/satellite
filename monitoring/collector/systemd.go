@@ -24,25 +24,35 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-var listOfServices = map[string]int{
-	"flanneld.service":                1,
-	"serf.service":                    1,
-	"planet-agent.service":            1,
-	"dnsmasq.service":                 1,
-	"registry.service":                1,
-	"docker.service":                  1,
-	"etcd.service":                    1,
-	"kube-apiserver.service":          1,
-	"kube-scheduler.service":          1,
-	"kube-kubelet.service":            1,
-	"kube-proxy.service":              1,
-	"kube-controller-manager.service": 1,
-}
+var (
+	listOfServices = serviceMap(
+		"flanneld.service",
+		"serf.service",
+		"planet-agent.service",
+		"dnsmasq.service",
+		"registry.service",
+		"docker.service",
+		"etcd.service",
+		"kube-apiserver.service",
+		"kube-scheduler.service",
+		"kube-kubelet.service",
+		"kube-proxy.service",
+		"kube-controller-manager.service",
+	)
+
+	systemdState = typedDesc{prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "systemd", "health"),
+		"State of systemd service",
+		nil, nil,
+	), prometheus.GaugeValue}
+
+	systemdHealthy   = systemdState.mustNewConstMetric(1.0)
+	systemdUnhealthy = systemdState.mustNewConstMetric(0.0)
+)
 
 // SystemdCollector collects metrics about systemd health
 type SystemdCollector struct {
 	dbusConn         *dbus.Conn
-	systemdState     typedDesc
 	systemdUnitState typedDesc
 }
 
@@ -55,11 +65,6 @@ func NewSystemdCollector() (*SystemdCollector, error) {
 
 	return &SystemdCollector{
 		dbusConn: conn,
-		systemdState: typedDesc{prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "systemd", "health"),
-			"State of systemd service",
-			nil, nil,
-		), prometheus.GaugeValue},
 		systemdUnitState: typedDesc{prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "systemd", "unit_health"),
 			"State of systemd unit",
@@ -75,22 +80,15 @@ func (s *SystemdCollector) Collect(ch chan<- prometheus.Metric) error {
 		return trace.Wrap(err, "failed to query systemd status")
 	}
 
-	var systemdHealthMetric prometheus.Metric
 	if systemdStatus == monitoring.SystemStatusRunning {
-		if systemdHealthMetric, err = s.systemdState.newConstMetric(1.0); err != nil {
-			return trace.Wrap(err, "failed to create prometheus metric: %v", err)
-		}
+		ch <- systemdHealthy
 	} else {
-		if systemdHealthMetric, err = s.systemdState.newConstMetric(0.0); err != nil {
-			return trace.Wrap(err, "failed to create prometheus metric: %v", err)
-		}
+		ch <- systemdUnhealthy
 	}
-
-	ch <- systemdHealthMetric
 
 	units, err := s.dbusConn.ListUnits()
 	if err != nil {
-		return trace.Wrap(err, "failed to query systemd units: %v", err)
+		return trace.Wrap(err, "failed to query systemd units")
 	}
 
 	var systemdUnitHealthMetric prometheus.Metric
@@ -98,11 +96,11 @@ func (s *SystemdCollector) Collect(ch chan<- prometheus.Metric) error {
 		if _, ok := listOfServices[unit.Name]; ok {
 			if unit.ActiveState == string(activeStateActive) && unit.LoadState == string(loadStateLoaded) {
 				if systemdUnitHealthMetric, err = s.systemdUnitState.newConstMetric(1.0, unit.Name); err != nil {
-					return trace.Wrap(err, "failed to create prometheus metric: %v", err)
+					return trace.Wrap(err, "failed to create prometheus metric")
 				}
 			} else {
 				if systemdUnitHealthMetric, err = s.systemdUnitState.newConstMetric(0.0, unit.Name); err != nil {
-					return trace.Wrap(err, "failed to create prometheus metric: %v", err)
+					return trace.Wrap(err, "failed to create prometheus metric")
 				}
 			}
 			ch <- systemdUnitHealthMetric
@@ -112,22 +110,30 @@ func (s *SystemdCollector) Collect(ch chan<- prometheus.Metric) error {
 	return nil
 }
 
+func serviceMap(services ...string) map[string]struct{} {
+	result := make(map[string]struct{})
+	for _, service := range services {
+		result[service] = struct{}{}
+	}
+	return result
+}
+
 type loadState string
 
 const (
 	loadStateLoaded   loadState = "loaded"
-	loadStateError              = "error"
-	loadStateMasked             = "masked"
-	loadStateNotFound           = "not-found"
+	loadStateError    loadState = "error"
+	loadStateMasked   loadState = "masked"
+	loadStateNotFound loadState = "not-found"
 )
 
 type activeState string
 
 const (
 	activeStateActive       activeState = "active"
-	activeStateReloading                = "reloading"
-	activeStateInactive                 = "inactive"
-	activeStateFailed                   = "failed"
-	activeStateActivating               = "activating"
-	activeStateDeactivating             = "deactivating"
+	activeStateReloading    activeState = "reloading"
+	activeStateInactive     activeState = "inactive"
+	activeStateFailed       activeState = "failed"
+	activeStateActivating   activeState = "activating"
+	activeStateDeactivating activeState = "deactivating"
 )
