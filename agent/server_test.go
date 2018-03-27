@@ -28,6 +28,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 
@@ -71,19 +72,19 @@ func (_ *AgentSuite) TestSetsSystemStatusFromMemberStatuses(c *C) {
 			MemberStatus: &pb.MemberStatus{
 				Name:   "foo",
 				Status: pb.MemberStatus_Alive,
-				Tags:   map[string]string{"role": string(RoleNode)},
+				Tags:   tags{"role": string(RoleNode)},
 			},
 		},
 		{
 			MemberStatus: &pb.MemberStatus{
 				Name:   "bar",
 				Status: pb.MemberStatus_Failed,
-				Tags:   map[string]string{"role": string(RoleMaster)},
+				Tags:   tags{"role": string(RoleMaster)},
 			},
 		},
 	}
 
-	setSystemStatus(resp.Status)
+	setSystemStatus(resp.Status, []serf.Member{{Name: "foo"}, {Name: "bar"}})
 	c.Assert(resp.Status.Status, Equals, pb.SystemStatus_Degraded)
 }
 
@@ -96,7 +97,7 @@ func (_ *AgentSuite) TestSetsSystemStatusFromNodeStatuses(c *C) {
 			MemberStatus: &pb.MemberStatus{
 				Name:   "foo",
 				Status: pb.MemberStatus_Alive,
-				Tags:   map[string]string{"role": string(RoleNode)},
+				Tags:   tags{"role": string(RoleNode)},
 			},
 		},
 		{
@@ -105,7 +106,7 @@ func (_ *AgentSuite) TestSetsSystemStatusFromNodeStatuses(c *C) {
 			MemberStatus: &pb.MemberStatus{
 				Name:   "bar",
 				Status: pb.MemberStatus_Alive,
-				Tags:   map[string]string{"role": string(RoleMaster)},
+				Tags:   tags{"role": string(RoleMaster)},
 			},
 			Probes: []*pb.Probe{
 				{
@@ -117,7 +118,7 @@ func (_ *AgentSuite) TestSetsSystemStatusFromNodeStatuses(c *C) {
 		},
 	}
 
-	setSystemStatus(resp.Status)
+	setSystemStatus(resp.Status, []serf.Member{{Name: "foo"}, {Name: "bar"}})
 	c.Assert(resp.Status.Status, Equals, pb.SystemStatus_Degraded)
 }
 
@@ -125,22 +126,24 @@ func (_ *AgentSuite) TestDetectsNoMaster(c *C) {
 	resp := &pb.StatusResponse{Status: &pb.SystemStatus{}}
 	resp.Status.Nodes = []*pb.NodeStatus{
 		{
+			Name: "foo",
 			MemberStatus: &pb.MemberStatus{
 				Name:   "foo",
 				Status: pb.MemberStatus_Alive,
-				Tags:   map[string]string{"role": string(RoleNode)},
+				Tags:   tags{"role": string(RoleNode)},
 			},
 		},
 		{
+			Name: "bar",
 			MemberStatus: &pb.MemberStatus{
 				Name:   "bar",
 				Status: pb.MemberStatus_Alive,
-				Tags:   map[string]string{"role": string(RoleNode)},
+				Tags:   tags{"role": string(RoleNode)},
 			},
 		},
 	}
 
-	setSystemStatus(resp.Status)
+	setSystemStatus(resp.Status, []serf.Member{{Name: "foo"}, {Name: "bar"}})
 	c.Assert(resp.Status.Status, Equals, pb.SystemStatus_Degraded)
 	c.Assert(resp.Status.Summary, Equals, errNoMaster.Error())
 }
@@ -154,7 +157,7 @@ func (_ *AgentSuite) TestSetsOkSystemStatus(c *C) {
 			MemberStatus: &pb.MemberStatus{
 				Name:   "foo",
 				Status: pb.MemberStatus_Alive,
-				Tags:   map[string]string{"role": string(RoleNode)},
+				Tags:   tags{"role": string(RoleNode)},
 			},
 		},
 		{
@@ -163,13 +166,13 @@ func (_ *AgentSuite) TestSetsOkSystemStatus(c *C) {
 			MemberStatus: &pb.MemberStatus{
 				Name:   "bar",
 				Status: pb.MemberStatus_Alive,
-				Tags:   map[string]string{"role": string(RoleMaster)},
+				Tags:   tags{"role": string(RoleMaster)},
 			},
 		},
 	}
 
 	expectedStatus := pb.SystemStatus_Running
-	setSystemStatus(resp.Status)
+	setSystemStatus(resp.Status, []serf.Member{{Name: "foo"}, {Name: "bar"}})
 	c.Assert(resp.Status.Status, Equals, expectedStatus)
 }
 
@@ -178,52 +181,126 @@ func (_ *AgentSuite) TestSetsOkSystemStatus(c *C) {
 func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 	var agentTestCases = []struct {
 		comment  string
-		status   pb.SystemStatus_Type
 		members  [2]serf.Member
-		checkers [][]health.Checker
-		rpcPort  int
+		checkers [2][]health.Checker
+		status   pb.SystemStatus
 	}{
 		{
 			comment: "Degraded due to a failed checker",
-			status:  pb.SystemStatus_Degraded,
+			status: pb.SystemStatus{
+				Status: pb.SystemStatus_Degraded,
+				Nodes: []*pb.NodeStatus{
+					{
+						Name:   "master",
+						Status: pb.NodeStatus_Degraded,
+						MemberStatus: &pb.MemberStatus{Name: "master", Addr: "<nil>:0",
+							Tags: tags{"role": string(RoleMaster)}, Status: pb.MemberStatus_Alive},
+						Probes: []*pb.Probe{failedProbe, healthyProbe},
+					},
+					{
+						Name:   "node",
+						Status: pb.NodeStatus_Running,
+						MemberStatus: &pb.MemberStatus{Name: "node", Addr: "<nil>:0",
+							Tags: tags{"role": string(RoleNode)}, Status: pb.MemberStatus_Alive},
+						Probes: []*pb.Probe{healthyProbe, healthyProbe},
+					},
+				},
+			},
 			members: [2]serf.Member{
 				newMember("master", "alive"),
 				newMember("node", "alive"),
 			},
-			checkers: [][]health.Checker{{healthyTest, failedTest}, {healthyTest, healthyTest}},
-			rpcPort:  7676,
+			checkers: [2][]health.Checker{{healthyTest, failedTest}, {healthyTest, healthyTest}},
 		},
 		{
 			comment: "Degraded due to a missing master node",
-			status:  pb.SystemStatus_Degraded,
+			status: pb.SystemStatus{
+				Status: pb.SystemStatus_Degraded,
+				Nodes: []*pb.NodeStatus{
+					{
+						Name:   "node-1",
+						Status: pb.NodeStatus_Running,
+						MemberStatus: &pb.MemberStatus{Name: "node-1", Addr: "<nil>:0",
+							Tags: tags{"role": string(RoleNode)}, Status: pb.MemberStatus_Alive},
+						Probes: []*pb.Probe{healthyProbe, healthyProbe},
+					},
+					{
+						Name:   "node-2",
+						Status: pb.NodeStatus_Running,
+						MemberStatus: &pb.MemberStatus{Name: "node-2", Addr: "<nil>:0",
+							Tags: tags{"role": string(RoleNode)}, Status: pb.MemberStatus_Alive},
+						Probes: []*pb.Probe{healthyProbe, healthyProbe},
+					},
+				},
+				Summary: errNoMaster.Error(),
+			},
 			members: [2]serf.Member{
 				newMember("node-1", "alive"),
 				newMember("node-2", "alive"),
 			},
-			checkers: [][]health.Checker{{healthyTest, healthyTest}, {healthyTest, healthyTest}},
-			rpcPort:  7677,
+			checkers: [2][]health.Checker{{healthyTest, healthyTest}, {healthyTest, healthyTest}},
 		},
 		{
 			comment: "Running with all systems running",
-			status:  pb.SystemStatus_Running,
+			status: pb.SystemStatus{
+				Status: pb.SystemStatus_Running,
+				Nodes: []*pb.NodeStatus{
+					{
+						Name:   "master",
+						Status: pb.NodeStatus_Running,
+						MemberStatus: &pb.MemberStatus{Name: "master", Addr: "<nil>:0",
+							Tags: tags{"role": string(RoleMaster)}, Status: pb.MemberStatus_Alive},
+						Probes: []*pb.Probe{healthyProbe, healthyProbe},
+					},
+					{
+						Name:   "node",
+						Status: pb.NodeStatus_Running,
+						MemberStatus: &pb.MemberStatus{Name: "node", Addr: "<nil>:0",
+							Tags: tags{"role": string(RoleNode)}, Status: pb.MemberStatus_Alive},
+						Probes: []*pb.Probe{healthyProbe, healthyProbe},
+					},
+				},
+			},
 			members: [2]serf.Member{
 				newMember("master", "alive"),
 				newMember("node", "alive"),
 			},
-			checkers: [][]health.Checker{{healthyTest, healthyTest}, {healthyTest, healthyTest}},
-			rpcPort:  7678,
+			checkers: [2][]health.Checker{{healthyTest, healthyTest}, {healthyTest, healthyTest}},
+		},
+		{
+			comment: `Ignores members in "left" state`,
+			status: pb.SystemStatus{
+				Status: pb.SystemStatus_Running,
+				Nodes: []*pb.NodeStatus{
+					{
+						Name:   "master",
+						Status: pb.NodeStatus_Running,
+						MemberStatus: &pb.MemberStatus{Name: "master", Addr: "<nil>:0",
+							Tags: tags{"role": string(RoleMaster)}, Status: pb.MemberStatus_Alive},
+						Probes: []*pb.Probe{healthyProbe, healthyProbe},
+					},
+				},
+			},
+			members: [2]serf.Member{
+				newMember("master", "alive"),
+				newMember("node", "left"),
+			},
+			checkers: [2][]health.Checker{{healthyTest, healthyTest}, {healthyTest, healthyTest}},
 		},
 	}
 
+	rpcPort := 7676
 	for _, testCase := range agentTestCases {
 		comment := Commentf(testCase.comment)
 		clock := clockwork.NewFakeClock()
 		localNode := testCase.members[0].Name
 		remoteNode := testCase.members[1].Name
-		localAgent := r.newLocalNode(localNode, testCase.rpcPort,
+		localAgent := r.newLocalNode(localNode, rpcPort,
 			testCase.members[:], testCase.checkers[0], clock, c)
-		remoteAgent := r.newRemoteNode(remoteNode, testCase.rpcPort,
+		c.Assert(localAgent.Start(), IsNil)
+		remoteAgent := r.newRemoteNode(remoteNode, rpcPort,
 			testCase.members[:], testCase.checkers[1], clock, c)
+		c.Assert(remoteAgent.Start(), IsNil)
 		defer func() {
 			localAgent.Close()
 			remoteAgent.Close()
@@ -236,11 +313,17 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 		clock.BlockUntil(2)
 
 		req := &pb.StatusRequest{}
-		resp, err := localAgent.rpc.Status(context.TODO(), req)
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		resp, err := localAgent.rpc.Status(ctx, req)
 		c.Assert(err, IsNil, comment)
 
-		c.Assert(resp.Status.Status, Equals, testCase.status, comment)
-		c.Assert(resp.Status.Nodes, HasLen, len(testCase.members), comment)
+		testCase.status.Timestamp = pb.NewTimeToProto(clock.Now())
+		for _, node := range resp.Status.Nodes {
+			sort.Sort(byChecker(node.Probes))
+		}
+		c.Assert(resp.Status, test.DeepCompare, &testCase.status, comment)
+		rpcPort = rpcPort + 1
 	}
 }
 
@@ -293,7 +376,7 @@ func (r *AgentSuite) TestIsMember(c *C) {
 	c.Assert(agent.IsMember(), Equals, true)
 }
 
-func (r *AgentSuite) TestReflectStatusInStatusCode(c *C) {
+func (r *AgentSuite) TestReflectsStatusInStatusCode(c *C) {
 	// setup
 	member := newMember("master", "alive")
 	cluster := []serf.Member{member}
@@ -307,12 +390,9 @@ func (r *AgentSuite) TestReflectStatusInStatusCode(c *C) {
 					Name:   "master",
 					Addr:   "<nil>:0",
 					Status: pb.MemberStatus_Alive,
-					Tags:   map[string]string{"role": "master"},
+					Tags:   tags{"role": string(RoleMaster)},
 				},
-				Probes: []*pb.Probe{
-					&pb.Probe{Checker: "failing service", Error: errInvalidState.Error(), Status: pb.Probe_Failed},
-					&pb.Probe{Checker: "healthy service", Status: pb.Probe_Running},
-				},
+				Probes: []*pb.Probe{failedProbe, healthyProbe},
 			},
 		},
 	}
@@ -320,12 +400,13 @@ func (r *AgentSuite) TestReflectStatusInStatusCode(c *C) {
 
 	// exercise
 	agent := r.newRemoteNode(member.Name, rpcPort, cluster, checkers, clock, c)
+	c.Assert(agent.Start(), IsNil)
 	defer agent.Close()
 
 	// wait until agent has started waiting to collect statuses
 	clock.BlockUntil(1)
 	clock.Advance(statusUpdateTimeout + time.Second)
-	// wait for status update loop to finish
+	// ensure that the status update loop has finished updating status
 	clock.BlockUntil(1)
 
 	client, err := httpClient(fmt.Sprintf("https://127.0.0.1:%v", rpcPort))
@@ -340,10 +421,62 @@ func (r *AgentSuite) TestReflectStatusInStatusCode(c *C) {
 	err = json.Unmarshal(resp.Bytes(), &status)
 	c.Assert(err, IsNil)
 
-	// reset the variable timestamp
-	expected.Timestamp = status.Timestamp
+	expected.Timestamp = pb.NewTimeToProto(clock.Now())
 	sort.Sort(byChecker(status.Nodes[0].Probes))
 	c.Assert(status, test.DeepCompare, expected)
+}
+
+func (r *AgentSuite) TestFailsIfTimesOutToCollectStatus(c *C) {
+	clock := clockwork.NewFakeClock()
+	members := [2]serf.Member{
+		newMember("master", "alive"),
+		newMember("node", "failed"),
+	}
+	const rpcPort = 7575
+	localAgent := r.newLocalNode("master", rpcPort, members[:], []health.Checker{healthyTest}, clock, c)
+	localAgent.statusQueryReplyTimeout = 1 * time.Second
+	c.Assert(localAgent.Start(), IsNil)
+	defer localAgent.Close()
+
+	// wait until master agent has started waiting to collect statuses
+	clock.BlockUntil(1)
+	clock.Advance(statusUpdateTimeout + time.Second)
+	// ensure master's status update loop has finished updating status
+	clock.BlockUntil(1)
+
+	req := &pb.StatusRequest{}
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	resp, err := localAgent.rpc.Status(ctx, req)
+	c.Assert(err, IsNil)
+
+	for _, node := range resp.Status.Nodes {
+		sort.Sort(byChecker(node.Probes))
+	}
+	expected := []*pb.NodeStatus{
+		{
+			Name:   "master",
+			Status: pb.NodeStatus_Running,
+			MemberStatus: &pb.MemberStatus{Name: "master", Addr: "<nil>:0",
+				Tags: tags{"role": string(RoleMaster)}, Status: pb.MemberStatus_Alive},
+			Probes: []*pb.Probe{healthyProbe},
+		},
+	}
+	// The agent might receive status about the failed node but in state "unknown"
+	if len(resp.Status.Nodes) == 2 {
+		expected = append(expected, &pb.NodeStatus{
+			Name:   "node",
+			Status: pb.NodeStatus_Unknown,
+			MemberStatus: &pb.MemberStatus{Name: "master", Addr: "<nil>:0",
+				Tags: tags{"role": string(RoleMaster)}, Status: pb.MemberStatus_Failed},
+		})
+	}
+	c.Assert(resp.Status, test.DeepCompare, &pb.SystemStatus{
+		Status:    pb.SystemStatus_Degraded,
+		Nodes:     expected,
+		Timestamp: pb.NewTimeToProto(clock.Now()),
+		Summary:   fmt.Sprintf(msgNoStatus, "node,"),
+	})
 }
 
 // newLocalNode creates a new instance of the local agent - agent used to make status queries.
@@ -351,8 +484,6 @@ func (r *AgentSuite) newLocalNode(node string, rpcPort int, members []serf.Membe
 	checkers []health.Checker, clock clockwork.Clock, c *C) *agent {
 	agent := r.newAgent(node, rpcPort, members, checkers, clock, nil, c)
 	agent.rpc = &testServer{&server{agent: agent}}
-	err := agent.Start()
-	c.Assert(err, IsNil)
 	return agent
 }
 
@@ -363,8 +494,6 @@ func (r *AgentSuite) newRemoteNode(node string, rpcPort int, members []serf.Memb
 	addr := fmt.Sprintf("127.0.0.1:%v", rpcPort)
 
 	agent := r.newAgent(node, rpcPort, members, checkers, clock, nil, c)
-	err := agent.Start()
-	c.Assert(err, IsNil)
 
 	// Use the same CA certificate for client and server
 	server, err := newRPCServer(agent, r.certFile, r.certFile, r.keyFile, []string{addr})
@@ -405,7 +534,7 @@ func newMember(name string, status string) serf.Member {
 	result := serf.Member{
 		Name:   name,
 		Status: status,
-		Tags:   map[string]string{"role": string(RoleNode)},
+		Tags:   tags{"role": string(RoleNode)},
 	}
 	if name == "master" {
 		result.Tags["role"] = string(RoleMaster)
@@ -417,9 +546,20 @@ var healthyTest = &testChecker{
 	name: "healthy service",
 }
 
+var healthyProbe = &pb.Probe{
+	Checker: "healthy service",
+	Status:  pb.Probe_Running,
+}
+
 var failedTest = &testChecker{
 	name: "failing service",
 	err:  errInvalidState,
+}
+
+var failedProbe = &pb.Probe{
+	Checker: "failing service",
+	Status:  pb.Probe_Failed,
+	Error:   "invalid state",
 }
 
 // testSerfClient implements serfClient
@@ -464,18 +604,25 @@ type testCache struct {
 	*pb.SystemStatus
 	c     *C
 	clock clockwork.Clock
+	sync.Mutex
 }
 
 func (r *testCache) UpdateStatus(status *pb.SystemStatus) error {
+	r.Lock()
+	defer r.Unlock()
 	r.SystemStatus = status
 	return nil
 }
 
 func (r *testCache) RecentStatus() (*pb.SystemStatus, error) {
+	r.Lock()
+	defer r.Unlock()
 	return r.SystemStatus, nil
 }
 
 func (r *testCache) Recycle() error {
+	r.Lock()
+	defer r.Unlock()
 	r.SystemStatus = pb.EmptyStatus()
 	return nil
 }
@@ -541,6 +688,8 @@ func (r byChecker) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
 func (r byChecker) Less(i, j int) bool { return r[i].Checker < r[j].Checker }
 
 type byChecker []*pb.Probe
+
+type tags map[string]string
 
 // openssl req -new -out server.csr -key server.key -config san.cnf
 // openssl x509 -req -days 3650 -in server.csr -signkey server.key -out server.crt -extensions req_ext -extfile san.cnf
