@@ -41,7 +41,7 @@ func DefaultPortChecker() health.Checker {
 	)
 }
 
-// PreInstallPortChecker validates no actual checkers
+// PreInstallPortChecker validates ports required for installation
 func PreInstallPortChecker() health.Checker {
 	return NewPortChecker(
 		PortRange{protoTCP, 4242, 4242, "bandwidth checker"},
@@ -52,7 +52,7 @@ func PreInstallPortChecker() health.Checker {
 }
 
 // DefaultProcessChecker returns checker which will ensure no conflicting program is running
-func DefaultProcessChecker() *ProcessChecker {
+func DefaultProcessChecker() health.Checker {
 	return &ProcessChecker{[]string{
 		"dockerd",
 		"lxd",
@@ -67,9 +67,10 @@ func DefaultProcessChecker() *ProcessChecker {
 	}}
 }
 
-// BasicCheckers will try to detect most common problems preventing k8s cluster to function properly
-func BasicCheckers() *compositeChecker {
-	return &compositeChecker{
+// BasicCheckers detects common problems preventing k8s cluster from
+// functioning properly
+func BasicCheckers(checkers ...health.Checker) health.Checker {
+	c := &compositeChecker{
 		name: "local",
 		checkers: []health.Checker{
 			NewIPForwardChecker(),
@@ -80,13 +81,13 @@ func BasicCheckers() *compositeChecker {
 			DefaultBootConfigParams(),
 		},
 	}
+	c.checkers = append(c.checkers, checkers...)
+	return c
 }
 
 // PreInstallCheckers are designed to run on a node before installing telekube
 func PreInstallCheckers() health.Checker {
-	base := BasicCheckers()
-	base.checkers = append(base.checkers, PreInstallPortChecker())
-	return base
+	return BasicCheckers(PreInstallPortChecker())
 }
 
 // DefaultBootConfigParams returns standard kernel configs required for running kubernetes
