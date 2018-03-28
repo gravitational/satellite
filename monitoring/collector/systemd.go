@@ -91,9 +91,10 @@ func (s *SystemdCollector) Collect(ch chan<- prometheus.Metric) error {
 		return trace.Wrap(err, "failed to query systemd units")
 	}
 
-	var systemdUnitHealthMetric prometheus.Metric
 	for _, unit := range units {
 		if _, ok := listOfServices[unit.Name]; ok {
+			var systemdUnitHealthMetric prometheus.Metric
+
 			if unit.ActiveState == string(activeStateActive) && unit.LoadState == string(loadStateLoaded) {
 				if systemdUnitHealthMetric, err = s.systemdUnitState.newConstMetric(1.0, unit.Name); err != nil {
 					return trace.Wrap(err, "failed to create prometheus metric")
