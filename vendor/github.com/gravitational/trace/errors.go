@@ -228,6 +228,9 @@ func IsAccessDenied(e error) bool {
 func ConvertSystemError(err error) error {
 	innerError := Unwrap(err)
 
+	if os.IsExist(innerError) {
+		return WrapWithMessage(&AlreadyExistsError{Message: innerError.Error()}, innerError.Error())
+	}
 	if os.IsNotExist(innerError) {
 		return WrapWithMessage(&NotFoundError{Message: innerError.Error()}, innerError.Error())
 	}
@@ -335,8 +338,8 @@ func IsLimitExceeded(e error) bool {
 // TrustError indicates trust-related validation error (e.g. untrusted cert)
 type TrustError struct {
 	// Err is original error
-	Err     error `json:"error"`
-	Message string
+	Err     error  `json:"-"`
+	Message string `json:"message"`
 }
 
 // Error returns log-friendly error description
