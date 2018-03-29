@@ -203,6 +203,11 @@ type agent struct {
 	mu sync.Mutex
 	// localStatus is the last obtained local node status.
 	localStatus *pb.NodeStatus
+
+	// statusQueryReplyTimeout specifies the maximum amount of time to wait for status reply
+	// from remote nodes during status collection.
+	// Defaults to statusQueryReplyTimeout if unspecified
+	statusQueryReplyTimeout time.Duration
 }
 
 // Start starts the agent's background tasks.
@@ -291,7 +296,7 @@ func (r *agent) LocalStatus() *pb.NodeStatus {
 type dialRPC func(*serf.Member) (*client, error)
 
 // runChecks executes the monitoring tests configured for this agent in parallel.
-func (r *agent) runChecks(ctx context.Context) (*pb.NodeStatus, error) {
+func (r *agent) runChecks(ctx context.Context) *pb.NodeStatus {
 	// semaphoreCh limits the number of concurrent checkers
 	semaphoreCh := make(chan struct{}, maxConcurrentCheckers)
 	// channel for collecting resulting health probes
@@ -302,7 +307,8 @@ func (r *agent) runChecks(ctx context.Context) (*pb.NodeStatus, error) {
 		case semaphoreCh <- struct{}{}:
 			go runChecker(ctx, c, probeCh, semaphoreCh)
 		case <-ctx.Done():
-			return nil, trace.ConnectionProblem(nil, "timed out running tests")
+			log.Warnf("Timed out running tests: %v.", ctx.Err())
+			return emptyNodeStatus(r.name)
 		}
 	}
 
@@ -312,7 +318,12 @@ func (r *agent) runChecks(ctx context.Context) (*pb.NodeStatus, error) {
 		case probe := <-probeCh:
 			probes = append(probes, probe...)
 		case <-ctx.Done():
-			return nil, trace.ConnectionProblem(nil, "timed out collecting test results")
+			log.Warnf("Timed out collecting test results: %v.", ctx.Err())
+			return &pb.NodeStatus{
+				Name:   r.name,
+				Status: pb.NodeStatus_Degraded,
+				Probes: probes.GetProbes(),
+			}
 		}
 	}
 
@@ -320,7 +331,7 @@ func (r *agent) runChecks(ctx context.Context) (*pb.NodeStatus, error) {
 		Name:   r.name,
 		Status: probes.Status(),
 		Probes: probes.GetProbes(),
-	}, nil
+	}
 }
 
 // runChecker executes the specified checker and reports results on probeCh.
@@ -341,7 +352,7 @@ func runChecker(ctx context.Context, checker health.Checker, probeCh chan<- heal
 		<-semaphoreCh
 	}()
 
-	log.Debugf("running checker %q", checker.Name())
+	log.Debugf("Running checker %q.", checker.Name())
 
 	var probes health.Probes
 	checker.Check(ctx, &probes)
@@ -365,31 +376,40 @@ const statusQueryReplyTimeout = 30 * time.Second
 func (r *agent) statusUpdateLoop() {
 	statusUpdateCh := r.statusClock.After(statusUpdateTimeout)
 	recycleCh := r.recycleClock.After(recycleTimeout)
+	replyTimeout := r.statusQueryReplyTimeout
+	if replyTimeout == 0 {
+		replyTimeout = statusQueryReplyTimeout
+	}
+	// collectCh is a channel that receives updates when the status collecting process
+	// has finished collecting
+	collectCh := make(chan struct{})
 	for {
 		select {
 		case <-statusUpdateCh:
-			ctx, cancel := context.WithTimeout(context.TODO(), statusQueryReplyTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), replyTimeout)
 			go func() {
 				defer cancel() // close context if collection finishes before the deadline
 				status, err := r.collectStatus(ctx)
 				if err != nil {
-					log.Warningf("error collecting system status: %v", err)
-					return
+					log.Warnf("Error collecting system status: %v.", err)
 				}
-				if err = r.cache.UpdateStatus(status); err != nil {
-					log.Warningf("error updating system status in cache: %v", err)
+				if status != nil {
+					if err = r.cache.UpdateStatus(status); err != nil {
+						log.Warnf("Error updating system status in cache: %v", err)
+					}
+				}
+				select {
+				case <-r.done:
+				case collectCh <- struct{}{}:
 				}
 			}()
 			select {
-			case <-ctx.Done():
-				if ctx.Err() == context.DeadlineExceeded {
-					log.Warningf("timed out collecting system status")
-				}
+			case <-collectCh:
+				statusUpdateCh = r.statusClock.After(statusUpdateTimeout)
 			case <-r.done:
 				cancel()
 				return
 			}
-			statusUpdateCh = r.statusClock.After(statusUpdateTimeout)
 		case <-recycleCh:
 			err := r.cache.Recycle()
 			if err != nil {
@@ -405,13 +425,17 @@ func (r *agent) statusUpdateLoop() {
 // collectStatus obtains the cluster status by querying statuses of
 // known cluster members.
 func (r *agent) collectStatus(ctx context.Context) (systemStatus *pb.SystemStatus, err error) {
-	systemStatus = &pb.SystemStatus{Status: pb.SystemStatus_Unknown, Timestamp: pb.NewTimestamp()}
+	systemStatus = &pb.SystemStatus{
+		Status:    pb.SystemStatus_Unknown,
+		Timestamp: pb.NewTimeToProto(r.statusClock.Now()),
+	}
 
 	members, err := r.serfClient.Members()
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to query serf members")
 	}
-	log.Debugf("started collecting statuses from %d members: %v", len(members), members)
+	members = filterLeft(members)
+	log.Debugf("Started collecting statuses from members %v.", members)
 
 	statusCh := make(chan *statusResponse, len(members))
 	for _, member := range members {
@@ -422,47 +446,47 @@ func (r *agent) collectStatus(ctx context.Context) (systemStatus *pb.SystemStatu
 		}
 	}
 
+L:
 	for i := 0; i < len(members); i++ {
 		select {
 		case status := <-statusCh:
-			log.Debugf("retrieved status from %v: %v", status.member, status.NodeStatus)
+			log.Debugf("Retrieved status from %v: %v.", status.member, status.NodeStatus)
 			nodeStatus := status.NodeStatus
 			if status.err != nil {
-				log.Warningf("failed to query node %s(%v) status: %v", status.member.Name, status.member.Addr, status.err)
+				log.Warnf("Failed to query node %s(%v) status: %v.",
+					status.member.Name, status.member.Addr, status.err)
 				nodeStatus = unknownNodeStatus(&status.member)
 			}
 			systemStatus.Nodes = append(systemStatus.Nodes, nodeStatus)
 		case <-ctx.Done():
-			return nil, trace.ConnectionProblem(nil, "timed out collecting node statuses")
+			log.Warnf("Timed out collecting node statuses: %v.", ctx.Err())
+			// With insufficient status responses received, system status
+			// will be automatically degraded
+			break L
 		}
 	}
-	setSystemStatus(systemStatus)
+	setSystemStatus(systemStatus, members)
 
 	return systemStatus, nil
 }
 
 // collectLocalStatus executes monitoring tests on the local node.
-func (r *agent) collectLocalStatus(ctx context.Context, local *serf.Member) (status *pb.NodeStatus, err error) {
-	status, err = r.runChecks(ctx)
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
+func (r *agent) collectLocalStatus(ctx context.Context, local *serf.Member) (status *pb.NodeStatus) {
+	status = r.runChecks(ctx)
 	status.MemberStatus = statusFromMember(local)
 	r.mu.Lock()
 	r.localStatus = status
 	r.mu.Unlock()
 
-	return status, nil
+	return status
 }
 
 // getLocalStatus obtains local node status.
 func (r *agent) getLocalStatus(ctx context.Context, local serf.Member, respc chan<- *statusResponse) {
-	status, err := r.collectLocalStatus(ctx, &local)
-	resp := &statusResponse{member: local}
-	if err != nil {
-		resp.err = trace.Wrap(err)
-	} else {
-		resp.NodeStatus = status
+	status := r.collectLocalStatus(ctx, &local)
+	resp := &statusResponse{
+		NodeStatus: status,
+		member:     local,
 	}
 	select {
 	case respc <- resp:
@@ -563,6 +587,19 @@ func statusFromMember(member *serf.Member) *pb.MemberStatus {
 		Tags:   member.Tags,
 		Addr:   fmt.Sprintf("%s:%d", member.Addr.String(), member.Port),
 	}
+}
+
+// filterLeft filters out members that have left the serf cluster
+func filterLeft(members []serf.Member) (result []serf.Member) {
+	result = make([]serf.Member, 0, len(members))
+	for _, member := range members {
+		if member.Status == MemberLeft {
+			// Skip
+			continue
+		}
+		result = append(result, member)
+	}
+	return result
 }
 
 // maxConcurrentCheckers specifies the maximum number of checkers active at
