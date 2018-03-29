@@ -160,7 +160,7 @@ func (c *Client) Endpoint(params ...string) string {
 func (c *Client) PostForm(endpoint string, vals url.Values, files ...File) (*Response, error) {
 	return c.RoundTrip(func() (*http.Response, error) {
 		if len(files) == 0 {
-			req, err := http.NewRequest("POST", endpoint, strings.NewReader(vals.Encode()))
+			req, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(vals.Encode()))
 			if err != nil {
 				return nil, err
 			}
@@ -190,7 +190,7 @@ func (c *Client) PostForm(endpoint string, vals url.Values, files ...File) (*Res
 			return c.writeWithPipe(endpoint, vals, buffers...)
 		}
 
-		req, err := http.NewRequest("POST", endpoint, &buf)
+		req, err := http.NewRequest(http.MethodPost, endpoint, &buf)
 		if err != nil {
 			return nil, err
 		}
@@ -209,7 +209,7 @@ func (c *Client) PostJSON(endpoint string, data interface{}) (*Response, error) 
 	tracer := c.newTracer()
 	return tracer.Done(c.RoundTrip(func() (*http.Response, error) {
 		data, err := json.Marshal(data)
-		req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(data))
+		req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(data))
 		if err != nil {
 			return nil, err
 		}
@@ -228,7 +228,26 @@ func (c *Client) PutJSON(endpoint string, data interface{}) (*Response, error) {
 	tracer := c.newTracer()
 	return tracer.Done(c.RoundTrip(func() (*http.Response, error) {
 		data, err := json.Marshal(data)
-		req, err := http.NewRequest("PUT", endpoint, bytes.NewBuffer(data))
+		req, err := http.NewRequest(http.MethodPut, endpoint, bytes.NewBuffer(data))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		c.addAuth(req)
+		tracer.Start(req)
+		return c.client.Do(req)
+	}))
+}
+
+// PatchJSON posts JSON "application/json" encoded request body and "PATCH" method
+//
+// c.PatchJSON(c.Endpoint("users"), map[string]string{"name": "alice@example.com"})
+//
+func (c *Client) PatchJSON(endpoint string, data interface{}) (*Response, error) {
+	tracer := c.newTracer()
+	return tracer.Done(c.RoundTrip(func() (*http.Response, error) {
+		data, err := json.Marshal(data)
+		req, err := http.NewRequest(http.MethodPatch, endpoint, bytes.NewBuffer(data))
 		if err != nil {
 			return nil, err
 		}
@@ -246,7 +265,7 @@ func (c *Client) PutJSON(endpoint string, data interface{}) (*Response, error) {
 func (c *Client) Delete(endpoint string) (*Response, error) {
 	tracer := c.newTracer()
 	return tracer.Done(c.RoundTrip(func() (*http.Response, error) {
-		req, err := http.NewRequest("DELETE", endpoint, nil)
+		req, err := http.NewRequest(http.MethodDelete, endpoint, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -281,7 +300,7 @@ func (c *Client) Get(u string, params url.Values) (*Response, error) {
 	baseUrl.RawQuery = params.Encode()
 	tracer := c.newTracer()
 	return tracer.Done(c.RoundTrip(func() (*http.Response, error) {
-		req, err := http.NewRequest("GET", baseUrl.String(), nil)
+		req, err := http.NewRequest(http.MethodGet, baseUrl.String(), nil)
 		if err != nil {
 			return nil, err
 		}
@@ -301,7 +320,7 @@ func (c *Client) GetFile(u string, params url.Values) (*FileResponse, error) {
 		return nil, err
 	}
 	baseUrl.RawQuery = params.Encode()
-	req, err := http.NewRequest("GET", baseUrl.String(), nil)
+	req, err := http.NewRequest(http.MethodGet, baseUrl.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -388,7 +407,7 @@ func (c *Client) writeWithPipe(endpoint string, vals url.Values, buffers ...file
 		w.CloseWithError(err)
 	}()
 
-	req, err := http.NewRequest("POST", endpoint, r)
+	req, err := http.NewRequest(http.MethodPost, endpoint, r)
 	if err != nil {
 		r.Close()
 		return nil, err
