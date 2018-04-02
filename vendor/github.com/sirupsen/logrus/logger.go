@@ -308,6 +308,20 @@ func (logger *Logger) SetNoLock() {
 	logger.mu.Disable()
 }
 
+func (logger *Logger) GetHooks() LevelHooks {
+	var hooks LevelHooks
+	logger.mu.Lock()
+	hooks = logger.Hooks
+	logger.mu.Unlock()
+	return hooks
+}
+
+func (logger *Logger) SetHooks(hooks LevelHooks) {
+	logger.mu.Lock()
+	logger.Hooks = hooks
+	logger.mu.Unlock()
+}
+
 func (logger *Logger) level() Level {
 	return Level(atomic.LoadUint32((*uint32)(&logger.Level)))
 }
