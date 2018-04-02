@@ -24,9 +24,10 @@ import (
 	"unicode"
 
 	"github.com/gravitational/satellite/agent/health"
-	"github.com/gravitational/trace"
+	"github.com/gravitational/satellite/lib/kubernetes"
 
 	"github.com/blang/semver"
+	"github.com/gravitational/trace"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -37,7 +38,6 @@ import (
 	"k8s.io/client-go/discovery"
 	kube "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/kubernetes/staging/src/k8s.io/apiserver/pkg/storage/names"
 )
 
 // This file implements a functional pod communication test.
@@ -319,7 +319,7 @@ func createNamespaceIfNeeded(client *kube.Clientset, namespace string) error {
 // generateName generates a name for a kubernetes object.
 // The name generated is guaranteed to satisfy kubernetes requirements.
 func generateName(prefix string) string {
-	return names.SimpleNameGenerator.GenerateName(prefix)
+	return kubernetes.SimpleNameGenerator.GenerateName(prefix)
 }
 
 // getServiceAccount retrieves the service account with the specified name
