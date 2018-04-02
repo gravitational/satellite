@@ -24,10 +24,10 @@ import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/trace"
 
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/pkg/api/v1"
 )
 
 // NewNodesStatusChecker returns a Checker that tests kubernetes nodes availability
@@ -61,7 +61,7 @@ func (r *nodesStatusChecker) Check(ctx context.Context, reporter health.Reporter
 		LabelSelector: labels.Everything().String(),
 		FieldSelector: fields.Everything().String(),
 	}
-	statuses, err := client.Nodes().List(listOptions)
+	statuses, err := client.Core().Nodes().List(listOptions)
 	if err != nil {
 		reason := "failed to query nodes"
 		reporter.Add(NewProbeFromErr(r.Name(), reason, trace.Wrap(err)))
