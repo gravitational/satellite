@@ -74,7 +74,8 @@
 
 [[constraint]]
   name = "github.com/sirupsen/logrus"
-  version = ">=1.0.2, <=34.0.0-g181d419"
+  source = "github.com/gravitational/logrus"
+  version = "1.0.6"
 
 [[constraint]]
   name = "golang.org/x/net"
