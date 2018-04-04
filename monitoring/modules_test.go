@@ -44,6 +44,7 @@ func (_ *MonitoringSuite) TestLoadsModules(c *C) {
 			modules: moduleMap(
 				Module{Name: "br_netfilter", ModuleState: ModuleStateLive},
 				Module{Name: "nf_conntrack_netlink", ModuleState: ModuleStateLive},
+				Module{Name: "alternative_required", ModuleState: ModuleStateLive},
 				Module{Name: "ebtable_filter", ModuleState: ModuleStateLive, Instances: 1},
 				Module{Name: "ebtables", ModuleState: ModuleStateLive, Instances: 3},
 				Module{Name: "nfsd", ModuleState: ModuleStateLive, Instances: 1},
@@ -84,30 +85,30 @@ func (_ *MonitoringSuite) TestLoadsModules(c *C) {
 
 func (_ *MonitoringSuite) TestHasModules(c *C) {
 	// exercise
-	modules, err := ReadModulesFrom(bytes.NewReader(modulesData))
+	kernelModules, err := ReadModulesFrom(bytes.NewReader(modulesData))
 
 	// verify
 	c.Assert(err, IsNil)
-	for _, module := range []string{"ebtables", "br_netfilter"} {
-		c.Assert(modules.WasLoaded(module), Equals, true)
+	for _, module := range modules("ebtables", "br_netfilter") {
+		c.Assert(kernelModules.IsLoaded(module), Equals, true)
 	}
 }
 
 func (_ *MonitoringSuite) TestValidatesModules(c *C) {
 	var testCases = []struct {
-		modules []string
+		modules []ModuleRequest
 		reader  moduleGetterFunc
 		probes  health.Probes
 		comment string
 	}{
 		{
-			modules: []string{"ebtables", "br_netfilter"},
+			modules: modules("ebtables", "br_netfilter"),
 			reader:  moduleReader(modulesData),
 			probes:  health.Probes{&pb.Probe{Checker: kernelModuleCheckerID, Status: pb.Probe_Running}},
 			comment: "running",
 		},
 		{
-			modules: []string{"required"},
+			modules: modules("required"),
 			reader:  moduleReader(modulesData),
 			probes: health.Probes{
 				&pb.Probe{
@@ -130,7 +131,7 @@ func (_ *MonitoringSuite) TestValidatesModules(c *C) {
 			comment: "skip test for empty requirements",
 		},
 		{
-			modules: []string{"required"},
+			modules: modules("required"),
 			reader:  testFailingModuleReader(trace.NotFound("file or directory not found")),
 			probes: health.Probes{
 				&pb.Probe{
@@ -141,7 +142,7 @@ func (_ *MonitoringSuite) TestValidatesModules(c *C) {
 			comment: "skip test if no modules file available",
 		},
 		{
-			modules: []string{"required"},
+			modules: modules("required"),
 			reader:  testFailingModuleReader(trace.AccessDenied("permission denied")),
 			probes: health.Probes{
 				&pb.Probe{
@@ -152,6 +153,22 @@ func (_ *MonitoringSuite) TestValidatesModules(c *C) {
 				},
 			},
 			comment: "fail if error prevents from reading the file (other than not found)",
+		},
+		{
+			modules: []ModuleRequest{
+				{
+					Name:  "required",
+					Names: []string{"alternative_required"},
+				},
+			},
+			reader: moduleReader(modulesData),
+			probes: health.Probes{
+				&pb.Probe{
+					Checker: kernelModuleCheckerID,
+					Status:  pb.Probe_Running,
+				},
+			},
+			comment: "successful match based on alternative module name",
 		},
 	}
 
@@ -187,8 +204,17 @@ func moduleMap(modules ...Module) Modules {
 	return result
 }
 
+func modules(names ...string) (result []ModuleRequest) {
+	result = make([]ModuleRequest, 0, len(names))
+	for _, name := range names {
+		result = append(result, ModuleRequest{Name: name})
+	}
+	return result
+}
+
 var modulesData = []byte(`br_netfilter 22209 0 - Live 0xffffffffc063f000
 nf_conntrack_netlink 40449 0 - Live 0xffffffffc0659000
+alternative_required 1 0 - Live 0xffffffffb123a019
 ebtable_filter 12827 1 - Live 0xffffffffc0415000
 ebtables 35009 3 ebtable_nat,ebtable_broute,ebtable_filter, Live 0xffffffffc0407000
 nfsd 342857 1 - Live 0xffffffffc033f000

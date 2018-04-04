@@ -32,9 +32,9 @@ import (
 )
 
 // NewKernelModuleChecker creates a new kernel module checker
-func NewKernelModuleChecker(names ...string) health.Checker {
+func NewKernelModuleChecker(modules ...ModuleRequest) health.Checker {
 	return kernelModuleChecker{
-		Modules:    names,
+		Modules:    modules,
 		getModules: ReadModules,
 	}
 }
@@ -68,10 +68,10 @@ func (r kernelModuleChecker) check(ctx context.Context, reporter health.Reporter
 	}
 
 	for _, module := range r.Modules {
-		if !modules.WasLoaded(module) {
+		if !modules.IsLoaded(module) {
 			reporter.Add(&pb.Probe{
 				Checker: r.Name(),
-				Detail:  fmt.Sprintf("kernel module %q not loaded", module),
+				Detail:  fmt.Sprintf("%v not loaded", module),
 				Status:  pb.Probe_Failed,
 			})
 		}
@@ -83,7 +83,7 @@ func (r kernelModuleChecker) check(ctx context.Context, reporter health.Reporter
 // kernelModuleChecker checks if the specified set of kernel modules are loaded
 type kernelModuleChecker struct {
 	// Modules lists required kernel modules
-	Modules    []string
+	Modules    []ModuleRequest
 	getModules moduleGetterFunc
 }
 
@@ -124,10 +124,37 @@ func ReadModulesFrom(r io.Reader) (modules Modules, err error) {
 	return modules, nil
 }
 
-// WasLoaded determines whether module name is loaded.
-func (r Modules) WasLoaded(name string) bool {
-	_, loaded := r[name]
-	return loaded
+// IsLoaded determines whether module name is loaded.
+func (r Modules) IsLoaded(module ModuleRequest) bool {
+	_, loaded := r[module.Name]
+	if loaded {
+		return true
+	}
+	// Check alternative module names
+	for _, name := range module.Names {
+		if _, loaded = r[name]; loaded {
+			return true
+		}
+	}
+	return false
+}
+
+// String returns a text representation of this kernel module request
+func (r ModuleRequest) String() string {
+	if len(r.Names) == 0 {
+		return fmt.Sprintf("kernel module %q", r.Name)
+	}
+	return fmt.Sprintf("kernel module %q (%q)", r.Name, r.Names)
+}
+
+// ModuleRequest describes a kernel module
+type ModuleRequest struct {
+	// Name names the kernel module
+	Name string
+	// Names lists alternative names for the module if any.
+	// For example, on CentOS 7.2 bridge netfilter module is called "bridge"
+	// instead of "br_netfilter".
+	Names []string
 }
 
 // Modules lists kernel modules
@@ -136,6 +163,11 @@ type Modules map[string]Module
 // IsLoaded determines if this module is loaded
 func (r Module) IsLoaded() bool {
 	return r.ModuleState == ModuleStateLive
+}
+
+// String returns a text representation of this kernel module
+func (r Module) String() string {
+	return fmt.Sprintf("kernel module %q", r.Name)
 }
 
 // Module describes a kernel module
