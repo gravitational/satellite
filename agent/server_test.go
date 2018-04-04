@@ -462,6 +462,7 @@ func (r *AgentSuite) TestFailsIfTimesOutToCollectStatus(c *C) {
 			Probes: []*pb.Probe{healthyProbe},
 		},
 	}
+	summary := fmt.Sprintf(msgNoStatus, "node,")
 	// The agent might receive status about the failed node but in state "unknown"
 	if len(resp.Status.Nodes) == 2 {
 		expected = append(expected, &pb.NodeStatus{
@@ -470,12 +471,14 @@ func (r *AgentSuite) TestFailsIfTimesOutToCollectStatus(c *C) {
 			MemberStatus: &pb.MemberStatus{Name: "master", Addr: "<nil>:0",
 				Tags: tags{"role": string(RoleMaster)}, Status: pb.MemberStatus_Failed},
 		})
+		// Summary is empty with statuses from both nodes
+		summary = ""
 	}
 	c.Assert(resp.Status, test.DeepCompare, &pb.SystemStatus{
 		Status:    pb.SystemStatus_Degraded,
 		Nodes:     expected,
 		Timestamp: pb.NewTimeToProto(clock.Now()),
-		Summary:   fmt.Sprintf(msgNoStatus, "node,"),
+		Summary:   summary,
 	})
 }
 

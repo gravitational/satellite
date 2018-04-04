@@ -90,7 +90,7 @@ func (_ *MonitoringSuite) TestHasModules(c *C) {
 	// verify
 	c.Assert(err, IsNil)
 	for _, module := range modules("ebtables", "br_netfilter") {
-		c.Assert(kernelModules.WasLoaded(module), Equals, true)
+		c.Assert(kernelModules.IsLoaded(module), Equals, true)
 	}
 }
 

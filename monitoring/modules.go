@@ -68,7 +68,7 @@ func (r kernelModuleChecker) check(ctx context.Context, reporter health.Reporter
 	}
 
 	for _, module := range r.Modules {
-		if !modules.WasLoaded(module) {
+		if !modules.IsLoaded(module) {
 			reporter.Add(&pb.Probe{
 				Checker: r.Name(),
 				Detail:  fmt.Sprintf("%v not loaded", module),
@@ -124,8 +124,8 @@ func ReadModulesFrom(r io.Reader) (modules Modules, err error) {
 	return modules, nil
 }
 
-// WasLoaded determines whether module name is loaded.
-func (r Modules) WasLoaded(module ModuleRequest) bool {
+// IsLoaded determines whether module name is loaded.
+func (r Modules) IsLoaded(module ModuleRequest) bool {
 	_, loaded := r[module.Name]
 	if loaded {
 		return true
