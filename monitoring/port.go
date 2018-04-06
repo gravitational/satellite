@@ -66,8 +66,26 @@ func (c *portChecker) Check(ctx context.Context, reporter health.Reporter) {
 		return
 	}
 
+	type conn struct {
+		pid      pid
+		port     int
+		protocol string
+	}
+	// Group processes on the pid/port/protocol to avoid duplicates
+	unique := make(map[conn]process)
+	for _, process := range processes {
+		conn := conn{
+			pid:      process.pid,
+			port:     process.localAddr().port,
+			protocol: process.proto(),
+		}
+		if _, exists := unique[conn]; !exists {
+			unique[conn] = process
+		}
+	}
+
 	conflicts := false
-	for _, proc := range processes {
+	for _, proc := range unique {
 		if c.checkProcess(proc, reporter) {
 			conflicts = true
 		}

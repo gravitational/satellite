@@ -88,6 +88,63 @@ func (*MonitoringSuite) TestValidatesPorts(c *C) {
 				}},
 			comment: "fails if unable to read process information",
 		},
+		{
+			ports: []PortRange{
+				PortRange{From: 9001, To: 9001, Protocol: "tcp"},
+				PortRange{From: 9001, To: 9001, Protocol: "udp"},
+			},
+			reader: testGetProcs(
+				process{
+					name: "foo",
+					pid:  101,
+					socket: tcpSocket{
+						State:         Listen,
+						LocalAddress:  tcpAddr("127.0.0.1:9001", c),
+						RemoteAddress: tcpAddr("192.168.178.1:45001", c),
+					},
+				},
+				process{
+					name: "foo",
+					pid:  101,
+					socket: tcpSocket{
+						State:         Listen,
+						LocalAddress:  tcpAddr("127.0.0.1:9001", c),
+						RemoteAddress: tcpAddr("192.168.178.2:45002", c),
+					},
+				},
+				process{
+					name: "foo",
+					pid:  101,
+					socket: udpSocket{
+						State:         Listen,
+						LocalAddress:  udpAddr("127.0.0.1:9001", c),
+						RemoteAddress: udpAddr("192.168.178.2:45003", c),
+					},
+				},
+				process{
+					name: "foo",
+					pid:  101,
+					socket: udpSocket{
+						State:         Listen,
+						LocalAddress:  udpAddr("127.0.0.1:9001", c),
+						RemoteAddress: udpAddr("192.168.178.3:46001", c),
+					},
+				},
+			),
+			probes: []*pb.Probe{
+				&pb.Probe{
+					Checker: portCheckerID,
+					Detail:  `conflicting program "foo"(pid=101) is occupying port tcp/9001(listen)`,
+					Status:  pb.Probe_Failed,
+				},
+				&pb.Probe{
+					Checker: portCheckerID,
+					Detail:  `conflicting program "foo"(pid=101) is occupying port udp/9001(listen)`,
+					Status:  pb.Probe_Failed,
+				},
+			},
+			comment: "dedups processes that have multiple connections on the same port",
+		},
 	}
 
 	// exercise & verify
