@@ -19,6 +19,7 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
@@ -63,12 +64,12 @@ func (*MonitoringSuite) TestValidatesPorts(c *C) {
 			probes: []*pb.Probe{
 				&pb.Probe{
 					Checker: portCheckerID,
-					Detail:  `conflicting program "foo"(pid=100) is occupying port tcp/9001(listen)`,
+					Detail:  `conflicting program "bar"(pid=101) is occupying port udp/8005(listen)`,
 					Status:  pb.Probe_Failed,
 				},
 				&pb.Probe{
 					Checker: portCheckerID,
-					Detail:  `conflicting program "bar"(pid=101) is occupying port udp/8005(listen)`,
+					Detail:  `conflicting program "foo"(pid=100) is occupying port tcp/9001(listen)`,
 					Status:  pb.Probe_Failed,
 				},
 			},
@@ -155,6 +156,9 @@ func (*MonitoringSuite) TestValidatesPorts(c *C) {
 		}
 		var probes health.Probes
 		checker.Check(context.TODO(), &probes)
+		sort.Slice(probes, func(i, j int) bool {
+			return probes[i].Detail < probes[j].Detail
+		})
 		c.Assert(probes, test.DeepCompare, testCase.probes, Commentf(testCase.comment))
 	}
 }
