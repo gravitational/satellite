@@ -215,10 +215,10 @@
   revision = "4e0f2df8846ee9557b5c88307a769ff2f85e89cd"
 
 [[projects]]
+  branch = "master"
   name = "github.com/gravitational/roundtrip"
   packages = ["."]
-  revision = "ad87871f2c4d31b9bef3f3c6224c3f5e50d0bac1"
-  version = "0.0.2"
+  revision = "37ee6ee8eac0767a2f81cddf6f3fa0d37046fecc"
 
 [[projects]]
   name = "github.com/gravitational/trace"
@@ -720,6 +720,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "f0b97e37b8f8179efbfece9180d0d8e5597cb7898c7d59e912b521966419754f"
+  inputs-digest = "a4294b79c52771658216417e4073dc9ede5a953a697f0f98fa633f688d3c7edd"
   solver-name = "gps-cdcl"
   solver-version = 1

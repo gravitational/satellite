@@ -42,7 +42,7 @@ func (*awsHasProfileChecker) Name() string {
 	return awsHasProfileCheckerID
 }
 
-// Check will scan current open ports and report every conflict detected
+// Check will check the metadata API to see if an IAM profile is assigned to the node
 // Implements health.Checker
 func (*awsHasProfileChecker) Check(ctx context.Context, reporter health.Reporter) {
 	session := session.New()
