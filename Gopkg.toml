@@ -25,6 +25,10 @@
   go-tests = true
 
 [[constraint]]
+  name = "github.com/aws/aws-sdk-go"
+  version = "v1.13.57"
+
+[[constraint]]
   name = "github.com/blang/semver"
   version = "3.5.0"
 
