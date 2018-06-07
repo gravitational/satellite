@@ -25,9 +25,12 @@ import (
 	"github.com/gravitational/trace"
 )
 
-// NewScriptChecker returns a new script checker for the specified script
-func NewScriptChecker(script io.Reader, args ...string) health.Checker {
-	return scriptChecker{Reader: script, args: args}
+// NewScriptChecker returns a new script checker for the specified script.
+// dir can specify an alternative working directory for the script.
+// If dir is left unspecified, the running process's directory is used
+// as a working directory.
+func NewScriptChecker(script io.Reader, dir string, args ...string) health.Checker {
+	return scriptChecker{Reader: script, dir: dir, args: args}
 }
 
 // Name returns name of the checker.
@@ -39,7 +42,7 @@ func (r scriptChecker) Name() string {
 func (r scriptChecker) Check(ctx context.Context, reporter health.Reporter) {
 	f, err := ioutil.TempFile("", "monitoring")
 	if err != nil {
-		reporter.Add(NewProbeFromErr(r.Name(), "failed to create script",
+		reporter.Add(NewProbeFromErr(r.Name(), "failed to create script file",
 			trace.ConvertSystemError(err)))
 		return
 	}
@@ -54,6 +57,7 @@ func (r scriptChecker) Check(ctx context.Context, reporter health.Reporter) {
 
 	args := append([]string{f.Name()}, r.args...)
 	cmd := exec.Command("bash", args...)
+	cmd.Dir = r.dir
 	buf, err := cmd.CombinedOutput()
 	if err != nil {
 		reporter.Add(NewProbeFromErr(r.Name(), string(buf),
@@ -67,6 +71,8 @@ func (r scriptChecker) Check(ctx context.Context, reporter health.Reporter) {
 // scriptChecker is a checker that executes the specified script
 type scriptChecker struct {
 	io.Reader
+	// dir defines the working directory
+	dir  string
 	args []string
 }
 
