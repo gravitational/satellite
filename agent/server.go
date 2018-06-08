@@ -17,6 +17,7 @@ limitations under the License.
 package agent
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"strings"
@@ -88,8 +89,16 @@ func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []str
 	// The HTTPS endpoint returns the cluster status as JSON
 	handler := grpcHandlerFunc(server, healthzHandler)
 
+	tlsConfig := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+	}
 	for _, addr := range rpcAddrs {
-		go http.ListenAndServeTLS(addr, certFile, keyFile, handler)
+		srv := &http.Server{
+			Addr:      addr,
+			Handler:   handler,
+			TLSConfig: tlsConfig,
+		}
+		go srv.ListenAndServeTLS(certFile, keyFile)
 	}
 
 	return server, nil
