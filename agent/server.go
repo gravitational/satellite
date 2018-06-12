@@ -72,10 +72,13 @@ func (r *server) LocalStatus(ctx context.Context, req *pb.LocalStatusRequest) (r
 
 // newRPCServer creates an agent RPC endpoint for each provided listener.
 func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []string) (*server, error) {
-	creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to read certificate/key from %v/%v", certFile, keyFile)
 	}
+	creds := credentials.NewTLS(&tls.Config{
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12})
 
 	healthzHandler, err := newHealthHandler(caFile)
 	if err != nil {
