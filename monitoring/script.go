@@ -31,8 +31,8 @@ import (
 // dir can specify an alternative working directory for the script.
 // If workingDir is left unspecified, the running process's directory is used
 // as a working directory.
-func NewScriptChecker(script io.Reader, workingDir string, args ...string) health.Checker {
-	return scriptChecker{Reader: script, workingDir: workingDir, args: args}
+func NewScriptChecker(script Script) health.Checker {
+	return scriptChecker{Script: script}
 }
 
 // Name returns name of the checker.
@@ -61,12 +61,13 @@ func (r scriptChecker) Check(ctx context.Context, reporter health.Reporter) {
 		return
 	}
 
-	args := append([]string{f.Name()}, r.args...)
+	args := append([]string{f.Name()}, r.Args...)
 	cmd := exec.CommandContext(ctx, "bash", args...)
-	cmd.Dir = r.workingDir
+	cmd.Dir = r.WorkingDir
 	buf, err := cmd.CombinedOutput()
 	if err != nil {
-		reporter.Add(NewProbeFromErr(r.Name(), string(buf),
+		reporter.Add(NewProbeFromErr(r.Name(),
+			fmt.Sprintf("script %q failed: %s", r.Description, buf),
 			trace.Wrap(err)))
 		return
 	}
@@ -74,12 +75,23 @@ func (r scriptChecker) Check(ctx context.Context, reporter health.Reporter) {
 	reporter.Add(NewSuccessProbe(r.Name()))
 }
 
+// Script defines a check based on a set of shell commands
+type Script struct {
+	// Reader specifies the contents of the script
+	io.Reader
+	// Description provides a desciption of the check script performs
+	Description string
+	// WorkingDir specifies the working directory for the script.
+	// If unspecified, the script is executed in the working directory
+	// of the calling process
+	WorkingDir string
+	// Args specifies the optional arguments to the script
+	Args []string
+}
+
 // scriptChecker is a checker that executes the specified script
 type scriptChecker struct {
-	io.Reader
-	// workingDir defines the working directory
-	workingDir string
-	args       []string
+	Script
 }
 
 const scriptCheckerID = "script-check"
