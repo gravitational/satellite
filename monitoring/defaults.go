@@ -64,3 +64,23 @@ func DefaultBootConfigParams() health.Checker {
 func GetStorageDriverBootConfigParams(drv string) health.Checker {
 	return noopChecker{}
 }
+
+// NewStorageChecker creates a new instance of the volume checker
+// using the specified checker as configuration
+func NewStorageChecker(config StorageConfig) health.Checker {
+	return noopChecker{}
+}
+
+// StorageConfig describes checker configuration
+type StorageConfig struct {
+	// Path represents volume to be checked
+	Path string
+	// WillBeCreated when true, then all checks will be applied to first existing dir, or fail otherwise
+	WillBeCreated bool
+	// MinBytesPerSecond is minimum write speed for probe to succeed
+	MinBytesPerSecond uint64
+	// Filesystems define list of supported filesystems, or any if empty
+	Filesystems []string
+	// MinFreeBytes define minimum free volume capacity
+	MinFreeBytes uint64
+}
