@@ -76,9 +76,23 @@ func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []str
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to read certificate/key from %v/%v", certFile, keyFile)
 	}
+
 	creds := credentials.NewTLS(&tls.Config{
 		Certificates: []tls.Certificate{cert},
-		MinVersion:   tls.VersionTLS12})
+		MinVersion:   tls.VersionTLS12,
+		// Use TLS Modern capability suites
+		// https://wiki.mozilla.org/Security/Server_Side_TLS
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
+		},
+	})
 
 	healthzHandler, err := newHealthHandler(caFile)
 	if err != nil {
@@ -94,6 +108,18 @@ func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []str
 
 	tlsConfig := &tls.Config{
 		MinVersion: tls.VersionTLS12,
+		// Use TLS Modern capability suites
+		// https://wiki.mozilla.org/Security/Server_Side_TLS
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
+		},
 	}
 	for _, addr := range rpcAddrs {
 		srv := &http.Server{
