@@ -17,6 +17,7 @@ limitations under the License.
 package agent
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"strings"
@@ -71,10 +72,27 @@ func (r *server) LocalStatus(ctx context.Context, req *pb.LocalStatusRequest) (r
 
 // newRPCServer creates an agent RPC endpoint for each provided listener.
 func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []string) (*server, error) {
-	creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to read certificate/key from %v/%v", certFile, keyFile)
 	}
+
+	creds := credentials.NewTLS(&tls.Config{
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
+		// Use TLS Modern capability suites
+		// https://wiki.mozilla.org/Security/Server_Side_TLS
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
+		},
+	})
 
 	healthzHandler, err := newHealthHandler(caFile)
 	if err != nil {
@@ -88,8 +106,28 @@ func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []str
 	// The HTTPS endpoint returns the cluster status as JSON
 	handler := grpcHandlerFunc(server, healthzHandler)
 
+	tlsConfig := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		// Use TLS Modern capability suites
+		// https://wiki.mozilla.org/Security/Server_Side_TLS
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
+		},
+	}
 	for _, addr := range rpcAddrs {
-		go http.ListenAndServeTLS(addr, certFile, keyFile, handler)
+		srv := &http.Server{
+			Addr:      addr,
+			Handler:   handler,
+			TLSConfig: tlsConfig,
+		}
+		go srv.ListenAndServeTLS(certFile, keyFile)
 	}
 
 	return server, nil
