@@ -24,7 +24,9 @@ import (
 	"os/exec"
 
 	"github.com/gravitational/satellite/agent/health"
+
 	"github.com/gravitational/trace"
+	log "github.com/sirupsen/logrus"
 )
 
 // NewScriptChecker returns a new script checker for the specified script.
@@ -72,6 +74,7 @@ func (r scriptChecker) Check(ctx context.Context, reporter health.Reporter) {
 		return
 	}
 
+	log.Infof("Script %q: %s.", r.Description, buf)
 	reporter.Add(NewSuccessProbe(r.Name()))
 }
 
