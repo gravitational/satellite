@@ -471,7 +471,7 @@
   revision = "88942b9c40a4c9d203b82b3731787b672d6e809b"
 
 [[projects]]
-  branch = "release-branch.go1.9"
+  branch = "release-branch.go1.10"
   name = "golang.org/x/net"
   packages = [
     "bpf",
@@ -487,7 +487,7 @@
     "lex/httplex",
     "trace"
   ]
-  revision = "44b7c21cbf19450f38b337eb6b6fe4f6496fb5b3"
+  revision = "0ed95abb35c445290478a5348a7b38bb154135fd"
 
 [[projects]]
   branch = "master"
@@ -720,6 +720,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "a4294b79c52771658216417e4073dc9ede5a953a697f0f98fa633f688d3c7edd"
+  inputs-digest = "556e5cbd5a89fc9bc81a131165fb0ece39630f678570d6b931a997db63e99c31"
   solver-name = "gps-cdcl"
   solver-version = 1
