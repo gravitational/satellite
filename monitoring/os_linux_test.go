@@ -53,6 +53,12 @@ func (*MonitoringSuite) TestValidatesOS(c *C) {
 			comment:    "requirements match on prefix",
 		},
 		{
+			releases:   staticOSReleases(`.*suse.*`, "12"),
+			getRelease: testGetOSRelease(OSRelease{ID: "opensuse-tumbleweed", VersionID: "12-SP3"}),
+			probes:     health.Probes{&pb.Probe{Checker: osCheckerID, Status: pb.Probe_Running}},
+			comment:    "requirements match on pattern",
+		},
+		{
 			releases:   staticOSReleases("ubuntu", "16.04.3", "centos", "7.2"),
 			getRelease: testGetOSRelease(OSRelease{ID: "debian", VersionID: "9.3"}),
 			probes: health.Probes{&pb.Probe{
@@ -72,7 +78,7 @@ func (*MonitoringSuite) TestValidatesOS(c *C) {
 			releases:   staticOSReleases("fedora", "25"),
 			getRelease: testFailingGetOSRelease(trace.NotFound("file or directory not found")),
 			probes:     health.Probes{&pb.Probe{Checker: osCheckerID, Status: pb.Probe_Running}},
-			comment:    "skip test if OS no distribution files are available",
+			comment:    "skip test if no OS distribution files are available",
 		},
 		{
 			releases:   staticOSReleases("debian", "9"),
@@ -108,11 +114,11 @@ func (*MonitoringSuite) TestReadsReleaseInfo(c *C) {
 	}{
 		{
 			files: releaseFiles{
-				lsbRelease: testLsbRelease(OSRelease{ID: "centos", VersionID: "7.3.1711"}),
+				lsbRelease: testLsbRelease(OSRelease{VersionID: "7.3.1711"}),
 				release:    testReader(testOSRelease),
 			},
-			expected: OSRelease{ID: "centos", VersionID: "7.3.1711"},
-			comment:  "lsb_release is preferred",
+			expected: OSRelease{ID: "centos", VersionID: "7.3.1711", Like: []string{"rhel", "fedora"}},
+			comment:  "lsb_release is used to update version",
 		},
 		{
 			files: releaseFiles{
@@ -137,7 +143,7 @@ func (*MonitoringSuite) TestFailsOnNoReleaseFiles(c *C) {
 		[]string{"/etc/no-such-release"},
 		[]string{"/etc/no-such-version"},
 	)
-	c.Assert(err, ErrorMatches, "no release version file found")
+	c.Assert(err, ErrorMatches, "no release file found")
 }
 
 func testGetOSRelease(release OSRelease) osReleaseGetter {
@@ -185,6 +191,7 @@ ANSI_COLOR="0;31"
 CPE_NAME="cpe:/o:centos:centos:7"
 HOME_URL="https://www.centos.org/"
 BUG_REPORT_URL="https://bugs.centos.org/"
+# this is a comment
 
 CENTOS_MANTISBT_PROJECT="CentOS-7"
 CENTOS_MANTISBT_PROJECT_VERSION="7"

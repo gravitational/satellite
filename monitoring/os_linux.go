@@ -96,7 +96,11 @@ func (c *osReleaseChecker) check(ctx context.Context, reporter health.Reporter) 
 	}
 
 	for _, release := range c.Releases {
-		if versionsMatch(release, *info) {
+		match, err := versionsMatch(release, *info)
+		if err != nil {
+			return trace.Wrap(err, "failed to query OS version")
+		}
+		if match {
 			return nil
 		}
 	}
@@ -115,11 +119,12 @@ func (c *osReleaseChecker) check(ctx context.Context, reporter health.Reporter) 
 // based on https://www.freedesktop.org/software/systemd/man/os-release.html
 type OSRelease struct {
 	// ID identifies the distributor: ubuntu, redhat/centos, etc.
+	// The value is a regular expression.
 	ID string
 	// VersionID is the release version i.e. 16.04 for Ubuntu
 	VersionID string
 	// Like specifies the list of root OS distributions this
-	// distribution is a descendant of: `debian` for Ubuntu or `fedora` for RHEL
+	// distribution is a descendant of: `debian` for Ubuntu or `fedora` for RHEL.
 	Like []string
 }
 
@@ -132,7 +137,7 @@ func getOSReleaseFromFiles(releases, versions []string) (info *OSRelease, err er
 	release, err := openFirst(releases...)
 	if err != nil {
 		log.Warnf("Failed to read any release file: %v.", err)
-		return nil, trace.NotFound("no release version file found")
+		return nil, trace.NotFound("no release file found")
 	}
 
 	version, err := openFirst(versions...)
@@ -149,22 +154,9 @@ func getOSReleaseFromFiles(releases, versions []string) (info *OSRelease, err er
 }
 
 func getOSRelease(files releaseFiles) (info *OSRelease, err error) {
-	// Try lsb_release first
-	if files.lsbRelease != nil {
-		info, err = files.lsbRelease()
-		if err == nil {
-			return info, nil
-		}
-	}
-
 	info, err = files.releaseInfo()
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to determine release version")
-	}
-
-	if info == nil {
-		// At this point, we cannot determine release information
-		return nil, trace.NotFound("no release information found")
 	}
 
 	files.updateInfo(info)
@@ -173,18 +165,24 @@ func getOSRelease(files releaseFiles) (info *OSRelease, err error) {
 }
 
 // versionsMatch tests if test is equivalent to info
-func versionsMatch(test, info OSRelease) bool {
-	if strings.ToLower(test.ID) != strings.ToLower(info.ID) {
-		return false
+func versionsMatch(test, info OSRelease) (bool, error) {
+	expr, err := regexp.Compile(strings.ToLower(test.ID))
+	if err != nil {
+		return false, trace.Wrap(err,
+			"version specification %q is not a valid regular expression", test.ID)
+	}
+
+	if !expr.MatchString(strings.ToLower(info.ID)) {
+		return false, nil
 	}
 
 	// Versions are matched as prefixes, e.g. if a required version is 7.2 then
 	// it matches 7.2, 7.2.1, 7.2.2, etc.
 	if !strings.HasPrefix(info.VersionID, test.VersionID) {
-		return false
+		return false, nil
 	}
 
-	return true
+	return true, nil
 }
 
 const (
@@ -224,6 +222,14 @@ func (r releaseFiles) releaseInfo() (info *OSRelease, err error) {
 }
 
 func (r releaseFiles) updateInfo(release *OSRelease) {
+	if r.lsbRelease != nil {
+		info, err := r.lsbRelease()
+		if err == nil {
+			release.VersionID = info.VersionID
+			return
+		}
+	}
+
 	if r.version == nil {
 		return
 	}
@@ -268,12 +274,6 @@ func lsbRelease() (info *OSRelease, err error) {
 		return bytes.TrimSpace(out), nil
 	}
 
-	// distributor
-	id, err := toolCmd("--id")
-	if err != nil {
-		return nil, trace.Wrap(err, "failed to determine OS distributor: %s", id)
-	}
-
 	// release
 	release, err := toolCmd("--release")
 	if err != nil {
@@ -281,7 +281,6 @@ func lsbRelease() (info *OSRelease, err error) {
 	}
 
 	return &OSRelease{
-		ID:        string(id),
 		VersionID: string(release),
 	}, nil
 }
@@ -299,12 +298,24 @@ func parseGenericRelease(rc io.ReadCloser) (info *OSRelease, err error) {
 		if len(line) == 0 {
 			continue
 		}
-		parts := strings.SplitN(line, "=", 2)
-		var value string
-		if value, err = strconv.Unquote(parts[1]); err != nil {
-			value = parts[1]
+		if strings.HasPrefix(line, "#") {
+			// Skip comment
+			continue
 		}
-		switch parts[0] {
+
+		indexEquals := strings.Index(line, "=")
+		if indexEquals == -1 {
+			log.Warnf("Skip ill-formed line %q", line)
+			continue
+		}
+
+		name := line[:indexEquals]
+		value := line[indexEquals+1:]
+		if stripped, err := strconv.Unquote(value); err == nil {
+			value = stripped
+		}
+
+		switch name {
 		case fieldReleaseID:
 			info.ID = value
 		case fieldLike:
@@ -341,12 +352,25 @@ func parseVersionFile(rc io.ReadCloser) (version string, err error) {
 	return version, nil
 }
 
-// getReleaseVersion extracts the version detail from the version file.
+// getReleaseVersion extracts the version detail from the release file.
+// The release file has the following format:
 //
-// For example, on CentOS, the following version information:
+//  <distribution> release <version> (<code name>)
+//
+// where,
+//	distribition - identifies the distribution.
+//			For example `CentOS Linux` or `Red Hat Enterprise Linux Server`.
+//			This also becomes the NAME in /etc/os-release with words concatenated
+//			and `Linux` stripped.
+//	version      - specifies the release version.
+//			For example `7.4.1708` or `7.5`
+//	code name    - identifies the release.
+//			For example `Core` or `Maipo`
+//
+// For example, on CentOS, with the following as contents of the release file:
 //   CentOS Linux release 7.3.1611 (Core)
 //
-// yields "7.3.1611" as the version
+// the function yields "7.3.1611" as the result.
 func getReleaseVersion(version string) string {
 	result := versionRegexp.FindStringSubmatch(version)
 	if len(result) == 0 {
