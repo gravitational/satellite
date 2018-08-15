@@ -78,12 +78,13 @@ message NodeStatus {
   repeated Probe probes = 4;
 }
 
+// Probe represents the outcome of a single check
 message Probe {
-  // Name of the checker that generated the probe.
+  // Checker is the name of the checker that generated the probe
   string checker = 1;
-  // Optional detail specific to the checker
+  // Detail is the optional detail specific to the checker
   string detail = 2;
-  // Optional code specific to a checker (i.e. HTTP status code)
+  // Code is the optional code specific to a checker (i.e. HTTP status code)
   string code = 3;
   enum Type {
     Unknown = 0;
@@ -91,8 +92,12 @@ message Probe {
     Failed = 2;
     Terminated = 3;
   }
+  // Status is the result of the probe
   Type status = 4;
+  // Error is the probe-specific error message
   string error = 5;
+  // CheckerData is a free-form data specific to the checker
+  bytes checker_data = 6;
 }
 
 message Timestamp {

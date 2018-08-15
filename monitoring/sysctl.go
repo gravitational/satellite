@@ -18,6 +18,7 @@ package monitoring
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -61,17 +62,32 @@ func (c *SysctlChecker) Check(ctx context.Context, reporter health.Reporter) {
 		return
 	}
 
+	data := SysctlCheckerData{ParameterName: c.Param, ParameterValue: c.Expected}
+	bytes, marshalErr := json.Marshal(data)
+	if marshalErr != nil {
+		reporter.Add(NewProbeFromErr(c.CheckerName, fmt.Sprintf(
+			"failed to marshal %v", data), trace.Wrap(marshalErr)))
+	}
+
 	if err == nil && value != c.Expected {
 		reporter.Add(&pb.Probe{
-			Checker: c.CheckerName,
-			Detail:  c.OnValueMismatch,
-			Status:  pb.Probe_Failed})
+			Checker:     c.CheckerName,
+			Detail:      c.OnValueMismatch,
+			Status:      pb.Probe_Failed,
+			CheckerData: bytes,
+		})
 		return
 	}
 
 	if trace.IsNotFound(err) {
 		if !c.SkipNotFound {
-			reporter.Add(NewProbeFromErr(c.CheckerName, c.OnMissing, trace.Wrap(err)))
+			reporter.Add(&pb.Probe{
+				Checker:     c.CheckerName,
+				Detail:      c.OnMissing,
+				Status:      pb.Probe_Failed,
+				Error:       trace.UserMessage(err),
+				CheckerData: bytes,
+			})
 		}
 		return
 	}
@@ -91,4 +107,12 @@ func Sysctl(name string) (string, error) {
 		return "", trace.BadParameter("empty output from sysctl")
 	}
 	return string(data[:len(data)-1]), nil
+}
+
+// SysctlCheckerData gets attached to the sysctl parameter check probes
+type SysctlCheckerData struct {
+	// ParameterName is the name of sysctl parameter
+	ParameterName string
+	// ParameterValue is the expected value of sysctl parameter
+	ParameterValue string
 }
