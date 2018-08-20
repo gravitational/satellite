@@ -24,6 +24,7 @@ import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
 	"github.com/gravitational/trace"
+	log "github.com/sirupsen/logrus"
 )
 
 // NewPortChecker returns a new port range checker
@@ -101,6 +102,14 @@ func (c *portChecker) checkProcess(proc process, reporter health.Reporter) bool 
 	conflicts := false
 	for _, r := range c.ranges {
 		if r.Protocol != proc.socket.proto() {
+			continue
+		}
+		// if prechecks have been run multiple times quickly, sockets from
+		// the ping-pong test may still be lingering in time-wait state and
+		// should eventually go away
+		switch proc.socket.state() {
+		case TimeWait, Close:
+			log.Debugf("Ignoring socket in %q state for program %q(pid=%v).", proc.socket.state(), proc.name, proc.pid)
 			continue
 		}
 		if uint64(proc.localAddr().port) >= r.From && uint64(proc.localAddr().port) <= r.To {
