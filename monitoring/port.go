@@ -104,9 +104,8 @@ func (c *portChecker) checkProcess(proc process, reporter health.Reporter) bool 
 		if r.Protocol != proc.socket.proto() {
 			continue
 		}
-		// if prechecks have been run multiple times quickly, sockets from
-		// the ping-pong test may still be lingering in time-wait state and
-		// should eventually go away
+		// ignore sockets in time-wait and closed states since they're going
+		// away soon
 		switch proc.socket.state() {
 		case TimeWait, Close:
 			log.Debugf("Ignoring socket in %q state for program %q(pid=%v).", proc.socket.state(), proc.name, proc.pid)
