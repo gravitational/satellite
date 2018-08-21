@@ -399,6 +399,17 @@ type addr struct {
 	port int
 }
 
+// String returns the address' string representation
+func (a addr) String() string {
+	return fmt.Sprintf("%s:%v", a.ip, a.port)
+}
+
+// formatSocket formats the provided socket to a string
+func formatSocket(s socket) string {
+	return fmt.Sprintf("socket(proto=%v, addr=%s, state=%s, inode=%v)",
+		s.proto(), s.localAddr(), s.state(), s.inode())
+}
+
 // procNet* are standard paths to Linux procfs information on sockets
 const (
 	procNetTCP  = "/proc/net/tcp"
