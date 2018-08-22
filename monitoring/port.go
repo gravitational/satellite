@@ -107,8 +107,8 @@ func (c *portChecker) checkProcess(proc process, reporter health.Reporter) bool 
 		// ignore sockets in time-wait and closed states since they're going
 		// away soon
 		switch proc.socket.state() {
-		case TimeWait, Close:
-			log.Debugf("Ignoring socket in %q state for program %q(pid=%v).", proc.socket.state(), proc.name, proc.pid)
+		case TimeWait:
+			log.Debugf("Ignoring %v for program %q(pid=%v).", formatSocket(proc.socket), proc.name, proc.pid)
 			continue
 		}
 		if uint64(proc.localAddr().port) >= r.From && uint64(proc.localAddr().port) <= r.To {
