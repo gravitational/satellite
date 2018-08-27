@@ -19,6 +19,7 @@ package monitoring
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -41,7 +42,7 @@ func NewKernelModuleChecker(modules ...ModuleRequest) health.Checker {
 
 // Name returns name of the checker
 func (r kernelModuleChecker) Name() string {
-	return kernelModuleCheckerID
+	return KernelModuleCheckerID
 }
 
 // Check determines if the modules specified with r.Modules have been loaded
@@ -68,16 +69,27 @@ func (r kernelModuleChecker) check(ctx context.Context, reporter health.Reporter
 	}
 
 	for _, module := range r.Modules {
+		data, err := json.Marshal(KernelModuleCheckerData{Module: module})
+		if err != nil {
+			return trace.Wrap(err)
+		}
 		if !modules.IsLoaded(module) {
 			reporter.Add(&pb.Probe{
-				Checker: r.Name(),
-				Detail:  fmt.Sprintf("%v not loaded", module),
-				Status:  pb.Probe_Failed,
+				Checker:     r.Name(),
+				Detail:      fmt.Sprintf("%v not loaded", module),
+				Status:      pb.Probe_Failed,
+				CheckerData: data,
 			})
 		}
 	}
 
 	return nil
+}
+
+// KernelModuleCheckerData gets attached to the kernel module check probes
+type KernelModuleCheckerData struct {
+	// Module is the probed kernel module
+	Module ModuleRequest
 }
 
 // kernelModuleChecker checks if the specified set of kernel modules are loaded
@@ -216,6 +228,7 @@ const (
 
 type moduleGetterFunc func() (Modules, error)
 
-const kernelModuleCheckerID = "kernel-module"
+// KernelModuleCheckerID is the ID of the checker of kernel modules
+const KernelModuleCheckerID = "kernel-module"
 
 var moduleColumns = []string{"name", "memory_size", "instances", "dependencies", "state", "memory_offset"}

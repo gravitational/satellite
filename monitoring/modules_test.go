@@ -112,7 +112,7 @@ func (_ *MonitoringSuite) TestValidatesModules(c *C) {
 			reader:  moduleReader(modulesData),
 			probes: health.Probes{
 				&pb.Probe{
-					Checker: kernelModuleCheckerID,
+					Checker: KernelModuleCheckerID,
 					Detail:  `kernel module "required" not loaded`,
 					Status:  pb.Probe_Failed,
 				},
@@ -124,7 +124,7 @@ func (_ *MonitoringSuite) TestValidatesModules(c *C) {
 			reader:  moduleReader(modulesData),
 			probes: health.Probes{
 				&pb.Probe{
-					Checker: kernelModuleCheckerID,
+					Checker: KernelModuleCheckerID,
 					Status:  pb.Probe_Running,
 				},
 			},
@@ -135,7 +135,7 @@ func (_ *MonitoringSuite) TestValidatesModules(c *C) {
 			reader:  testFailingModuleReader(trace.NotFound("file or directory not found")),
 			probes: health.Probes{
 				&pb.Probe{
-					Checker: kernelModuleCheckerID,
+					Checker: KernelModuleCheckerID,
 					Status:  pb.Probe_Running,
 				},
 			},
@@ -146,7 +146,7 @@ func (_ *MonitoringSuite) TestValidatesModules(c *C) {
 			reader:  testFailingModuleReader(trace.AccessDenied("permission denied")),
 			probes: health.Probes{
 				&pb.Probe{
-					Checker: kernelModuleCheckerID,
+					Checker: KernelModuleCheckerID,
 					Detail:  "failed to validate kernel modules",
 					Error:   "permission denied",
 					Status:  pb.Probe_Failed,
@@ -164,7 +164,7 @@ func (_ *MonitoringSuite) TestValidatesModules(c *C) {
 			reader: moduleReader(modulesData),
 			probes: health.Probes{
 				&pb.Probe{
-					Checker: kernelModuleCheckerID,
+					Checker: KernelModuleCheckerID,
 					Status:  pb.Probe_Running,
 				},
 			},
