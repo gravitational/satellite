@@ -35,12 +35,12 @@ import (
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/test"
+	"github.com/gravitational/trace"
 
 	"github.com/gravitational/roundtrip"
 	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/grpc/credentials"
 	. "gopkg.in/check.v1"
 )
 
@@ -409,7 +409,7 @@ func (r *AgentSuite) TestReflectsStatusInStatusCode(c *C) {
 	// ensure that the status update loop has finished updating status
 	clock.BlockUntil(1)
 
-	client, err := httpClient(fmt.Sprintf("https://127.0.0.1:%v", rpcPort))
+	client, err := r.httpClient(fmt.Sprintf("https://127.0.0.1:%v", rpcPort))
 	c.Assert(err, IsNil)
 
 	resp, err := client.Get(client.Endpoint(""), url.Values{})
@@ -516,7 +516,7 @@ func (r *AgentSuite) newAgent(node string, rpcPort int, members []serf.Member,
 	return &agent{
 		name:         node,
 		serfClient:   &testSerfClient{members: members},
-		dialRPC:      testDialRPC(rpcPort, r.certFile),
+		rpcPort:      rpcPort,
 		cache:        &testCache{c: c, SystemStatus: &pb.SystemStatus{Status: pb.SystemStatus_Unknown}},
 		Checkers:     checkers,
 		statusClock:  statusClock,
@@ -525,9 +525,18 @@ func (r *AgentSuite) newAgent(node string, rpcPort int, members []serf.Member,
 	}
 }
 
-func httpClient(url string) (*roundtrip.Client, error) {
+func (r *AgentSuite) httpClient(url string) (*roundtrip.Client, error) {
+	// Load client cert/key
+	cert, err := tls.LoadX509KeyPair(r.certFile, r.keyFile)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+			Certificates:       []tls.Certificate{cert},
+		},
 	}
 	return roundtrip.NewClient(url, "", roundtrip.HTTPClient(&http.Client{Transport: tr}))
 }
@@ -643,23 +652,6 @@ type testServer struct {
 
 // Stop is a no-op.
 func (_ *testServer) Stop() {}
-
-// testDialRPC is a test implementation of the dialRPC interface,
-// that creates an RPC client bound to localhost.
-func testDialRPC(port int, certFile string) dialRPC {
-	return func(member *serf.Member) (*client, error) {
-		addr := fmt.Sprintf(":%d", port)
-		creds, err := credentials.NewClientTLSFromFile(certFile, "agent")
-		if err != nil {
-			return nil, err
-		}
-		client, err := NewClientWithCreds(addr, creds)
-		if err != nil {
-			return nil, err
-		}
-		return client, err
-	}
-}
 
 var errInvalidState = errors.New("invalid state")
 

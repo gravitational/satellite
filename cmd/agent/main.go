@@ -79,7 +79,9 @@ func run() error {
 		cstatusRPCPort     = cstatus.Flag("rpc-port", "Local agent RPC port").Default("7575").Int()
 		cstatusPrettyPrint = cstatus.Flag("pretty", "Pretty-print the output").Bool()
 		cstatusLocal       = cstatus.Flag("local", "Query the status of the local node").Bool()
-		cstatusCertFile    = cstatus.Flag("cert-file", "Client SSL certificate file for RPC. This should be the CA certificate if the server certificates are signed by a CA").ExistingFile()
+		cstatusCAFile      = cstatus.Flag("ca-file", "CA certificate for verifying server certificates").ExistingFile()
+		cstatusCertFile    = cstatus.Flag("client-cert-file", "mTLS client certificate file").ExistingFile()
+		cstatusKeyFile     = cstatus.Flag("client-key-file", "mTLS client key file").ExistingFile()
 
 		// checks command
 		cchecks = app.Command("checks", "Run local compatibility checks")
@@ -159,7 +161,7 @@ func run() error {
 		}
 		err = runAgent(agentConfig, monitoringConfig, toAddrList(*cagentInitialCluster))
 	case cstatus.FullCommand():
-		_, err = status(*cstatusRPCPort, *cstatusLocal, *cstatusPrettyPrint, *cstatusCertFile)
+		_, err = status(*cstatusRPCPort, *cstatusLocal, *cstatusPrettyPrint, *cstatusCAFile, *cstatusCertFile, *cstatusKeyFile)
 	case cchecks.FullCommand():
 		err = localChecks()
 	case cversion.FullCommand():

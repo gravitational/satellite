@@ -18,15 +18,16 @@ package agent
 
 import (
 	"crypto/tls"
-	"fmt"
+	"crypto/x509"
+	"io/ioutil"
 	"net/http"
 	"strings"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/gravitational/roundtrip"
 	"github.com/gravitational/trace"
-	serf "github.com/hashicorp/serf/client"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -72,14 +73,21 @@ func (r *server) LocalStatus(ctx context.Context, req *pb.LocalStatusRequest) (r
 
 // newRPCServer creates an agent RPC endpoint for each provided listener.
 func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []string) (*server, error) {
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to read certificate/key from %v/%v", certFile, keyFile)
 	}
 
-	creds := credentials.NewTLS(&tls.Config{
-		Certificates: []tls.Certificate{cert},
-		MinVersion:   tls.VersionTLS12,
+	caCert, err := ioutil.ReadFile(caFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
+
+	tlsConfig := &tls.Config{
+		ClientCAs:  caCertPool,
+		ClientAuth: tls.RequireAndVerifyClientCert,
 		// Use TLS Modern capability suites
 		// https://wiki.mozilla.org/Security/Server_Side_TLS
 		CipherSuites: []uint16{
@@ -92,55 +100,42 @@ func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []str
 			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
 			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
 		},
-	})
-
-	healthzHandler, err := newHealthHandler(caFile)
-	if err != nil {
-		return nil, trace.Wrap(err, "failed to read CA certificate from %v", caFile)
+		PreferServerCipherSuites: true,
+		MinVersion:               tls.VersionTLS12,
 	}
+	tlsConfig.BuildNameToCertificate()
 
 	backend := grpc.NewServer(grpc.Creds(creds))
 	server := &server{agent: agent, Server: backend}
 	pb.RegisterAgentServer(backend, server)
+
+	healthzHandler := newHealthHandler(server)
+
 	// handler is a multiplexer for both gRPC and HTTPS queries.
 	// The HTTPS endpoint returns the cluster status as JSON
 	handler := grpcHandlerFunc(server, healthzHandler)
 
-	tlsConfig := &tls.Config{
-		MinVersion: tls.VersionTLS12,
-		// Use TLS Modern capability suites
-		// https://wiki.mozilla.org/Security/Server_Side_TLS
-		CipherSuites: []uint16{
-			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
-		},
-	}
 	for _, addr := range rpcAddrs {
-		srv := &http.Server{
-			Addr:      addr,
-			Handler:   handler,
-			TLSConfig: tlsConfig,
-		}
-		go srv.ListenAndServeTLS(certFile, keyFile)
+		//go http.ListenAndServeTLS(addr, certFile, keyFile, handler)
+		go serve(addr, certFile, keyFile, tlsConfig, handler)
 	}
 
 	return server, nil
 }
 
+func serve(addr, certFile, keyFile string, tlsConfig *tls.Config, handler http.Handler) {
+	server := &http.Server{
+		Addr:      addr,
+		TLSConfig: tlsConfig,
+		Handler:   handler,
+	}
+
+	server.ListenAndServeTLS(certFile, keyFile)
+}
+
 // newHealthHandler creates a http.Handler that returns cluster status
 // from an HTTPS endpoint listening on the same RPC port as the agent.
-func newHealthHandler(certFile string) (http.HandlerFunc, error) {
-	addr := fmt.Sprintf("127.0.0.1:%v", RPCPort)
-	client, err := NewClient(addr, certFile)
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
+func newHealthHandler(s *server) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
@@ -148,26 +143,18 @@ func newHealthHandler(certFile string) (http.HandlerFunc, error) {
 			return
 		}
 
-		status, err := client.Status(context.TODO())
+		status, err := s.Status(context.TODO(), nil)
 		if err != nil {
 			roundtrip.ReplyJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
 			return
 		}
 
 		httpStatus := http.StatusOK
-		if isDegraded(*status) {
+		if isDegraded(*status.GetStatus()) {
 			httpStatus = http.StatusServiceUnavailable
 		}
 
-		roundtrip.ReplyJSON(w, httpStatus, status)
-	}, nil
-}
-
-// defaultDialRPC is a default RPC client factory function.
-// It creates a new client based on address details from the specific serf member.
-func defaultDialRPC(certFile string) dialRPC {
-	return func(member *serf.Member) (*client, error) {
-		return NewClient(fmt.Sprintf("%s:%d", member.Addr.String(), RPCPort), certFile)
+		roundtrip.ReplyJSON(w, httpStatus, status.GetStatus())
 	}
 }
 
