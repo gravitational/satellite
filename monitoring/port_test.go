@@ -146,6 +146,52 @@ func (*MonitoringSuite) TestValidatesPorts(c *C) {
 			},
 			comment: "dedups processes that have multiple connections on the same port",
 		},
+		{
+			ports: []PortRange{
+				PortRange{From: 9001, To: 9001, Protocol: "tcp", ListenAddr: "127.0.0.2"},
+			},
+			reader: testGetProcs(
+				process{
+					name: "foo",
+					pid:  9001,
+					socket: tcpSocket{
+						State:         Listen,
+						LocalAddress:  tcpAddr("127.0.0.1:9001", c),
+						RemoteAddress: tcpAddr("192.168.178.1:45001", c),
+					},
+				},
+			),
+			probes: []*pb.Probe{
+				&pb.Probe{
+					Checker: portCheckerID,
+					Status:  pb.Probe_Running,
+				},
+			},
+			comment: "only validates the specified listen address",
+		},
+		{
+			ports: []PortRange{
+				PortRange{From: 9001, To: 9001, Protocol: "tcp"},
+			},
+			reader: testGetProcs(
+				process{
+					name: "foo",
+					pid:  9001,
+					socket: tcpSocket{
+						State:         TimeWait,
+						LocalAddress:  tcpAddr("127.0.0.1:9001", c),
+						RemoteAddress: tcpAddr("192.168.178.1:45001", c),
+					},
+				},
+			),
+			probes: []*pb.Probe{
+				&pb.Probe{
+					Checker: portCheckerID,
+					Status:  pb.Probe_Running,
+				},
+			},
+			comment: "ignores open ports in TimeWait",
+		},
 	}
 
 	// exercise & verify
