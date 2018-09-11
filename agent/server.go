@@ -19,12 +19,13 @@ package agent
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-	log "github.com/sirupsen/logrus"
+	serf "github.com/hashicorp/serf/client"
 
 	"github.com/gravitational/roundtrip"
 	"github.com/gravitational/trace"
@@ -80,7 +81,7 @@ func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []str
 
 	caCert, err := ioutil.ReadFile(caFile)
 	if err != nil {
-		log.Fatal(err)
+		return nil, trace.ConvertSystemError(err)
 	}
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM(caCert)
@@ -116,27 +117,25 @@ func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []str
 	handler := grpcHandlerFunc(server, healthzHandler)
 
 	for _, addr := range rpcAddrs {
-		//go http.ListenAndServeTLS(addr, certFile, keyFile, handler)
 		go serve(addr, certFile, keyFile, tlsConfig, handler)
 	}
 
 	return server, nil
 }
 
-func serve(addr, certFile, keyFile string, tlsConfig *tls.Config, handler http.Handler) {
+func serve(addr, certFile, keyFile string, tlsConfig *tls.Config, handler http.Handler) error {
 	server := &http.Server{
 		Addr:      addr,
 		TLSConfig: tlsConfig,
 		Handler:   handler,
 	}
 
-	server.ListenAndServeTLS(certFile, keyFile)
+	return server.ListenAndServeTLS(certFile, keyFile)
 }
 
 // newHealthHandler creates a http.Handler that returns cluster status
 // from an HTTPS endpoint listening on the same RPC port as the agent.
 func newHealthHandler(s *server) http.HandlerFunc {
-
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -169,4 +168,12 @@ func grpcHandlerFunc(rpcServer *server, other http.Handler) http.Handler {
 			other.ServeHTTP(w, r)
 		}
 	})
+}
+
+// defaultDialRPC is a default RPC client factory function.
+// It creates a new client based on address details from the specific serf member.
+func defaultDialRPC(caFile, certFile, keyFile string) dialRPC {
+	return func(member *serf.Member) (*client, error) {
+		return NewClient(fmt.Sprintf("%s:%d", member.Addr.String(), RPCPort), caFile, certFile, keyFile)
+	}
 }

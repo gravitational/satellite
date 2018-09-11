@@ -18,11 +18,19 @@ package agent
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"math/big"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -35,6 +43,7 @@ import (
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/test"
+
 	"github.com/gravitational/trace"
 
 	"github.com/gravitational/roundtrip"
@@ -61,8 +70,7 @@ func (r *AgentSuite) SetUpSuite(c *C) {
 	dir := c.MkDir()
 	r.certFile = filepath.Join(dir, "server.crt")
 	r.keyFile = filepath.Join(dir, "server.key")
-	c.Assert(ioutil.WriteFile(r.certFile, certFile, sharedReadWriteMask), IsNil)
-	c.Assert(ioutil.WriteFile(r.keyFile, keyFile, sharedReadWriteMask), IsNil)
+	c.Assert(generateCert(r.certFile, r.keyFile), IsNil)
 }
 
 func (_ *AgentSuite) TestSetsSystemStatusFromMemberStatuses(c *C) {
@@ -516,13 +524,43 @@ func (r *AgentSuite) newAgent(node string, rpcPort int, members []serf.Member,
 	return &agent{
 		name:         node,
 		serfClient:   &testSerfClient{members: members},
-		rpcPort:      rpcPort,
+		dialRPC:      testDialRPC(rpcPort, r.certFile, r.keyFile),
 		cache:        &testCache{c: c, SystemStatus: &pb.SystemStatus{Status: pb.SystemStatus_Unknown}},
 		Checkers:     checkers,
 		statusClock:  statusClock,
 		recycleClock: recycleClock,
 		localStatus:  emptyNodeStatus(node),
 	}
+}
+
+// testDialRPC is a test implementation of the dialRPC interface,
+// that creates an RPC client bound to localhost.
+func testDialRPC(port int, certFile, keyFile string) dialRPC {
+	return func(member *serf.Member) (*client, error) {
+		return newClient(fmt.Sprintf(":%d", port), "agent", certFile, certFile, keyFile)
+	}
+	/*return func(member *serf.Member) (*client, error) {
+		addr := fmt.Sprintf(":%d", port)
+
+		// Load client cert/key
+		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
+
+		creds, err := credentials.NewClientTLSFromFile(certFile, "agent")
+		if err != nil {
+			return nil, err
+		}
+
+
+
+		client, err := NewClientWithCreds(addr, creds)
+		if err != nil {
+			return nil, err
+		}
+		return client, err
+	}*/
 }
 
 func (r *AgentSuite) httpClient(url string) (*roundtrip.Client, error) {
@@ -686,72 +724,91 @@ type byChecker []*pb.Probe
 
 type tags map[string]string
 
-// openssl req -new -out server.csr -key server.key -config san.cnf
-// openssl x509 -req -days 3650 -in server.csr -signkey server.key -out server.crt -extensions req_ext -extfile san.cnf
-// san.cnf:
-// [req]
-// req_extensions=req_ext
-// prompt=no
-// distinguished_name=dn
-// [dn]
-// C=US
-// ST=Test
-// L=Test
-// O=Acme LLC
-// CN=agent
-// [req_ext]
-// subjectAltName=@alt_names
-// [alt_names]
-// DNS.1=agent
-// IP.1=127.0.0.1
-var certFile = []byte(`-----BEGIN CERTIFICATE-----
-MIIDOTCCAiGgAwIBAgIJAJkeMEm1V6iYMA0GCSqGSIb3DQEBCwUAME4xCzAJBgNV
-BAYTAlVTMQ0wCwYDVQQIDARUZXN0MQ0wCwYDVQQHDARUZXN0MREwDwYDVQQKDAhB
-Y21lIExMQzEOMAwGA1UEAwwFYWdlbnQwHhcNMTcxMTE0MjE1OTI5WhcNMjcxMTEy
-MjE1OTI5WjBOMQswCQYDVQQGEwJVUzENMAsGA1UECAwEVGVzdDENMAsGA1UEBwwE
-VGVzdDERMA8GA1UECgwIQWNtZSBMTEMxDjAMBgNVBAMMBWFnZW50MIIBIjANBgkq
-hkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxyBjYyMJ6DQXerhK7VhUna6iVXr+dXBe
-delPqox3ZnfGiuOcm70xPwJW0yeDndvHNc21i12cI86pv3g8YNnH6IKqYY7uyD3C
-Cpa0AE2Tt3C0Iowc6HPQQzUeAfAomh4M1LZzSaPKbtVvAcApOGG9ZJxw4NS1tVeq
-pBC+k4ZYzdzy5b4bqugw/6uxM7kND/7jzDB3zLyxqPpwd58mHI+RTWkNSeIuJmi9
-09njqMO6q8lypEDXdikX0PL5Mph9Dr2i3uV3lGJWk/QHov/AuN2DsubdeYH3udIu
-pKDmy89s7uX8aqdgeF4c21vwsZ1htHcWBAKXaHuDptgPFAq/C+gbTQIDAQABoxow
-GDAWBgNVHREEDzANggVhZ2VudIcEfwAAATANBgkqhkiG9w0BAQsFAAOCAQEAgHDT
-Rgq8K/i56L9tc5a+uRqnv9b1xyg9z2Brk7L6TFGtZBoExe1I9FVlHY9EbnE11xp0
-FPlpoDjk+giwOclwnFFIZGmjKFiyWslrvxNT3sSAFwbL42y//u9ddszxez4S09kt
-g9huQ1wgMGe1E2EsO2XSCSG+NAHrW/FFX09DB/l25b0GqpOSXG//ztiVXYdVYIjl
-r6tb7YzYC2U5ssdeNow//EzpuDWv/TPG35UWEMuK+8ruisSASDZC/0exUBOkGn8W
-PC6DCBH+wA8cbO7V6CguMZN0rNapnXOjyYyjPCazKxCftHNMVg90BGQjwyXTbnIj
-rzz+3PuKaaMFNJhMJA==
------END CERTIFICATE-----`)
+func generateCert(certFile, keyFile string) error {
+	priv, err := ecdsa.GenerateKey(elliptic.P224(), rand.Reader)
+	if err != nil {
+		return trace.Wrap(err)
+	}
 
-// openssl genrsa -out server.key 2048
-var keyFile = []byte(`-----BEGIN RSA PRIVATE KEY-----
-MIIEpgIBAAKCAQEAxyBjYyMJ6DQXerhK7VhUna6iVXr+dXBedelPqox3ZnfGiuOc
-m70xPwJW0yeDndvHNc21i12cI86pv3g8YNnH6IKqYY7uyD3CCpa0AE2Tt3C0Iowc
-6HPQQzUeAfAomh4M1LZzSaPKbtVvAcApOGG9ZJxw4NS1tVeqpBC+k4ZYzdzy5b4b
-qugw/6uxM7kND/7jzDB3zLyxqPpwd58mHI+RTWkNSeIuJmi909njqMO6q8lypEDX
-dikX0PL5Mph9Dr2i3uV3lGJWk/QHov/AuN2DsubdeYH3udIupKDmy89s7uX8aqdg
-eF4c21vwsZ1htHcWBAKXaHuDptgPFAq/C+gbTQIDAQABAoIBAQCLr8bIxs2uXMyT
-xDCbqzlAnD84o91ZWQiKwq6mP3+LHD7lM6KrBd9ECkoKOk/0LzbiIXpXV8WuwM0H
-ijsg3eWE0BTh9zi+s8QpVWrUQ5d6Oc/D5HJrBsN0QhDY3zY8VxQ9K/hYElRxx7vl
-iH3iFX6c07nDnrQRkHweN7jZGIe3cSfd7dS4rLBpV5EE7px7S5zT/DD3Tkmj1gXE
-LR60KrZkNuv1WtQ9LQMZmB5ik7AQVEdqOZ5qCwjFbGwMbVJpRAOeYzhxIYiPzRkP
-rH0VRqVPld0QRNArd+81c3VWwXGR3QpIEdYQtaCH5ZItQju9tyBvpGngrzYj+PV1
-IaV0R76pAoGBAPZ7AM5LDG9f6f5fANqexcApn9CjswpE6qSDFLg14nmze4+kxk6y
-tStl18SYYLQrk6YYy8ViI66AUWCLTHC9b88Ok04uqRWbT9TpKc4QSzb/ZHAgRjF0
-DK8ysbUwQPSKNtSybIH1DWvg2Qc7GUkZknDAd1LU4zW2NuhXV6pG3jB3AoGBAM7R
-MBtvPdTbZNmBipWSIbfM4QKj5CEDr7M4LigWwbQC8JMgTIrpu5EOeHuM+RbZdT8S
-c3PFf8b46WXSHDM3BNrIedwKKFgpYKvd8YpdRDSiKb3jfyY2wjKVMIR2tjzcNhkc
-+7kikngVasoWDvoI9rg5tJ8IuZlDH9AA9ieGO2dbAoGBANB8zPqyWote2yPSInvK
-L0VTMB6gSVKXZs7PHdiPo8kDu7GOVDu/SCW0WKWvqqTb82Fcugh08e+qFKuQSJFY
-e9nt30YTi+x92jIjI7xs5eJYdxGtCxLLsesD+3NipJ70xlp1rfjjWn30zD8ki0fc
-/JSpCIWlE6ecQKeZMcsTdOATAoGBAM4YL7RnGlqvdsQ5Dv0V7nvWsrOK1p7/qWsT
-JQvWAZl9BHfYy+3yFXPr06xrQx29/dSoclyAB2EkUpGg23E99px/AtB/XszcDvW1
-6ilT39ADeU09E0vlbYgym3KlSd1EJLTJ6R8IkKUR0qUnbi1EGXhkKNYCP9G2zlDd
-ZG7mmPPZAoGBALYsBoLEvRsUnfZwg+6EC8L8BYbch/UgaXjqg0nmFHsWbKJNMPzr
-EGailjuSn0ofbz2gcLDD5Na1/3hnI7qOP7th+rHXBWh3/4ypdbCOJeGepS82MPGW
-3bggrvOh3D8sfevWppMw6Hzt0FsevUC2TGp0okbId/BGcMs9WYIV+pq2
------END RSA PRIVATE KEY-----`)
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	template := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			Organization: []string{"Acme Co"},
+		},
+		NotBefore: time.Now(),
+		NotAfter:  time.Now().Add(1 * time.Hour),
+
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
+		DNSNames:              []string{"agent"},
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, publicKey(priv), priv)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	certOut, err := os.Create(certFile)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	if err := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
+		return trace.Wrap(err)
+	}
+	if err := certOut.Close(); err != nil {
+		return trace.Wrap(err)
+	}
+
+	keyOut, err := os.OpenFile(keyFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	if err := pem.Encode(keyOut, pemBlockForKey(priv)); err != nil {
+		return trace.Wrap(err)
+	}
+	if err := keyOut.Close(); err != nil {
+		return trace.Wrap(err)
+	}
+	return nil
+}
+
+// pemBlockForKey
+// reference: https://golang.org/src/crypto/tls/generate_cert.go
+func pemBlockForKey(priv interface{}) *pem.Block {
+	switch k := priv.(type) {
+	case *rsa.PrivateKey:
+		return &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(k)}
+	case *ecdsa.PrivateKey:
+		b, err := x509.MarshalECPrivateKey(k)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Unable to marshal ECDSA private key: %v", err)
+			os.Exit(2)
+		}
+		return &pem.Block{Type: "EC PRIVATE KEY", Bytes: b}
+	default:
+		return nil
+	}
+}
+
+// publicKey
+// reference: https://golang.org/src/crypto/tls/generate_cert.go
+func publicKey(priv interface{}) interface{} {
+	switch k := priv.(type) {
+	case *rsa.PrivateKey:
+		return &k.PublicKey
+	case *ecdsa.PrivateKey:
+		return &k.PublicKey
+	default:
+		return nil
+	}
+}
 
 const sharedReadWriteMask = 0666

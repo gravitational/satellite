@@ -128,14 +128,11 @@ func New(config *Config) (Agent, error) {
 		serfClient:      client,
 		name:            config.Name,
 		cache:           config.Cache,
+		dialRPC:         defaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
 		statusClock:     clock,
 		recycleClock:    clock,
 		localStatus:     emptyNodeStatus(config.Name),
 		metricsListener: metricsListener,
-		caFile:          config.CAFile,
-		certFile:        config.CertFile,
-		keyFile:         config.KeyFile,
-		rpcPort:         RPCPort,
 	}
 
 	agent.rpc, err = newRPCServer(agent, config.CAFile, config.CertFile, config.KeyFile, config.RPCAddrs)
@@ -188,11 +185,12 @@ type agent struct {
 	// status sync with other agents.
 	rpc RPCServer
 
-	// rpcPort is the por this server is listening on for RPC calls
-	rpcPort int
-
 	// cache persists node status history.
 	cache cache.Cache
+
+	// dialRPC is a factory function to create clients to other agents.
+	// If future, agent address discovery will happen through serf.
+	dialRPC dialRPC
 
 	// done is a channel used for cleanup.
 	done chan struct{}
@@ -210,13 +208,9 @@ type agent struct {
 	// from remote nodes during status collection.
 	// Defaults to statusQueryReplyTimeout if unspecified
 	statusQueryReplyTimeout time.Duration
-
-	// TLS certificate/key files for connecting to other agents
-	// using mTLS
-	caFile   string
-	certFile string
-	keyFile  string
 }
+
+type dialRPC func(*serf.Member) (*client, error)
 
 // Start starts the agent's background tasks.
 func (r *agent) Start() error {
@@ -299,11 +293,6 @@ func (r *agent) Close() (err error) {
 // LocalStatus reports the status of the local agent node.
 func (r *agent) LocalStatus() *pb.NodeStatus {
 	return r.recentLocalStatus()
-}
-
-func (r *agent) dialMember(member *serf.Member) (*client, error) {
-	addr := fmt.Sprintf("%s:%d", member.Addr.String(), r.rpcPort)
-	return NewClient(addr, r.caFile, r.certFile, r.keyFile)
 }
 
 // runChecks executes the monitoring tests configured for this agent in parallel.
@@ -507,7 +496,7 @@ func (r *agent) getLocalStatus(ctx context.Context, local serf.Member, respc cha
 
 // getStatusFrom obtains node status from the node identified by member.
 func (r *agent) getStatusFrom(ctx context.Context, member serf.Member, respc chan<- *statusResponse) {
-	client, err := r.dialMember(&member)
+	client, err := r.dialRPC(&member)
 	resp := &statusResponse{member: member}
 	if err != nil {
 		resp.err = trace.Wrap(err)

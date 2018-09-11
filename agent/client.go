@@ -45,6 +45,12 @@ type client struct {
 // NewClient creates a agent RPC client to the given address
 // using the specified client certificate certFile
 func NewClient(addr, caFile, certFile, keyFile string) (*client, error) {
+	return newClient(addr, "", caFile, certFile, keyFile)
+}
+
+// newClient additional allows a serverName override, but is only available
+// from unit tests
+func newClient(addr, serverName, caFile, certFile, keyFile string) (*client, error) {
 	// Load client cert/key
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
@@ -54,7 +60,7 @@ func NewClient(addr, caFile, certFile, keyFile string) (*client, error) {
 	// Load the CA of the server
 	clientCACert, err := ioutil.ReadFile(caFile)
 	if err != nil {
-		return nil, trace.Wrap(err)
+		return nil, trace.ConvertSystemError(err)
 	}
 
 	certPool := x509.NewCertPool()
@@ -66,6 +72,7 @@ func NewClient(addr, caFile, certFile, keyFile string) (*client, error) {
 		RootCAs:      certPool,
 		Certificates: []tls.Certificate{cert},
 		MinVersion:   tls.VersionTLS12,
+		ServerName:   serverName,
 		// Use TLS Modern capability suites
 		// https://wiki.mozilla.org/Security/Server_Side_TLS
 		CipherSuites: []uint16{
