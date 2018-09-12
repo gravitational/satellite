@@ -54,7 +54,7 @@ func newClient(addr, serverName, caFile, certFile, keyFile string) (*client, err
 	// Load client cert/key
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
-		return nil, trace.Wrap(err)
+		return nil, trace.ConvertSystemError(err)
 	}
 
 	// Load the CA of the server

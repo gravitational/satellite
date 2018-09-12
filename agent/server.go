@@ -25,10 +25,10 @@ import (
 	"strings"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-	serf "github.com/hashicorp/serf/client"
 
 	"github.com/gravitational/roundtrip"
 	"github.com/gravitational/trace"
+	serf "github.com/hashicorp/serf/client"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
