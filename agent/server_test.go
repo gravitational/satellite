@@ -539,28 +539,6 @@ func testDialRPC(port int, certFile, keyFile string) dialRPC {
 	return func(member *serf.Member) (*client, error) {
 		return newClient(fmt.Sprintf(":%d", port), "agent", certFile, certFile, keyFile)
 	}
-	/*return func(member *serf.Member) (*client, error) {
-		addr := fmt.Sprintf(":%d", port)
-
-		// Load client cert/key
-		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-		if err != nil {
-			return nil, trace.Wrap(err)
-		}
-
-		creds, err := credentials.NewClientTLSFromFile(certFile, "agent")
-		if err != nil {
-			return nil, err
-		}
-
-
-
-		client, err := NewClientWithCreds(addr, creds)
-		if err != nil {
-			return nil, err
-		}
-		return client, err
-	}*/
 }
 
 func (r *AgentSuite) httpClient(url string) (*roundtrip.Client, error) {
@@ -745,7 +723,7 @@ func generateCert(certFile, keyFile string) error {
 		NotAfter:  time.Now().Add(1 * time.Hour),
 
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
 		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
 		DNSNames:              []string{"agent"},
