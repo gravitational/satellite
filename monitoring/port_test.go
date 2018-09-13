@@ -171,6 +171,26 @@ func (*MonitoringSuite) TestValidatesPorts(c *C) {
 		},
 		{
 			ports: []PortRange{
+				PortRange{From: 9001, To: 9001, Protocol: "tcp", ListenAddr: "127.0.0.2"},
+			},
+			reader: testGetProcs(
+				process{
+					name:   "foo",
+					pid:    100,
+					socket: tcpSocket{State: Listen, LocalAddress: tcpAddr("0.0.0.0:9001", c)},
+				},
+			),
+			probes: []*pb.Probe{
+				&pb.Probe{
+					Checker: portCheckerID,
+					Detail:  `conflicting program "foo"(pid=100) is occupying port tcp/9001(listen)`,
+					Status:  pb.Probe_Failed,
+				},
+			},
+			comment: "detects process bound to any address",
+		},
+		{
+			ports: []PortRange{
 				PortRange{From: 9001, To: 9001, Protocol: "tcp"},
 			},
 			reader: testGetProcs(

@@ -120,7 +120,7 @@ func (c *portChecker) checkProcess(proc process, reporter health.Reporter) bool 
 			addr = localAddr
 		}
 		if uint64(proc.localAddr().port) >= r.From && uint64(proc.localAddr().port) <= r.To &&
-			localAddr == addr {
+			(proc.localAddr().ip.IsUnspecified() || localAddr == addr) {
 			conflicts = true
 			reporter.Add(&pb.Probe{
 				Checker: portCheckerID,
