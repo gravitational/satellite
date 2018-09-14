@@ -33,7 +33,7 @@ sloccount:
 	find . -path ./vendor -prune -o -name "*.go" -print0 | xargs -0 wc -l
 
 test:
-	go test -test.parallel=0 -race ./...
+	go test -test.parallel=1 -race ./...
 
 test-style:
 	@scripts/validate-license.sh
