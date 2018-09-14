@@ -38,9 +38,9 @@ const statusTimeout = 5 * time.Second
 // the status of the cluster.
 // Returns true if the status query was successful, false - otherwise.
 // The output is prettified if prettyPrint is true.
-func status(RPCPort int, local, prettyPrint bool, certFile string) (ok bool, err error) {
+func status(RPCPort int, local, prettyPrint bool, caFile, certFile, keyFile string) (ok bool, err error) {
 	RPCAddr := fmt.Sprintf("127.0.0.1:%d", RPCPort)
-	client, err := agent.NewClient(RPCAddr, certFile)
+	client, err := agent.NewClient(RPCAddr, caFile, certFile, keyFile)
 	if err != nil {
 		return false, trace.Wrap(err)
 	}

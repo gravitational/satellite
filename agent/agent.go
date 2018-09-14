@@ -128,7 +128,7 @@ func New(config *Config) (Agent, error) {
 		serfClient:      client,
 		name:            config.Name,
 		cache:           config.Cache,
-		dialRPC:         defaultDialRPC(config.CAFile),
+		dialRPC:         defaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
 		statusClock:     clock,
 		recycleClock:    clock,
 		localStatus:     emptyNodeStatus(config.Name),
@@ -209,6 +209,8 @@ type agent struct {
 	// Defaults to statusQueryReplyTimeout if unspecified
 	statusQueryReplyTimeout time.Duration
 }
+
+type dialRPC func(*serf.Member) (*client, error)
 
 // Start starts the agent's background tasks.
 func (r *agent) Start() error {
@@ -292,8 +294,6 @@ func (r *agent) Close() (err error) {
 func (r *agent) LocalStatus() *pb.NodeStatus {
 	return r.recentLocalStatus()
 }
-
-type dialRPC func(*serf.Member) (*client, error)
 
 // runChecks executes the monitoring tests configured for this agent in parallel.
 func (r *agent) runChecks(ctx context.Context) *pb.NodeStatus {

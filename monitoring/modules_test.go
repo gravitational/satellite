@@ -112,9 +112,10 @@ func (_ *MonitoringSuite) TestValidatesModules(c *C) {
 			reader:  moduleReader(modulesData),
 			probes: health.Probes{
 				&pb.Probe{
-					Checker: KernelModuleCheckerID,
-					Detail:  `kernel module "required" not loaded`,
-					Status:  pb.Probe_Failed,
+					Checker:     KernelModuleCheckerID,
+					Detail:      `kernel module "required" not loaded`,
+					Status:      pb.Probe_Failed,
+					CheckerData: []byte("{\"Module\":{\"Name\":\"required\",\"Names\":null}}"),
 				},
 			},
 			comment: "missing module",
