@@ -53,7 +53,7 @@ func (c iNotifyChecker) Check(ctx context.Context, reporter health.Reporter) {
 		reporter.Add(&pb.Probe{
 			Checker: c.Name(),
 			Status:  pb.Probe_Failed,
-			Error:   "Unable to create intofiy watch",
+			Error:   "Unable to create inotify watch",
 		})
 	}
 }
