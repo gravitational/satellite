@@ -1,7 +1,7 @@
 // +build !linux
 
 /*
-Copyright 2017 Gravitational, Inc.
+Copyright 2018 Gravitational, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,6 +22,9 @@ import (
 	"github.com/gravitational/satellite/agent/health"
 )
 
+// NewINotifyChecker creates a new health.Checker that tests if inotify watches
+// can be created. This is usually an indication that the system has reached
+// fs.inotify.max_user_instances has been exhausted
 func NewINotifyChecker() health.Checker {
 	return noopChecker{}
 }

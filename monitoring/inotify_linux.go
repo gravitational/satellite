@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Gravitational, Inc.
+Copyright 2018 Gravitational, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,10 +21,14 @@ import (
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/trace"
 
 	"golang.org/x/sys/unix"
 )
 
+// NewINotifyChecker creates a new health.Checker that tests if inotify watches
+// can be created. This is usually an indication that the system has reached
+// fs.inotify.max_user_instances has been exhausted
 func NewINotifyChecker() health.Checker {
 	return iNotifyChecker{}
 }
@@ -38,14 +42,17 @@ func (c iNotifyChecker) Name() string {
 	return "inotify"
 }
 
+// Check tests whether inotify is working
 func (c iNotifyChecker) Check(ctx context.Context, reporter health.Reporter) {
 	fd, err := unix.InotifyInit()
 	if fd < 0 {
 		reporter.Add(&pb.Probe{
 			Checker: c.Name(),
 			Status:  pb.Probe_Failed,
-			Error:   "Unable to initialize inotify",
+			Detail:  "Unable to initialize inotify",
+			Error:   trace.UserMessage(trace.ConvertSystemError(err)),
 		})
+		return
 	}
 	defer unix.Close(fd)
 
@@ -53,7 +60,8 @@ func (c iNotifyChecker) Check(ctx context.Context, reporter health.Reporter) {
 		reporter.Add(&pb.Probe{
 			Checker: c.Name(),
 			Status:  pb.Probe_Failed,
-			Error:   "Unable to create inotify watch",
+			Detail:  "Unable to create inotify watch",
+			Error:   trace.UserMessage(trace.ConvertSystemError(err)),
 		})
 	}
 }
