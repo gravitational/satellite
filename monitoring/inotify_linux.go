@@ -26,24 +26,24 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// NewINotifyChecker creates a new health.Checker that tests if inotify watches
+// NewInotifyChecker creates a new health.Checker that tests if inotify watches
 // can be created. This is usually an indication that the system has reached
 // fs.inotify.max_user_instances has been exhausted
-func NewINotifyChecker() health.Checker {
-	return iNotifyChecker{}
+func NewInotifyChecker() health.Checker {
+	return inotifyChecker{}
 }
 
-// iNotifyChecker tries to create an inotify watch, and reports if it fails
-type iNotifyChecker struct {
+// inotifyChecker tries to create an inotify watch, and reports if it fails
+type inotifyChecker struct {
 }
 
 // Name returns name of the checker
-func (c iNotifyChecker) Name() string {
+func (c inotifyChecker) Name() string {
 	return "inotify"
 }
 
 // Check tests whether inotify is working
-func (c iNotifyChecker) Check(ctx context.Context, reporter health.Reporter) {
+func (c inotifyChecker) Check(ctx context.Context, reporter health.Reporter) {
 	fd, err := unix.InotifyInit()
 	if fd < 0 {
 		reporter.Add(&pb.Probe{

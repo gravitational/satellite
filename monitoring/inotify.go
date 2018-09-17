@@ -22,9 +22,9 @@ import (
 	"github.com/gravitational/satellite/agent/health"
 )
 
-// NewINotifyChecker creates a new health.Checker that tests if inotify watches
+// NewInotifyChecker creates a new health.Checker that tests if inotify watches
 // can be created. This is usually an indication that the system has reached
 // fs.inotify.max_user_instances has been exhausted
-func NewINotifyChecker() health.Checker {
+func NewInotifyChecker() health.Checker {
 	return noopChecker{}
 }

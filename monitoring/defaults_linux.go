@@ -79,7 +79,7 @@ func BasicCheckers(checkers ...health.Checker) health.Checker {
 			DefaultProcessChecker(),
 			DefaultPortChecker(),
 			DefaultBootConfigParams(),
-			NewINotifyChecker(),
+			NewInotifyChecker(),
 		},
 	}
 	c.checkers = append(c.checkers, checkers...)
