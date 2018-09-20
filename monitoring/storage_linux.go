@@ -57,6 +57,8 @@ type StorageConfig struct {
 	Filesystems []string
 	// MinFreeBytes define minimum free volume capacity
 	MinFreeBytes uint64
+	// HighWatermark is the disk occupancy percentage that is considered degrading
+	HighWatermark uint
 }
 
 // storageChecker verifies volume requirements
@@ -99,6 +101,7 @@ func (c *storageChecker) check(ctx context.Context, reporter health.Reporter) er
 
 	return trace.NewAggregate(c.checkFsType(ctx, reporter),
 		c.checkCapacity(ctx, reporter),
+		c.checkHighWatermark(ctx, reporter),
 		c.checkWriteSpeed(ctx, reporter))
 }
 
@@ -157,8 +160,31 @@ func (c *storageChecker) checkFsType(ctx context.Context, reporter health.Report
 	return nil
 }
 
+func (c *storageChecker) checkHighWatermark(ctx context.Context, reporter health.Reporter) error {
+	if c.HighWatermark == 0 {
+		return nil
+	}
+	availableBytes, totalBytes, err := c.diskCapacity(c.path)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	if float64(availableBytes)/float64(totalBytes)*100 > float64(c.HighWatermark) {
+		reporter.Add(&pb.Probe{
+			Checker: c.Name(),
+			Detail: fmt.Sprintf("disk utilization on %s exceeds high watermark of %v%%: %s is available out of %s",
+				c.Path, c.HighWatermark, humanize.Bytes(availableBytes), humanize.Bytes(totalBytes)),
+			Status: pb.Probe_Failed,
+		})
+	}
+	return nil
+}
+
 func (c *storageChecker) checkCapacity(ctx context.Context, reporter health.Reporter) error {
-	avail, err := c.diskCapacity(c.path)
+	if c.MinFreeBytes == 0 {
+		return nil
+	}
+
+	avail, _, err := c.diskCapacity(c.path)
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -269,16 +295,17 @@ func (r realOS) diskSpeed(ctx context.Context, path, prefix string) (bps uint64,
 	return bps, nil
 }
 
-func (r realOS) diskCapacity(path string) (bytesAvail uint64, err error) {
+func (r realOS) diskCapacity(path string) (bytesAvail, bytesTotal uint64, err error) {
 	var stat syscall.Statfs_t
 
 	err = syscall.Statfs(path, &stat)
 	if err != nil {
-		return 0, trace.Wrap(err)
+		return 0, 0, trace.Wrap(err)
 	}
 
 	bytesAvail = uint64(stat.Bsize) * stat.Bavail
-	return bytesAvail, nil
+	bytesTotal = uint64(stat.Bsize) * stat.Blocks
+	return bytesAvail, bytesTotal, nil
 }
 
 func writeN(ctx context.Context, file *os.File, buf []byte, n int) error {
@@ -303,5 +330,5 @@ type mountInfo interface {
 type osInterface interface {
 	mountInfo
 	diskSpeed(ctx context.Context, path, name string) (bps uint64, err error)
-	diskCapacity(path string) (bytes uint64, err error)
+	diskCapacity(path string) (bytesAvailable, bytesTotal uint64, err error)
 }
