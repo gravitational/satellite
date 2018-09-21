@@ -156,8 +156,8 @@ func (r bytesPerSecond) diskSpeed(context.Context, string, string) (uint64, erro
 	return uint64(r), nil
 }
 
-func (r bytesAvail) diskCapacity(string) (uint64, error) {
-	return uint64(r), nil
+func (r bytesAvail) diskCapacity(string) (uint64, uint64, error) {
+	return uint64(r), uint64(r) * 2, nil
 }
 
 type bytesPerSecond uint64

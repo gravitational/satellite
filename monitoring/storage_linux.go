@@ -168,7 +168,7 @@ func (c *storageChecker) checkHighWatermark(ctx context.Context, reporter health
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	if float64(availableBytes)/float64(totalBytes)*100 > float64(c.HighWatermark) {
+	if float64(totalBytes-availableBytes)/float64(totalBytes)*100 > float64(c.HighWatermark) {
 		reporter.Add(&pb.Probe{
 			Checker: c.Name(),
 			Detail: fmt.Sprintf("disk utilization on %s exceeds high watermark of %v%%: %s is available out of %s",
