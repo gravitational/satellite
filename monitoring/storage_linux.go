@@ -72,10 +72,11 @@ type storageChecker struct {
 }
 
 const (
-	storageWriteCheckerID = "io-check"
-	blockSize             = 1e5
-	cycles                = 1024
-	stRdonly              = int64(1)
+	storageWriteCheckerID  = "io-check"
+	highWatermarkCheckerID = "high-watermark"
+	blockSize              = 1e5
+	cycles                 = 1024
+	stRdonly               = int64(1)
 )
 
 // Name returns name of the checker
@@ -88,8 +89,6 @@ func (c *storageChecker) Check(ctx context.Context, reporter health.Reporter) {
 	if err != nil {
 		reporter.Add(NewProbeFromErr(c.Name(),
 			"failed to validate storage requirements", trace.Wrap(err)))
-	} else {
-		reporter.Add(&pb.Probe{Checker: c.Name(), Status: pb.Probe_Running})
 	}
 }
 
@@ -168,12 +167,20 @@ func (c *storageChecker) checkHighWatermark(ctx context.Context, reporter health
 	if err != nil {
 		return trace.Wrap(err)
 	}
+	checker := fmt.Sprintf("%v(%v%%, %v)", highWatermarkCheckerID, c.HighWatermark, c.path)
 	if float64(totalBytes-availableBytes)/float64(totalBytes)*100 > float64(c.HighWatermark) {
 		reporter.Add(&pb.Probe{
-			Checker: c.Name(),
+			Checker: checker,
 			Detail: fmt.Sprintf("disk utilization on %s exceeds high watermark of %v%%: %s is available out of %s",
 				c.Path, c.HighWatermark, humanize.Bytes(availableBytes), humanize.Bytes(totalBytes)),
 			Status: pb.Probe_Failed,
+		})
+	} else {
+		reporter.Add(&pb.Probe{
+			Checker: checker,
+			Detail: fmt.Sprintf("disk utilization on %s is below high watermark of %v%%: %s is available out of %s",
+				c.Path, c.HighWatermark, humanize.Bytes(availableBytes), humanize.Bytes(totalBytes)),
+			Status: pb.Probe_Running,
 		})
 	}
 	return nil
@@ -192,9 +199,16 @@ func (c *storageChecker) checkCapacity(ctx context.Context, reporter health.Repo
 	if avail < c.MinFreeBytes {
 		reporter.Add(&pb.Probe{
 			Checker: c.Name(),
-			Detail: fmt.Sprintf("%s available space left on %s, minimum of %s required",
+			Detail: fmt.Sprintf("%s available space left on %s, minimum of %s is required",
 				humanize.Bytes(avail), c.Path, humanize.Bytes(c.MinFreeBytes)),
 			Status: pb.Probe_Failed,
+		})
+	} else {
+		reporter.Add(&pb.Probe{
+			Checker: c.Name(),
+			Detail: fmt.Sprintf("available disk space %s on %s satisfies minimum requirement of %s",
+				humanize.Bytes(avail), c.Path, humanize.Bytes(c.MinFreeBytes)),
+			Status: pb.Probe_Running,
 		})
 	}
 
@@ -212,8 +226,15 @@ func (c *storageChecker) checkWriteSpeed(ctx context.Context, reporter health.Re
 	}
 
 	if bps >= c.MinBytesPerSecond {
+		reporter.Add(&pb.Probe{
+			Checker: c.Name(),
+			Detail: fmt.Sprintf("disk write speed %s/sec satisfies minumum requirement of %s",
+				humanize.Bytes(bps), humanize.Bytes(c.MinBytesPerSecond)),
+			Status: pb.Probe_Running,
+		})
 		return nil
 	}
+
 	reporter.Add(&pb.Probe{
 		Checker: c.Name(),
 		Detail: fmt.Sprintf("min write speed %s/sec required, have %s",
