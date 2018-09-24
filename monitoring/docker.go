@@ -78,39 +78,35 @@ func (c *devicemapperChecker) check(ctx context.Context, reporter health.Reporte
 	if info.Driver != "devicemapper" {
 		return nil
 	}
-	var spaceUsed, spaceAvailable, spaceTotal uint64
+	var usedBytes, availableBytes uint64
 	for _, status := range info.DriverStatus {
 		switch status[0] {
 		case "Data Space Used":
-			if spaceUsed, err = humanize.ParseBytes(status[1]); err != nil {
+			if usedBytes, err = humanize.ParseBytes(status[1]); err != nil {
 				return trace.Wrap(err)
 			}
 		case "Data Space Available":
-			if spaceAvailable, err = humanize.ParseBytes(status[1]); err != nil {
-				return trace.Wrap(err)
-			}
-		case "Data Space Total":
-			if spaceTotal, err = humanize.ParseBytes(status[1]); err != nil {
+			if availableBytes, err = humanize.ParseBytes(status[1]); err != nil {
 				return trace.Wrap(err)
 			}
 		}
 	}
-	if spaceUsed == 0 || spaceAvailable == 0 || spaceTotal == 0 {
-		return trace.BadParameter("failed to determine used docker space: %v",
-			info)
+	if usedBytes == 0 && availableBytes == 0 {
+		return trace.BadParameter("failed to determine used docker space: %v", info)
 	}
-	if float64(spaceUsed)/float64(spaceTotal)*100 > float64(c.HighWatermark) {
+	totalBytes := usedBytes + availableBytes
+	if float64(usedBytes)/float64(totalBytes)*100 > float64(c.HighWatermark) {
 		reporter.Add(&pb.Probe{
 			Checker: c.Name(),
-			Detail: fmt.Sprintf("docker devicemapper disk utilization exceeds %v%%: %s is available out of %s",
-				c.HighWatermark, humanize.Bytes(spaceAvailable), humanize.Bytes(spaceTotal)),
+			Detail: fmt.Sprintf("docker devicemapper disk utilization exceeds %v%% (%s is available out of %s), see https://gravitational.com/telekube/docs/cluster/#garbage-collection",
+				c.HighWatermark, humanize.Bytes(availableBytes), humanize.Bytes(totalBytes)),
 			Status: pb.Probe_Failed,
 		})
 	} else {
 		reporter.Add(&pb.Probe{
 			Checker: c.Name(),
-			Detail: fmt.Sprintf("docker devicemapper disk utilization is below %v%%: %s is available out of %s",
-				c.HighWatermark, humanize.Bytes(spaceAvailable), humanize.Bytes(spaceTotal)),
+			Detail: fmt.Sprintf("docker devicemapper disk utilization is below %v%% (%s is available out of %s)",
+				c.HighWatermark, humanize.Bytes(availableBytes), humanize.Bytes(totalBytes)),
 			Status: pb.Probe_Running,
 		})
 	}
