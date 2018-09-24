@@ -102,14 +102,14 @@ func (c *devicemapperChecker) check(ctx context.Context, reporter health.Reporte
 	if float64(spaceUsed)/float64(spaceTotal)*100 > float64(c.HighWatermark) {
 		reporter.Add(&pb.Probe{
 			Checker: c.Name(),
-			Detail: fmt.Sprintf("docker devicemapper disk space utilization exceeds high watermark of %v%%: %s is available out of %s",
+			Detail: fmt.Sprintf("docker devicemapper disk utilization exceeds %v%%: %s is available out of %s",
 				c.HighWatermark, humanize.Bytes(spaceAvailable), humanize.Bytes(spaceTotal)),
 			Status: pb.Probe_Failed,
 		})
 	} else {
 		reporter.Add(&pb.Probe{
 			Checker: c.Name(),
-			Detail: fmt.Sprintf("docker devicemapper disk space utilization is below high watermark of %v%%: %s is available out of %s",
+			Detail: fmt.Sprintf("docker devicemapper disk utilization is below %v%%: %s is available out of %s",
 				c.HighWatermark, humanize.Bytes(spaceAvailable), humanize.Bytes(spaceTotal)),
 			Status: pb.Probe_Running,
 		})

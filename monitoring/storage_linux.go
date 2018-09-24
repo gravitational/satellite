@@ -68,6 +68,22 @@ type HighWatermarkCheckerData struct {
 	HighWatermark uint `json:"high_watermark"`
 	// Path is the checked path
 	Path string `json:"path"`
+	// TotalBytes is the total disk capacity in bytes
+	TotalBytes uint64 `json:"total_bytes"`
+	// AvailableBytes is the available disk capacity in bytes
+	AvailableBytes uint64 `json:"available_bytes"`
+}
+
+// FailureMessage returns failure watermark check message
+func (d HighWatermarkCheckerData) FailureMessage() string {
+	return fmt.Sprintf("disk utilization on %s exceeds %v%%: %s is available out of %s",
+		d.Path, d.HighWatermark, humanize.Bytes(d.AvailableBytes), humanize.Bytes(d.TotalBytes))
+}
+
+// SuccessMessage returns success watermark check message
+func (d HighWatermarkCheckerData) SuccessMessage() string {
+	return fmt.Sprintf("disk utilization on %s is below %v%%: %s is available out of %s",
+		d.Path, d.HighWatermark, humanize.Bytes(d.AvailableBytes), humanize.Bytes(d.TotalBytes))
 }
 
 // storageChecker verifies volume requirements
@@ -81,11 +97,12 @@ type storageChecker struct {
 }
 
 const (
-	storageWriteCheckerID  = "io-check"
-	highWatermarkCheckerID = "high-watermark"
-	blockSize              = 1e5
-	cycles                 = 1024
-	stRdonly               = int64(1)
+	storageWriteCheckerID = "io-check"
+	// DiskSpaceCheckerID is the checker that checks disk space utilization
+	DiskSpaceCheckerID = "disk-space"
+	blockSize          = 1e5
+	cycles             = 1024
+	stRdonly           = int64(1)
 )
 
 // Name returns name of the checker
@@ -176,28 +193,29 @@ func (c *storageChecker) checkHighWatermark(ctx context.Context, reporter health
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	checkerName := fmt.Sprintf("%v(%v%%, %v)", highWatermarkCheckerID, c.HighWatermark, c.path)
-	checkerData, err := json.Marshal(HighWatermarkCheckerData{
-		HighWatermark: c.HighWatermark,
-		Path:          c.Path,
-	})
+	checkerName := fmt.Sprintf("%v(%v)", DiskSpaceCheckerID, c.path)
+	checkerData := HighWatermarkCheckerData{
+		HighWatermark:  c.HighWatermark,
+		Path:           c.Path,
+		TotalBytes:     totalBytes,
+		AvailableBytes: availableBytes,
+	}
+	checkerDataBytes, err := json.Marshal(checkerData)
 	if err != nil {
 		return trace.Wrap(err)
 	}
 	if float64(totalBytes-availableBytes)/float64(totalBytes)*100 > float64(c.HighWatermark) {
 		reporter.Add(&pb.Probe{
-			Checker: checkerName,
-			Detail: fmt.Sprintf("disk utilization on %s exceeds high watermark of %v%%: %s is available out of %s",
-				c.Path, c.HighWatermark, humanize.Bytes(availableBytes), humanize.Bytes(totalBytes)),
-			CheckerData: checkerData,
+			Checker:     checkerName,
+			Detail:      checkerData.FailureMessage(),
+			CheckerData: checkerDataBytes,
 			Status:      pb.Probe_Failed,
 		})
 	} else {
 		reporter.Add(&pb.Probe{
-			Checker: checkerName,
-			Detail: fmt.Sprintf("disk utilization on %s is below high watermark of %v%%: %s is available out of %s",
-				c.Path, c.HighWatermark, humanize.Bytes(availableBytes), humanize.Bytes(totalBytes)),
-			CheckerData: checkerData,
+			Checker:     checkerName,
+			Detail:      checkerData.SuccessMessage(),
+			CheckerData: checkerDataBytes,
 			Status:      pb.Probe_Running,
 		})
 	}
