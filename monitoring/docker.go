@@ -27,6 +27,7 @@ import (
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/trace"
+	"github.com/sirupsen/logrus"
 )
 
 func dockerChecker(response io.Reader) error {
@@ -59,19 +60,20 @@ func (c *devicemapperChecker) Name() string {
 func (c *devicemapperChecker) Check(ctx context.Context, reporter health.Reporter) {
 	err := c.check(ctx, reporter)
 	if err != nil {
+		logrus.Error(trace.DebugReport(err))
 		reporter.Add(NewProbeFromErr(c.Name(), "failed to check devicemapper free space",
 			trace.Wrap(err)))
 	}
 }
 
 func (c *devicemapperChecker) check(ctx context.Context, reporter health.Reporter) error {
-	out, err := exec.Command("docker", "info", "--format", "'{{json .}}'").CombinedOutput()
+	out, err := exec.Command("docker", "info", "--format", "{{json .}}").CombinedOutput()
 	if err != nil {
 		return trace.Wrap(err, "failed to get docker info: %s", out)
 	}
 	var info dockerInfo
 	if err := json.Unmarshal(out, &info); err != nil {
-		return trace.Wrap(err)
+		return trace.Wrap(err, "failed to unmarshal docker info: %s", out)
 	}
 	if info.Driver != "devicemapper" {
 		return nil
