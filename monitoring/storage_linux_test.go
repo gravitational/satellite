@@ -100,6 +100,24 @@ func (_ *StorageSuite) TestStorage(c *C) {
 		},
 		osInterface: testOS{mountList: mounts},
 	}.probe(c, "create if missing", shallSucceed)
+
+	storageChecker{
+		StorageConfig: StorageConfig{
+			Path:          path.Join("/tmp", fmt.Sprintf("%s", time.Now().Unix())),
+			WillBeCreated: true,
+			HighWatermark: 40,
+		},
+		osInterface: testOS{mountList: mounts, bytesAvail: 2048},
+	}.probe(c, "high watermark is reached", shallFail)
+
+	storageChecker{
+		StorageConfig: StorageConfig{
+			Path:          path.Join("/tmp", fmt.Sprintf("%s", time.Now().Unix())),
+			WillBeCreated: true,
+			HighWatermark: 60,
+		},
+		osInterface: testOS{mountList: mounts, bytesAvail: 2048},
+	}.probe(c, "high watermark is not reached", shallSucceed)
 }
 
 func (_ *StorageSuite) TestMatchesFilesystem(c *C) {
