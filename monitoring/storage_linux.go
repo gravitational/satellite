@@ -18,6 +18,7 @@ package monitoring
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -59,6 +60,14 @@ type StorageConfig struct {
 	MinFreeBytes uint64
 	// HighWatermark is the disk occupancy percentage that is considered degrading
 	HighWatermark uint
+}
+
+// HighWatermarkCheckerData is attached to high watermark check results
+type HighWatermarkCheckerData struct {
+	// HighWatermark is the watermark percentage value
+	HighWatermark uint `json:"high_watermark"`
+	// Path is the checked path
+	Path string `json:"path"`
 }
 
 // storageChecker verifies volume requirements
@@ -167,20 +176,29 @@ func (c *storageChecker) checkHighWatermark(ctx context.Context, reporter health
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	checker := fmt.Sprintf("%v(%v%%, %v)", highWatermarkCheckerID, c.HighWatermark, c.path)
+	checkerName := fmt.Sprintf("%v(%v%%, %v)", highWatermarkCheckerID, c.HighWatermark, c.path)
+	checkerData, err := json.Marshal(HighWatermarkCheckerData{
+		HighWatermark: c.HighWatermark,
+		Path:          c.Path,
+	})
+	if err != nil {
+		return trace.Wrap(err)
+	}
 	if float64(totalBytes-availableBytes)/float64(totalBytes)*100 > float64(c.HighWatermark) {
 		reporter.Add(&pb.Probe{
-			Checker: checker,
+			Checker: checkerName,
 			Detail: fmt.Sprintf("disk utilization on %s exceeds high watermark of %v%%: %s is available out of %s",
 				c.Path, c.HighWatermark, humanize.Bytes(availableBytes), humanize.Bytes(totalBytes)),
-			Status: pb.Probe_Failed,
+			CheckerData: checkerData,
+			Status:      pb.Probe_Failed,
 		})
 	} else {
 		reporter.Add(&pb.Probe{
-			Checker: checker,
+			Checker: checkerName,
 			Detail: fmt.Sprintf("disk utilization on %s is below high watermark of %v%%: %s is available out of %s",
 				c.Path, c.HighWatermark, humanize.Bytes(availableBytes), humanize.Bytes(totalBytes)),
-			Status: pb.Probe_Running,
+			CheckerData: checkerData,
+			Status:      pb.Probe_Running,
 		})
 	}
 	return nil

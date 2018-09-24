@@ -16,9 +16,109 @@ limitations under the License.
 
 package monitoring
 
-import "io"
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os/exec"
+
+	humanize "github.com/dustin/go-humanize"
+	"github.com/gravitational/satellite/agent/health"
+	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/trace"
+)
 
 func dockerChecker(response io.Reader) error {
 	// no-op
 	return nil
+}
+
+// NewDockerDevicemapperChecker returns devicemapper storage checker
+func NewDockerDevicemapperChecker(config DockerDevicemapperConfig) health.Checker {
+	return &devicemapperChecker{config}
+}
+
+// DockerDevicemapperConfig is the docker devicemapper checker configuration
+type DockerDevicemapperConfig struct {
+	// HighWatermark is the devicemapper high watermark usage
+	HighWatermark uint
+}
+
+type devicemapperChecker struct {
+	// DockerDevicemapperConfig is the devicemapper checker configuration
+	DockerDevicemapperConfig
+}
+
+// Name returns the devicemapper checker name
+func (c *devicemapperChecker) Name() string {
+	return "devicemapper"
+}
+
+// Check checks devicemapper free space
+func (c *devicemapperChecker) Check(ctx context.Context, reporter health.Reporter) {
+	err := c.check(ctx, reporter)
+	if err != nil {
+		reporter.Add(NewProbeFromErr(c.Name(), "failed to check devicemapper free space",
+			trace.Wrap(err)))
+	}
+}
+
+func (c *devicemapperChecker) check(ctx context.Context, reporter health.Reporter) error {
+	out, err := exec.Command("docker", "info", "--format", "'{{json .}}'").CombinedOutput()
+	if err != nil {
+		return trace.Wrap(err, "failed to get docker info: %s", out)
+	}
+	var info dockerInfo
+	if err := json.Unmarshal(out, &info); err != nil {
+		return trace.Wrap(err)
+	}
+	if info.Driver != "devicemapper" {
+		return nil
+	}
+	var spaceUsed, spaceAvailable, spaceTotal uint64
+	for _, status := range info.DriverStatus {
+		switch status[0] {
+		case "Data Space Used":
+			if spaceUsed, err = humanize.ParseBytes(status[1]); err != nil {
+				return trace.Wrap(err)
+			}
+		case "Data Space Available":
+			if spaceAvailable, err = humanize.ParseBytes(status[1]); err != nil {
+				return trace.Wrap(err)
+			}
+		case "Data Space Total":
+			if spaceTotal, err = humanize.ParseBytes(status[1]); err != nil {
+				return trace.Wrap(err)
+			}
+		}
+	}
+	if spaceUsed == 0 || spaceAvailable == 0 || spaceTotal == 0 {
+		return trace.BadParameter("failed to determine used docker space: %v",
+			info)
+	}
+	if float64(spaceUsed)/float64(spaceTotal)*100 > float64(c.HighWatermark) {
+		reporter.Add(&pb.Probe{
+			Checker: c.Name(),
+			Detail: fmt.Sprintf("docker devicemapper disk space utilization exceeds high watermark of %v%%: %s is available out of %s",
+				c.HighWatermark, humanize.Bytes(spaceAvailable), humanize.Bytes(spaceTotal)),
+			Status: pb.Probe_Failed,
+		})
+	} else {
+		reporter.Add(&pb.Probe{
+			Checker: c.Name(),
+			Detail: fmt.Sprintf("docker devicemapper disk space utilization is below high watermark of %v%%: %s is available out of %s",
+				c.HighWatermark, humanize.Bytes(spaceAvailable), humanize.Bytes(spaceTotal)),
+			Status: pb.Probe_Running,
+		})
+	}
+	return nil
+}
+
+// dockerInfo represents a subset of docker info output
+type dockerInfo struct {
+	// Driver is the docker storage driver
+	Driver string `json:"Driver"`
+	// DriverStatus is the docker storage driver information
+	DriverStatus [][]string `json:"DriverStatus"`
 }
