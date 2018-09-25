@@ -103,7 +103,7 @@ func (_ *StorageSuite) TestStorage(c *C) {
 
 	storageChecker{
 		StorageConfig: StorageConfig{
-			Path:          path.Join("/tmp", fmt.Sprintf("%s", time.Now().Unix())),
+			Path:          path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
 			WillBeCreated: true,
 			HighWatermark: 40,
 		},
@@ -112,7 +112,7 @@ func (_ *StorageSuite) TestStorage(c *C) {
 
 	storageChecker{
 		StorageConfig: StorageConfig{
-			Path:          path.Join("/tmp", fmt.Sprintf("%s", time.Now().Unix())),
+			Path:          path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
 			WillBeCreated: true,
 			HighWatermark: 60,
 		},
