@@ -29,7 +29,6 @@ func (_ *InotifySuite) TestCreateInotify(c *check.C) {
 	// Note, it's difficult to simulate on linux
 	// running out of inotify watches, so we only
 	// test the success case here.
-
 	checker := &inotifyChecker{}
 	var probes health.Probes
 	checker.Check(context.TODO(), &probes)

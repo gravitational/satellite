@@ -49,8 +49,8 @@ cover-package:
 	go tool cover -html=$(BUILDDIR)/coverage.out
 
 
-PROTOC_VER ?= 3.0.0
-GOGO_PROTO_TAG ?= v0.3
+PROTOC_VER ?= 3.4.0
+GOGO_PROTO_TAG ?= v0.4
 GRPC_GATEWAY_TAG ?= v1.1.0
 PLATFORM := linux-x86_64
 GRPC_API := agent/proto/agentpb
