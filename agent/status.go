@@ -76,10 +76,19 @@ func nodeToSystemStatus(status pb.NodeStatus_Type) pb.SystemStatus_Type {
 	}
 }
 
-func isDegraded(status pb.SystemStatus) bool {
+func isDegraded(resp *pb.StatusResponse) bool {
+	status := resp.GetStatus()
 	switch status.Status {
 	case pb.SystemStatus_Unknown, pb.SystemStatus_Degraded:
 		return true
+	}
+	for _, node := range status.Nodes {
+		for _, probe := range node.Probes {
+			if probe.Status == pb.Probe_Temporary {
+				// Consider temporary failures as degrading the cluster state
+				return true
+			}
+		}
 	}
 	return false
 }
