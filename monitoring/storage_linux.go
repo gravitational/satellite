@@ -76,13 +76,13 @@ type HighWatermarkCheckerData struct {
 
 // FailureMessage returns failure watermark check message
 func (d HighWatermarkCheckerData) FailureMessage() string {
-	return fmt.Sprintf("disk utilization on %s exceeds %v%% (%s is available out of %s), see https://gravitational.com/telekube/docs/cluster/#garbage-collection",
+	return fmt.Sprintf("disk utilization on %s exceeds %v percent (%s is available out of %s), see https://gravitational.com/telekube/docs/cluster/#garbage-collection",
 		d.Path, d.HighWatermark, humanize.Bytes(d.AvailableBytes), humanize.Bytes(d.TotalBytes))
 }
 
 // SuccessMessage returns success watermark check message
 func (d HighWatermarkCheckerData) SuccessMessage() string {
-	return fmt.Sprintf("disk utilization on %s is below %v%% (%s is available out of %s)",
+	return fmt.Sprintf("disk utilization on %s is below %v percent (%s is available out of %s)",
 		d.Path, d.HighWatermark, humanize.Bytes(d.AvailableBytes), humanize.Bytes(d.TotalBytes))
 }
 

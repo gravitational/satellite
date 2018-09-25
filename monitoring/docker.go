@@ -95,14 +95,14 @@ func (c *devicemapperChecker) check(ctx context.Context, reporter health.Reporte
 	if float64(usedBytes)/float64(totalBytes)*100 > float64(c.HighWatermark) {
 		reporter.Add(&pb.Probe{
 			Checker: c.Name(),
-			Detail: fmt.Sprintf("docker devicemapper disk utilization exceeds %v%% (%s is available out of %s), see https://gravitational.com/telekube/docs/cluster/#garbage-collection",
+			Detail: fmt.Sprintf("docker devicemapper disk utilization exceeds %v percent (%s is available out of %s), see https://gravitational.com/telekube/docs/cluster/#garbage-collection",
 				c.HighWatermark, humanize.Bytes(availableBytes), humanize.Bytes(totalBytes)),
 			Status: pb.Probe_Failed,
 		})
 	} else {
 		reporter.Add(&pb.Probe{
 			Checker: c.Name(),
-			Detail: fmt.Sprintf("docker devicemapper disk utilization is below %v%% (%s is available out of %s)",
+			Detail: fmt.Sprintf("docker devicemapper disk utilization is below %v percent (%s is available out of %s)",
 				c.HighWatermark, humanize.Bytes(availableBytes), humanize.Bytes(totalBytes)),
 			Status: pb.Probe_Running,
 		})
