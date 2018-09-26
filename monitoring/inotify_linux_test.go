@@ -30,7 +30,7 @@ func (_ *InotifySuite) TestCreateInotify(c *check.C) {
 	// running out of inotify watches, so we only
 	// test the success case here.
 
-	checker := &iNotifyChecker{}
+	checker := &inotifyChecker{}
 	var probes health.Probes
 	checker.Check(context.TODO(), &probes)
 	c.Assert(probes.NumProbes(), check.Equals, 0)
