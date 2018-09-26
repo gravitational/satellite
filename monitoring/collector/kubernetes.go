@@ -35,14 +35,9 @@ type KubernetesCollector struct {
 }
 
 // NewKubernetesCollector returns initialized KubernetesCollector
-func NewKubernetesCollector(kubeAddr string) (*KubernetesCollector, error) {
-	client, err := monitoring.ConnectToKube(kubeAddr, schedulerConfigPath)
-	if err != nil {
-		return nil, trace.Wrap(err, "failed to connect to kubernetes apiserver: %s", kubeAddr)
-	}
-
+func NewKubernetesCollector(config monitoring.KubeConfig) (*KubernetesCollector, error) {
 	return &KubernetesCollector{
-		client: client,
+		client: config.Client,
 		nodeIsReady: typedDesc{prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "k8s", "node_ready"),
 			"Status of Kubernetes node",

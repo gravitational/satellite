@@ -101,8 +101,10 @@ func (_ *MonitoringSuite) TestDetectsNodeStatus(c *C) {
 
 	for _, testCase := range testCases {
 		comment := Commentf(testCase.comment)
-		checker := NewNodeStatusChecker("", testCase.nodeName)
-		checker.nodeLister = testCase.nodes
+		checker := nodeStatusChecker{
+			nodeLister: testCase.nodes,
+			nodeName:   testCase.nodeName,
+		}
 		var probes health.Probes
 		checker.Check(context.TODO(), &probes)
 		c.Assert(probes, DeepEquals, testCase.probes, comment)

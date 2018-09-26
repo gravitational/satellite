@@ -50,7 +50,7 @@ func run() error {
 		// `agent` command
 		cagent                      = app.Command("agent", "Start monitoring agent")
 		cagentRPCAddrs              = ListFlag(cagent.Flag("rpc-addr", "List of addresses to bind the RPC listener to (host:port), comma-separated").Default("127.0.0.1:7575"))
-		cagentKubeAddr              = cagent.Flag("kube-addr", "Address of the kubernetes API server").Default("http://127.0.0.1:8080").String()
+		cagentKubeconfig            = cagent.Flag("kubeconfig", "Absolute path to the kubeconfig file").OverrideDefaultFromEnvar("KUBECONFIG").Required().String()
 		cagentKubeletAddr           = cagent.Flag("kubelet-addr", "Address of the kubelet").Default("http://127.0.0.1:10248").String()
 		cagentDockerAddr            = cagent.Flag("docker-addr", "Path to the docker daemon socket").Default("/var/run/docker.sock").String()
 		cagentNettestContainerImage = cagent.Flag("nettest-image", "Name of the image to use for networking test").Default("gcr.io/google_containers/nettest:1.8").String()
@@ -147,7 +147,7 @@ func run() error {
 		}
 		monitoringConfig := &config{
 			role:                 agent.Role(agentRole),
-			kubeAddr:             *cagentKubeAddr,
+			kubeconfigPath:       *cagentKubeconfig,
 			kubeletAddr:          *cagentKubeletAddr,
 			dockerAddr:           *cagentDockerAddr,
 			disableInterPodCheck: *disableInterPodCheck,

@@ -59,7 +59,7 @@ type MetricsCollector struct {
 }
 
 // NewMetricsCollector creates a new MetricsCollector
-func NewMetricsCollector(configEtcd *monitoring.ETCDConfig, kubeAddr string, role agent.Role) (*MetricsCollector, error) {
+func NewMetricsCollector(configEtcd *monitoring.ETCDConfig, kubeConfig monitoring.KubeConfig, role agent.Role) (*MetricsCollector, error) {
 	collectorEtcd, err := NewEtcdCollector(configEtcd)
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -76,7 +76,7 @@ func NewMetricsCollector(configEtcd *monitoring.ETCDConfig, kubeAddr string, rol
 
 	collectors := make(map[string]Collector)
 	if role == agent.RoleMaster {
-		collectorKubernetes, err := NewKubernetesCollector(kubeAddr)
+		collectorKubernetes, err := NewKubernetesCollector(kubeConfig)
 		if err != nil {
 			return nil, trace.Wrap(err)
 		}
