@@ -60,7 +60,6 @@ func (_ *MonitoringSuite) TestDetectsNodeStatus(c *C) {
 				&pb.Probe{
 					Checker: NodeStatusCheckerID,
 					Status:  pb.Probe_Temporary,
-					Detail:  "foo",
 					Error:   "Node is not ready",
 				},
 			},
@@ -92,7 +91,6 @@ func (_ *MonitoringSuite) TestDetectsNodeStatus(c *C) {
 				&pb.Probe{
 					Checker: NodeStatusCheckerID,
 					Status:  pb.Probe_Running,
-					Detail:  "foo",
 				},
 			},
 			comment: "detects a healthy node",
