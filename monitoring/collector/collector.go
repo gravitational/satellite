@@ -30,8 +30,6 @@ import (
 const (
 	namespace             = "satellite"
 	collectMetricsTimeout = 5 * time.Second
-	// schedulerConfigPath is the path to kube-scheduler configuration file
-	schedulerConfigPath = "/etc/kubernetes/scheduler.kubeconfig"
 )
 
 var (
@@ -54,7 +52,6 @@ var (
 // metrics and additionally exposes metrics about the duration
 // of each scrape as well as whether the scrapes were successful.
 type MetricsCollector struct {
-	configEtcd monitoring.ETCDConfig
 	collectors map[string]Collector
 }
 
