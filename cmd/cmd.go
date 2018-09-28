@@ -35,3 +35,7 @@ func GetKubeClientFromPath(configPath string) (*kubernetes.Clientset, error) {
 	}
 	return client, nil
 }
+
+// EnvKubeconfigFile specifies the name of the environment variable
+// that contains the absolute path to the kubeconfig file
+const EnvKubeconfigFile = "KUBECONFIG"

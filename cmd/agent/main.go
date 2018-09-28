@@ -24,6 +24,7 @@ import (
 	"github.com/gravitational/satellite/agent/backend/influxdb"
 	"github.com/gravitational/satellite/agent/backend/inmemory"
 	"github.com/gravitational/satellite/agent/cache/multiplex"
+	"github.com/gravitational/satellite/cmd"
 	"github.com/gravitational/satellite/monitoring"
 	"github.com/gravitational/trace"
 	"github.com/gravitational/version"
@@ -50,7 +51,7 @@ func run() error {
 		// `agent` command
 		cagent                      = app.Command("agent", "Start monitoring agent")
 		cagentRPCAddrs              = ListFlag(cagent.Flag("rpc-addr", "List of addresses to bind the RPC listener to (host:port), comma-separated").Default("127.0.0.1:7575"))
-		cagentKubeconfig            = cagent.Flag("kubeconfig", "Absolute path to the kubeconfig file").OverrideDefaultFromEnvar("KUBECONFIG").Required().String()
+		cagentKubeconfig            = cagent.Flag("kubeconfig", "Absolute path to the kubeconfig file").OverrideDefaultFromEnvar(cmd.EnvKubeconfigFile).Required().String()
 		cagentKubeletAddr           = cagent.Flag("kubelet-addr", "Address of the kubelet").Default("http://127.0.0.1:10248").String()
 		cagentDockerAddr            = cagent.Flag("docker-addr", "Path to the docker daemon socket").Default("/var/run/docker.sock").String()
 		cagentNettestContainerImage = cagent.Flag("nettest-image", "Name of the image to use for networking test").Default("gcr.io/google_containers/nettest:1.8").String()

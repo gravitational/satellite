@@ -20,9 +20,10 @@ import (
 	"fmt"
 	"strings"
 
-	"gopkg.in/alecthomas/kingpin.v2"
-
+	"github.com/gravitational/satellite/cmd"
 	"github.com/gravitational/satellite/healthz/defaults"
+
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 // ParseCLIFlags updates config with supplied command line flags values
@@ -35,7 +36,7 @@ func ParseCLIFlags(cfg *Config) {
 	kingpin.Flag("cert-file", "Path to TLS cert file.").Envar("HEALTH_CERT_FILE").StringVar(&cfg.CertFile)
 	kingpin.Flag("key-file", "Path to TLS key file.").Envar("HEALTH_KEY_FILE").StringVar(&cfg.KeyFile)
 	kingpin.Flag("ca-file", "Path to TLS CA file.").Envar("HEALTH_CA_FILE").StringVar(&cfg.CAFile)
-	kingpin.Flag("kubeconfig", "Absolute path to the kubeconfig.").Required().Envar("KUBECONFIG").StringVar(&cfg.KubeconfigPath)
+	kingpin.Flag("kubeconfig", "Absolute path to the kubeconfig.").Required().Envar(cmd.EnvKubeconfigFile).StringVar(&cfg.KubeconfigPath)
 	kingpin.Flag("kube-cert-file", "K8S apiserver TLS cert file.").Envar("HEALTH_KUBE_CERT_FILE").StringVar(&cfg.KubeCertFile)
 	kingpin.Flag("kube-nodes-threshold", "Minimal limit of K8S nodes must be ready to assume cluster is healthy").Required().Envar("HEALTH_KUBE_NODES_THRESHOLD").IntVar(&cfg.KubeNodesThreshold)
 	etcdEndpoints := kingpin.Flag("etcd-addr", "Etcd machine address.").Default("http://localhost:4001,http://localhost:2380").Envar("ETCDCTL_PEERS").String()

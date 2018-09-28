@@ -117,27 +117,30 @@ func (r *nodeStatusChecker) Check(ctx context.Context, reporter health.Reporter)
 	}
 	nodes, err := r.nodeLister.Nodes(options)
 	if err != nil {
-		reporter.Add(NewProbeFromErr(r.Name(), trace.UserMessage(err), trace.Wrap(err)))
+		reporter.Add(NewProbeFromErr(r.Name(), trace.UserMessage(err), err))
 		return
 	}
 
-	var unavailableNode *v1.Node
+	if len(nodes.Items) != 1 {
+		reporter.Add(NewProbeFromErr(r.Name(), "",
+			trace.NotFound("node %q not found", r.nodeName)))
+		return
+	}
+
+	node := nodes.Items[0]
 	var failureCondition *v1.NodeCondition
 L:
-	for _, node := range nodes.Items {
-		for _, condition := range node.Status.Conditions {
-			if condition.Type != v1.NodeReady {
-				continue
-			}
-			if condition.Status != v1.ConditionTrue && node.Name == r.nodeName {
-				unavailableNode = &node
-				failureCondition = &condition
-				break L
-			}
+	for _, condition := range node.Status.Conditions {
+		if condition.Type != v1.NodeReady {
+			continue
+		}
+		if condition.Status != v1.ConditionTrue && node.Name == r.nodeName {
+			failureCondition = &condition
+			break L
 		}
 	}
 
-	if unavailableNode == nil {
+	if failureCondition == nil {
 		reporter.Add(&pb.Probe{
 			Checker: r.Name(),
 			Status:  pb.Probe_Running,

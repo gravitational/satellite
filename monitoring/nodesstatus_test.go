@@ -50,14 +50,6 @@ func (_ *MonitoringSuite) TestDetectsNodeStatus(c *C) {
 							},
 						},
 					},
-					{
-						ObjectMeta: metav1.ObjectMeta{Name: "bar"},
-						Status: v1.NodeStatus{
-							Conditions: []v1.NodeCondition{
-								{Type: v1.NodeReady, Status: v1.ConditionTrue},
-							},
-						},
-					},
 				},
 			},
 			nodeName: "foo",
@@ -77,14 +69,6 @@ func (_ *MonitoringSuite) TestDetectsNodeStatus(c *C) {
 				Items: []v1.Node{
 					{
 						ObjectMeta: metav1.ObjectMeta{Name: "foo"},
-						Status: v1.NodeStatus{
-							Conditions: []v1.NodeCondition{
-								{Type: v1.NodeReady, Status: v1.ConditionTrue},
-							},
-						},
-					},
-					{
-						ObjectMeta: metav1.ObjectMeta{Name: "bar"},
 						Status: v1.NodeStatus{
 							Conditions: []v1.NodeCondition{
 								{Type: v1.NodeReady, Status: v1.ConditionTrue},
