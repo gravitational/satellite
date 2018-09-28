@@ -21,6 +21,7 @@ import (
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/lib/test"
 
 	. "gopkg.in/check.v1"
 	"k8s.io/api/core/v1"
@@ -41,7 +42,11 @@ func (_ *MonitoringSuite) TestDetectsNodeStatus(c *C) {
 						ObjectMeta: metav1.ObjectMeta{Name: "foo"},
 						Status: v1.NodeStatus{
 							Conditions: []v1.NodeCondition{
-								{Type: v1.NodeReady, Status: v1.ConditionFalse},
+								{
+									Type:   v1.NodeReady,
+									Status: v1.ConditionFalse,
+									Reason: "Stopped",
+								},
 							},
 						},
 					},
@@ -58,9 +63,11 @@ func (_ *MonitoringSuite) TestDetectsNodeStatus(c *C) {
 			nodeName: "foo",
 			probes: health.Probes{
 				&pb.Probe{
-					Checker: NodeStatusCheckerID,
-					Status:  pb.Probe_Temporary,
-					Error:   "Node is not ready",
+					Checker:  NodeStatusCheckerID,
+					Status:   pb.Probe_Failed,
+					Severity: pb.Probe_Warning,
+					Detail:   "Stopped",
+					Error:    "Node is not ready",
 				},
 			},
 			comment: "detects a not ready node",
@@ -105,11 +112,11 @@ func (_ *MonitoringSuite) TestDetectsNodeStatus(c *C) {
 		}
 		var probes health.Probes
 		checker.Check(context.TODO(), &probes)
-		c.Assert(probes, DeepEquals, testCase.probes, comment)
+		c.Assert(probes, test.DeepCompare, testCase.probes, comment)
 	}
 }
 
-func (r nodeList) Nodes() (*v1.NodeList, error) {
+func (r nodeList) Nodes(metav1.ListOptions) (*v1.NodeList, error) {
 	return (*v1.NodeList)(&r), nil
 }
 

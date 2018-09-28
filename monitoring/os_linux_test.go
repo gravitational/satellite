@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/gravitational/satellite/agent/health"
-	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/test"
 	"github.com/gravitational/trace"
 
@@ -32,6 +31,7 @@ import (
 
 func (*MonitoringSuite) TestValidatesOS(c *C) {
 	// setup
+	prober := newErrorProber(osCheckerID)
 	var testCases = []struct {
 		releases   []OSRelease
 		getRelease osReleaseGetter
@@ -41,7 +41,7 @@ func (*MonitoringSuite) TestValidatesOS(c *C) {
 		{
 			releases:   staticOSReleases("ubuntu", "16.04.3", "centos", "7.2"),
 			getRelease: testGetOSRelease(OSRelease{ID: "CentOS", VersionID: "7.2"}),
-			probes:     health.Probes{&pb.Probe{Checker: osCheckerID, Status: pb.Probe_Running}},
+			probes:     health.Probes{prober.newCleared()},
 			comment:    "requirements match",
 		},
 		{
@@ -49,46 +49,44 @@ func (*MonitoringSuite) TestValidatesOS(c *C) {
 			// a subset of distribution releases: i.e. "16" to capture multiple 16.x versions
 			releases:   staticOSReleases("ubuntu", "16", "centos", "7.2"),
 			getRelease: testGetOSRelease(OSRelease{ID: "ubuntu", VersionID: "16.04.3"}),
-			probes:     health.Probes{&pb.Probe{Checker: osCheckerID, Status: pb.Probe_Running}},
+			probes:     health.Probes{prober.newCleared()},
 			comment:    "requirements match on prefix",
 		},
 		{
 			releases:   staticOSReleases(`.*suse.*`, "12"),
 			getRelease: testGetOSRelease(OSRelease{ID: "opensuse-tumbleweed", VersionID: "12-SP3"}),
-			probes:     health.Probes{&pb.Probe{Checker: osCheckerID, Status: pb.Probe_Running}},
+			probes:     health.Probes{prober.newCleared()},
 			comment:    "requirements match on pattern",
 		},
 		{
 			releases:   staticOSReleases("ubuntu", "16.04.3", "centos", "7.2"),
 			getRelease: testGetOSRelease(OSRelease{ID: "debian", VersionID: "9.3"}),
-			probes: health.Probes{&pb.Probe{
-				Checker: osCheckerID,
-				Detail:  "debian 9.3 is not supported",
-				Status:  pb.Probe_Failed,
-			}},
+			probes: health.Probes{
+				prober.newRaised("debian 9.3 is not supported"),
+			},
 			comment: "missing requirement",
 		},
 		{
 			releases:   staticOSReleases(),
 			getRelease: testGetOSRelease(OSRelease{ID: "debian", VersionID: "9.3"}),
-			probes:     health.Probes{&pb.Probe{Checker: osCheckerID, Status: pb.Probe_Running}},
+			probes:     health.Probes{prober.newCleared()},
 			comment:    "no error for empty requirements",
 		},
 		{
 			releases:   staticOSReleases("fedora", "25"),
 			getRelease: testFailingGetOSRelease(trace.NotFound("file or directory not found")),
-			probes:     health.Probes{&pb.Probe{Checker: osCheckerID, Status: pb.Probe_Running}},
+			probes:     health.Probes{prober.newCleared()},
 			comment:    "skip test if no OS distribution files are available",
 		},
 		{
 			releases:   staticOSReleases("debian", "9"),
 			getRelease: testFailingGetOSRelease(trace.AccessDenied("permission denied")),
-			probes: health.Probes{&pb.Probe{
-				Checker: osCheckerID,
-				Detail:  "failed to validate OS distribution",
-				Error:   "permission denied, failed to query OS version",
-				Status:  pb.Probe_Failed,
-			}},
+			probes: health.Probes{
+				prober.newRaisedProbe(probe{
+					detail: "failed to validate OS distribution",
+					error:  "permission denied, failed to query OS version",
+				}),
+			},
 			comment: "fail if error prevents from reading the file (other than not found)",
 		},
 	}

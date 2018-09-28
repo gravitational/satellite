@@ -111,13 +111,18 @@ func (r *nodeStatusChecker) Name() string { return NodeStatusCheckerID }
 
 // Check validates the status of kubernetes components
 func (r *nodeStatusChecker) Check(ctx context.Context, reporter health.Reporter) {
-	nodes, err := r.nodeLister.Nodes()
+	options := metav1.ListOptions{
+		LabelSelector: labels.Everything().String(),
+		FieldSelector: fields.SelectorFromSet(fields.Set{"metadata.name": r.nodeName}).String(),
+	}
+	nodes, err := r.nodeLister.Nodes(options)
 	if err != nil {
 		reporter.Add(NewProbeFromErr(r.Name(), trace.UserMessage(err), trace.Wrap(err)))
 		return
 	}
 
 	var unavailableNode *v1.Node
+	var failureCondition *v1.NodeCondition
 L:
 	for _, node := range nodes.Items {
 		for _, condition := range node.Status.Conditions {
@@ -126,6 +131,7 @@ L:
 			}
 			if condition.Status != v1.ConditionTrue && node.Name == r.nodeName {
 				unavailableNode = &node
+				failureCondition = &condition
 				break L
 			}
 		}
@@ -140,21 +146,19 @@ L:
 	}
 
 	reporter.Add(&pb.Probe{
-		Checker: r.Name(),
-		Status:  pb.Probe_Temporary,
-		Error:   "Node is not ready",
+		Checker:  r.Name(),
+		Status:   pb.Probe_Failed,
+		Severity: pb.Probe_Warning,
+		Detail:   formatCondition(*failureCondition),
+		Error:    "Node is not ready",
 	})
 }
 
 type nodeLister interface {
-	Nodes() (*v1.NodeList, error)
+	Nodes(metav1.ListOptions) (*v1.NodeList, error)
 }
 
-func (r kubeNodeLister) Nodes() (*v1.NodeList, error) {
-	options := metav1.ListOptions{
-		LabelSelector: labels.Everything().String(),
-		FieldSelector: fields.Everything().String(),
-	}
+func (r kubeNodeLister) Nodes(options metav1.ListOptions) (*v1.NodeList, error) {
 	nodes, err := r.client.Nodes().List(options)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to query nodes")
@@ -164,6 +168,13 @@ func (r kubeNodeLister) Nodes() (*v1.NodeList, error) {
 
 type kubeNodeLister struct {
 	client corev1.CoreV1Interface
+}
+
+func formatCondition(condition v1.NodeCondition) string {
+	if condition.Message != "" {
+		return fmt.Sprintf("%v (%v)", condition.Reason, condition.Message)
+	}
+	return condition.Reason
 }
 
 const (

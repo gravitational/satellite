@@ -84,8 +84,8 @@ func isDegraded(resp *pb.StatusResponse) bool {
 	}
 	for _, node := range status.Nodes {
 		for _, probe := range node.Probes {
-			if probe.Status == pb.Probe_Temporary {
-				// Consider temporary failures as degrading the cluster state
+			if probe.Status == pb.Probe_Failed && probe.Severity == pb.Probe_Warning {
+				// Consider warnings as degrading the cluster state
 				return true
 			}
 		}

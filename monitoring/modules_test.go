@@ -21,7 +21,6 @@ import (
 	"context"
 
 	"github.com/gravitational/satellite/agent/health"
-	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/test"
 
 	"github.com/gravitational/trace"
@@ -95,6 +94,8 @@ func (_ *MonitoringSuite) TestHasModules(c *C) {
 }
 
 func (_ *MonitoringSuite) TestValidatesModules(c *C) {
+	// setup
+	prober := newErrorProber(KernelModuleCheckerID)
 	var testCases = []struct {
 		modules []ModuleRequest
 		reader  moduleGetterFunc
@@ -104,54 +105,40 @@ func (_ *MonitoringSuite) TestValidatesModules(c *C) {
 		{
 			modules: modules("ebtables", "br_netfilter"),
 			reader:  moduleReader(modulesData),
-			probes:  health.Probes{&pb.Probe{Checker: KernelModuleCheckerID, Status: pb.Probe_Running}},
+			probes:  health.Probes{prober.newCleared()},
 			comment: "running",
 		},
 		{
 			modules: modules("required"),
 			reader:  moduleReader(modulesData),
 			probes: health.Probes{
-				&pb.Probe{
-					Checker:     KernelModuleCheckerID,
-					Detail:      `kernel module "required" not loaded`,
-					Status:      pb.Probe_Failed,
-					CheckerData: []byte(`{"module":{"name":"required"}}`),
-				},
+				prober.newRaisedProbe(probe{
+					detail: `kernel module "required" not loaded`,
+					data:   []byte(`{"module":{"name":"required"}}`),
+				}),
 			},
 			comment: "missing module",
 		},
 		{
 			modules: nil,
 			reader:  moduleReader(modulesData),
-			probes: health.Probes{
-				&pb.Probe{
-					Checker: KernelModuleCheckerID,
-					Status:  pb.Probe_Running,
-				},
-			},
+			probes:  health.Probes{prober.newCleared()},
 			comment: "skip test for empty requirements",
 		},
 		{
 			modules: modules("required"),
 			reader:  testFailingModuleReader(trace.NotFound("file or directory not found")),
-			probes: health.Probes{
-				&pb.Probe{
-					Checker: KernelModuleCheckerID,
-					Status:  pb.Probe_Running,
-				},
-			},
+			probes:  health.Probes{prober.newCleared()},
 			comment: "skip test if no modules file available",
 		},
 		{
 			modules: modules("required"),
 			reader:  testFailingModuleReader(trace.AccessDenied("permission denied")),
 			probes: health.Probes{
-				&pb.Probe{
-					Checker: KernelModuleCheckerID,
-					Detail:  "failed to validate kernel modules",
-					Error:   "permission denied",
-					Status:  pb.Probe_Failed,
-				},
+				prober.newRaisedProbe(probe{
+					detail: "failed to validate kernel modules",
+					error:  "permission denied",
+				}),
 			},
 			comment: "fail if error prevents from reading the file (other than not found)",
 		},
@@ -162,13 +149,8 @@ func (_ *MonitoringSuite) TestValidatesModules(c *C) {
 					Names: []string{"alternative_required"},
 				},
 			},
-			reader: moduleReader(modulesData),
-			probes: health.Probes{
-				&pb.Probe{
-					Checker: KernelModuleCheckerID,
-					Status:  pb.Probe_Running,
-				},
-			},
+			reader:  moduleReader(modulesData),
+			probes:  health.Probes{prober.newCleared()},
 			comment: "successful match based on alternative module name",
 		},
 	}

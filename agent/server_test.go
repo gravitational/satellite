@@ -118,9 +118,10 @@ func (_ *AgentSuite) TestSetsSystemStatusFromNodeStatuses(c *C) {
 			},
 			Probes: []*pb.Probe{
 				{
-					Checker: "qux",
-					Status:  pb.Probe_Failed,
-					Error:   "not available",
+					Checker:  "qux",
+					Status:   pb.Probe_Failed,
+					Severity: pb.Probe_Critical,
+					Error:    "not available",
 				},
 			},
 		},
@@ -585,9 +586,10 @@ var failedTest = &testChecker{
 }
 
 var failedProbe = &pb.Probe{
-	Checker: "failing service",
-	Status:  pb.Probe_Failed,
-	Error:   "invalid state",
+	Checker:  "failing service",
+	Status:   pb.Probe_Failed,
+	Severity: pb.Probe_Critical,
+	Error:    "invalid state",
 }
 
 // testSerfClient implements serfClient

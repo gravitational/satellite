@@ -30,6 +30,7 @@ import (
 
 func (*MonitoringSuite) TestValidatesPorts(c *C) {
 	// setup
+	prober := newErrorProber(portCheckerID)
 	var testCases = []struct {
 		ports   []PortRange
 		probes  health.Probes
@@ -62,16 +63,8 @@ func (*MonitoringSuite) TestValidatesPorts(c *C) {
 				},
 			),
 			probes: []*pb.Probe{
-				&pb.Probe{
-					Checker: portCheckerID,
-					Detail:  `conflicting program "bar"(pid=101) is occupying port udp/8005(listen)`,
-					Status:  pb.Probe_Failed,
-				},
-				&pb.Probe{
-					Checker: portCheckerID,
-					Detail:  `conflicting program "foo"(pid=100) is occupying port tcp/9001(listen)`,
-					Status:  pb.Probe_Failed,
-				},
+				prober.newRaised(`conflicting program "bar"(pid=101) is occupying port udp/8005(listen)`),
+				prober.newRaised(`conflicting program "foo"(pid=100) is occupying port tcp/9001(listen)`),
 			},
 			comment: "detects port occupancy",
 		},
@@ -81,12 +74,11 @@ func (*MonitoringSuite) TestValidatesPorts(c *C) {
 			},
 			reader: testFailingGetProcs(fmt.Errorf("unable to read processes")),
 			probes: []*pb.Probe{
-				&pb.Probe{
-					Checker: portCheckerID,
-					Detail:  "failed to query socket connections",
-					Error:   "unable to read processes",
-					Status:  pb.Probe_Failed,
-				}},
+				prober.newRaisedProbe(probe{
+					detail: "failed to query socket connections",
+					error:  "unable to read processes",
+				}),
+			},
 			comment: "fails if unable to read process information",
 		},
 		{
@@ -133,16 +125,8 @@ func (*MonitoringSuite) TestValidatesPorts(c *C) {
 				},
 			),
 			probes: []*pb.Probe{
-				&pb.Probe{
-					Checker: portCheckerID,
-					Detail:  `conflicting program "foo"(pid=101) is occupying port tcp/9001(listen)`,
-					Status:  pb.Probe_Failed,
-				},
-				&pb.Probe{
-					Checker: portCheckerID,
-					Detail:  `conflicting program "foo"(pid=101) is occupying port udp/9001(listen)`,
-					Status:  pb.Probe_Failed,
-				},
+				prober.newRaised(`conflicting program "foo"(pid=101) is occupying port tcp/9001(listen)`),
+				prober.newRaised(`conflicting program "foo"(pid=101) is occupying port udp/9001(listen)`),
 			},
 			comment: "dedups processes that have multiple connections on the same port",
 		},
@@ -181,11 +165,7 @@ func (*MonitoringSuite) TestValidatesPorts(c *C) {
 				},
 			),
 			probes: []*pb.Probe{
-				&pb.Probe{
-					Checker: portCheckerID,
-					Detail:  `conflicting program "foo"(pid=100) is occupying port tcp/9001(listen)`,
-					Status:  pb.Probe_Failed,
-				},
+				prober.newRaised(`conflicting program "foo"(pid=100) is occupying port tcp/9001(listen)`),
 			},
 			comment: "detects process bound to any address",
 		},
