@@ -76,20 +76,14 @@ func nodeToSystemStatus(status pb.NodeStatus_Type) pb.SystemStatus_Type {
 	}
 }
 
-// isDegraded determines the cluster status from the given response resp.
-// It is used in the healthz endpoint and considers severities other than
-// pb.Probe_Critical to move cluster to degraded state
-func isDegraded(resp *pb.StatusResponse) bool {
-	status := resp.GetStatus()
+func isDegraded(status pb.SystemStatus) bool {
 	switch status.Status {
 	case pb.SystemStatus_Unknown, pb.SystemStatus_Degraded:
 		return true
 	}
 	for _, node := range status.Nodes {
 		for _, probe := range node.Probes {
-			if probe.Status == pb.Probe_Failed && probe.Severity != pb.Probe_Critical {
-				// Consider other severities as degrading the cluster state
-				// in this case
+			if probe.Status == pb.Probe_Failed {
 				return true
 			}
 		}

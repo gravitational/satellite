@@ -149,7 +149,7 @@ func newHealthHandler(s *server) http.HandlerFunc {
 		}
 
 		httpStatus := http.StatusOK
-		if isDegraded(status) {
+		if isDegraded(*status.GetStatus()) {
 			httpStatus = http.StatusServiceUnavailable
 		}
 
