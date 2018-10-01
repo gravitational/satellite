@@ -41,7 +41,7 @@ func (*MonitoringSuite) TestValidatesOS(c *C) {
 		{
 			releases:   staticOSReleases("ubuntu", "16.04.3", "centos", "7.2"),
 			getRelease: testGetOSRelease(OSRelease{ID: "CentOS", VersionID: "7.2"}),
-			probes:     health.Probes{prober.newCleared()},
+			probes:     health.Probes{prober.newSuccess()},
 			comment:    "requirements match",
 		},
 		{
@@ -49,13 +49,13 @@ func (*MonitoringSuite) TestValidatesOS(c *C) {
 			// a subset of distribution releases: i.e. "16" to capture multiple 16.x versions
 			releases:   staticOSReleases("ubuntu", "16", "centos", "7.2"),
 			getRelease: testGetOSRelease(OSRelease{ID: "ubuntu", VersionID: "16.04.3"}),
-			probes:     health.Probes{prober.newCleared()},
+			probes:     health.Probes{prober.newSuccess()},
 			comment:    "requirements match on prefix",
 		},
 		{
 			releases:   staticOSReleases(`.*suse.*`, "12"),
 			getRelease: testGetOSRelease(OSRelease{ID: "opensuse-tumbleweed", VersionID: "12-SP3"}),
-			probes:     health.Probes{prober.newCleared()},
+			probes:     health.Probes{prober.newSuccess()},
 			comment:    "requirements match on pattern",
 		},
 		{
@@ -69,13 +69,13 @@ func (*MonitoringSuite) TestValidatesOS(c *C) {
 		{
 			releases:   staticOSReleases(),
 			getRelease: testGetOSRelease(OSRelease{ID: "debian", VersionID: "9.3"}),
-			probes:     health.Probes{prober.newCleared()},
+			probes:     health.Probes{prober.newSuccess()},
 			comment:    "no error for empty requirements",
 		},
 		{
 			releases:   staticOSReleases("fedora", "25"),
 			getRelease: testFailingGetOSRelease(trace.NotFound("file or directory not found")),
-			probes:     health.Probes{prober.newCleared()},
+			probes:     health.Probes{prober.newSuccess()},
 			comment:    "skip test if no OS distribution files are available",
 		},
 		{

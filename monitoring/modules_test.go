@@ -105,7 +105,7 @@ func (_ *MonitoringSuite) TestValidatesModules(c *C) {
 		{
 			modules: modules("ebtables", "br_netfilter"),
 			reader:  moduleReader(modulesData),
-			probes:  health.Probes{prober.newCleared()},
+			probes:  health.Probes{prober.newSuccess()},
 			comment: "running",
 		},
 		{
@@ -122,13 +122,13 @@ func (_ *MonitoringSuite) TestValidatesModules(c *C) {
 		{
 			modules: nil,
 			reader:  moduleReader(modulesData),
-			probes:  health.Probes{prober.newCleared()},
+			probes:  health.Probes{prober.newSuccess()},
 			comment: "skip test for empty requirements",
 		},
 		{
 			modules: modules("required"),
 			reader:  testFailingModuleReader(trace.NotFound("file or directory not found")),
-			probes:  health.Probes{prober.newCleared()},
+			probes:  health.Probes{prober.newSuccess()},
 			comment: "skip test if no modules file available",
 		},
 		{
@@ -150,7 +150,7 @@ func (_ *MonitoringSuite) TestValidatesModules(c *C) {
 				},
 			},
 			reader:  moduleReader(modulesData),
-			probes:  health.Probes{prober.newCleared()},
+			probes:  health.Probes{prober.newSuccess()},
 			comment: "successful match based on alternative module name",
 		},
 	}

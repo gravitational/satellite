@@ -81,13 +81,6 @@ func isDegraded(status pb.SystemStatus) bool {
 	case pb.SystemStatus_Unknown, pb.SystemStatus_Degraded:
 		return true
 	}
-	for _, node := range status.Nodes {
-		for _, probe := range node.Probes {
-			if probe.Status == pb.Probe_Failed {
-				return true
-			}
-		}
-	}
 	return false
 }
 

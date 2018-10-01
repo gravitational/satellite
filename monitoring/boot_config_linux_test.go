@@ -88,7 +88,7 @@ func (*MonitoringSuite) TestValidatesBootConfig(c *C) {
 			params:              staticParams("CONFIG_PARAM2", "CONFIG_PARAM3"),
 			kernelVersionReader: staticKernelVersion("4.4.0"),
 			bootConfigReader:    testBootConfigReader(testBootConfig),
-			probes:              health.Probes{prober.newCleared()},
+			probes:              health.Probes{prober.newSuccess()},
 			comment:             "all parameters available",
 		},
 		{
@@ -108,7 +108,7 @@ func (*MonitoringSuite) TestValidatesBootConfig(c *C) {
 				}},
 			kernelVersionReader: staticKernelVersion("4.5.0"),
 			bootConfigReader:    testBootConfigReader(testBootConfig),
-			probes:              health.Probes{prober.newCleared()},
+			probes:              health.Probes{prober.newSuccess()},
 			comment:             "parameter should be skipped due to kernel version",
 		},
 		{
@@ -119,14 +119,14 @@ func (*MonitoringSuite) TestValidatesBootConfig(c *C) {
 				}},
 			kernelVersionReader: staticKernelVersion("4.5.0"),
 			bootConfigReader:    testBootConfigReader(testBootConfig),
-			probes:              health.Probes{prober.newCleared()},
+			probes:              health.Probes{prober.newSuccess()},
 			comment:             "parameter should be skipped due to kernel version",
 		},
 		{
 			params:              staticParams("CONFIG_PARAM"),
 			kernelVersionReader: staticKernelVersion("4.5.0"),
 			bootConfigReader:    testBootConfigFailingReader(trace.NotFound("file or directory not found")),
-			probes:              health.Probes{prober.newCleared()},
+			probes:              health.Probes{prober.newSuccess()},
 			comment:             "skip test if boot configuration is unavailable",
 		},
 		{

@@ -23,7 +23,7 @@ func newErrorProber(checkerID string) prober {
 	return prober{checkerID: checkerID}
 }
 
-func (r prober) newCleared() *pb.Probe {
+func (r prober) newSuccess() *pb.Probe {
 	return &pb.Probe{
 		Checker: r.checkerID,
 		Status:  pb.Probe_Running,
@@ -32,10 +32,9 @@ func (r prober) newCleared() *pb.Probe {
 
 func (r prober) newRaised(detail string) *pb.Probe {
 	return &pb.Probe{
-		Checker:  r.checkerID,
-		Detail:   detail,
-		Status:   pb.Probe_Failed,
-		Severity: pb.Probe_Critical,
+		Checker: r.checkerID,
+		Detail:  detail,
+		Status:  pb.Probe_Failed,
 	}
 }
 
@@ -45,7 +44,6 @@ func (r prober) newRaisedProbe(probe probe) *pb.Probe {
 		Detail:      probe.detail,
 		Error:       probe.error,
 		Status:      pb.Probe_Failed,
-		Severity:    pb.Probe_Critical,
 		CheckerData: probe.data,
 	}
 }

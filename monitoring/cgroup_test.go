@@ -62,10 +62,9 @@ func (*MonitoringSuite) TestValidatesCGroupMounts(c *C) {
 			cgroups: []string{"cpu", "memory", "blkio"},
 			probes: health.Probes{
 				&pb.Probe{
-					Checker:  cgroupCheckerID,
-					Error:    `Following CGroups have not been mounted: ["blkio"]`,
-					Status:   pb.Probe_Failed,
-					Severity: pb.Probe_Critical,
+					Checker: cgroupCheckerID,
+					Error:   `Following CGroups have not been mounted: ["blkio"]`,
+					Status:  pb.Probe_Failed,
 				},
 			},
 			reader:  testMountsReader(testCgroups),

@@ -586,10 +586,9 @@ var failedTest = &testChecker{
 }
 
 var failedProbe = &pb.Probe{
-	Checker:  "failing service",
-	Status:   pb.Probe_Failed,
-	Severity: pb.Probe_Critical,
-	Error:    "invalid state",
+	Checker: "failing service",
+	Status:  pb.Probe_Failed,
+	Error:   "invalid state",
 }
 
 // testSerfClient implements serfClient
