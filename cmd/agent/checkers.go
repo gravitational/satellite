@@ -18,7 +18,9 @@ package main
 
 import (
 	"github.com/gravitational/satellite/agent"
+	"github.com/gravitational/satellite/cmd"
 	"github.com/gravitational/satellite/monitoring"
+
 	"github.com/gravitational/trace"
 )
 
@@ -26,8 +28,8 @@ import (
 type config struct {
 	// role is the current agent's role
 	role agent.Role
-	// kubeAddr is the address of the kubernetes API server
-	kubeAddr string
+	// kubeconfigPath is the path to the kubeconfig file
+	kubeconfigPath string
 	// kubeletAddr is the address of the kubelet
 	kubeletAddr string
 	// dockerAddr is the endpoint of the docker daemon
@@ -42,27 +44,33 @@ type config struct {
 
 // addCheckers adds checkers to the agent.
 func addCheckers(node agent.Agent, config *config) (err error) {
+	client, err := cmd.GetKubeClientFromPath(config.kubeconfigPath)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	kubeConfig := monitoring.KubeConfig{Client: client}
 	switch config.role {
 	case agent.RoleMaster:
-		err = addToMaster(node, config)
+		err = addToMaster(node, config, kubeConfig)
 	case agent.RoleNode:
 		err = addToNode(node, config)
 	}
 	return trace.Wrap(err)
 }
 
-func addToMaster(node agent.Agent, config *config) error {
+func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeConfig) error {
 	etcdChecker, err := monitoring.EtcdHealth(config.etcd)
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	node.AddChecker(monitoring.KubeAPIServerHealth(config.kubeAddr, ""))
+	node.AddChecker(monitoring.KubeAPIServerHealth(kubeConfig))
 	node.AddChecker(monitoring.DockerHealth(config.dockerAddr))
 	node.AddChecker(etcdChecker)
 	node.AddChecker(monitoring.SystemdHealth())
 
 	if !config.disableInterPodCheck {
-		node.AddChecker(monitoring.InterPodCommunication(config.kubeAddr, config.nettestContainerImage))
+		node.AddChecker(monitoring.InterPodCommunication(kubeConfig, config.nettestContainerImage))
 	}
 	return nil
 }

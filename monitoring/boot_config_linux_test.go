@@ -24,7 +24,6 @@ import (
 	"io/ioutil"
 
 	"github.com/gravitational/satellite/agent/health"
-	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/test"
 	"github.com/gravitational/trace"
 
@@ -77,6 +76,7 @@ func (*MonitoringSuite) TestParsesKernelVersion(c *C) {
 
 func (*MonitoringSuite) TestValidatesBootConfig(c *C) {
 	// setup
+	prober := newErrorProber(bootConfigParamID)
 	var testCases = []struct {
 		params []BootConfigParam
 		kernelVersionReader
@@ -88,18 +88,16 @@ func (*MonitoringSuite) TestValidatesBootConfig(c *C) {
 			params:              staticParams("CONFIG_PARAM2", "CONFIG_PARAM3"),
 			kernelVersionReader: staticKernelVersion("4.4.0"),
 			bootConfigReader:    testBootConfigReader(testBootConfig),
-			probes:              health.Probes{&pb.Probe{Checker: bootConfigParamID, Status: pb.Probe_Running}},
+			probes:              health.Probes{prober.newSuccess()},
 			comment:             "all parameters available",
 		},
 		{
 			params:              staticParams("CONFIG_PARAM1", "CONFIG_PARAM2"),
 			kernelVersionReader: staticKernelVersion("4.4.0"),
 			bootConfigReader:    testBootConfigReader(testBootConfig),
-			probes: health.Probes{&pb.Probe{
-				Checker: bootConfigParamID,
-				Status:  pb.Probe_Failed,
-				Detail:  "required kernel boot config parameter CONFIG_PARAM1 missing",
-			}},
+			probes: health.Probes{
+				prober.newRaised("required kernel boot config parameter CONFIG_PARAM1 missing"),
+			},
 			comment: "parameter missing",
 		},
 		{
@@ -110,7 +108,7 @@ func (*MonitoringSuite) TestValidatesBootConfig(c *C) {
 				}},
 			kernelVersionReader: staticKernelVersion("4.5.0"),
 			bootConfigReader:    testBootConfigReader(testBootConfig),
-			probes:              health.Probes{&pb.Probe{Checker: bootConfigParamID, Status: pb.Probe_Running}},
+			probes:              health.Probes{prober.newSuccess()},
 			comment:             "parameter should be skipped due to kernel version",
 		},
 		{
@@ -121,26 +119,25 @@ func (*MonitoringSuite) TestValidatesBootConfig(c *C) {
 				}},
 			kernelVersionReader: staticKernelVersion("4.5.0"),
 			bootConfigReader:    testBootConfigReader(testBootConfig),
-			probes:              health.Probes{&pb.Probe{Checker: bootConfigParamID, Status: pb.Probe_Running}},
+			probes:              health.Probes{prober.newSuccess()},
 			comment:             "parameter should be skipped due to kernel version",
 		},
 		{
 			params:              staticParams("CONFIG_PARAM"),
 			kernelVersionReader: staticKernelVersion("4.5.0"),
 			bootConfigReader:    testBootConfigFailingReader(trace.NotFound("file or directory not found")),
-			probes:              health.Probes{&pb.Probe{Checker: bootConfigParamID, Status: pb.Probe_Running}},
+			probes:              health.Probes{prober.newSuccess()},
 			comment:             "skip test if boot configuration is unavailable",
 		},
 		{
 			params:              staticParams("CONFIG_PARAM"),
 			kernelVersionReader: testFailingKernelVersion(fmt.Errorf("unknown error")),
 			probes: health.Probes{
-				&pb.Probe{
-					Checker: bootConfigParamID,
-					Detail:  "failed to validate boot configuration",
-					Error:   "failed to read kernel version",
-					Status:  pb.Probe_Failed,
-				}},
+				prober.newRaisedProbe(probe{
+					detail: "failed to validate boot configuration",
+					error:  "failed to read kernel version",
+				}),
+			},
 			comment: "fails if kernel version cannot be determined",
 		},
 		{
@@ -148,16 +145,8 @@ func (*MonitoringSuite) TestValidatesBootConfig(c *C) {
 			kernelVersionReader: staticKernelVersion("4.5.0"),
 			bootConfigReader:    testBootConfigReader(testBootConfig),
 			probes: health.Probes{
-				&pb.Probe{
-					Checker: bootConfigParamID,
-					Status:  pb.Probe_Failed,
-					Detail:  "required kernel boot config parameter CONFIG_PARAM4 missing",
-				},
-				&pb.Probe{
-					Checker: bootConfigParamID,
-					Status:  pb.Probe_Failed,
-					Detail:  "required kernel boot config parameter CONFIG_PARAM5 missing",
-				},
+				prober.newRaised("required kernel boot config parameter CONFIG_PARAM4 missing"),
+				prober.newRaised("required kernel boot config parameter CONFIG_PARAM5 missing"),
 			},
 			comment: "collect all failed probes",
 		},

@@ -28,10 +28,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gravitational/satellite/cmd"
 	"github.com/gravitational/satellite/healthz/checks"
 	"github.com/gravitational/satellite/healthz/config"
 	"github.com/gravitational/satellite/healthz/handlers"
 	"github.com/gravitational/satellite/healthz/utils"
+	"github.com/gravitational/satellite/monitoring"
 
 	"github.com/gravitational/trace"
 	log "github.com/sirupsen/logrus"
@@ -72,8 +74,14 @@ func run() error {
 		}
 	}()
 
+	client, err := cmd.GetKubeClientFromPath(cfg.KubeconfigPath)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	kubeConfig := monitoring.KubeConfig{Client: client}
+
 	errChan := make(chan error, 10)
-	runner, err := checks.NewRunner(cfg.KubeAddr, cfg.KubeNodesThreshold, cfg.ETCDConfig)
+	runner, err := checks.NewRunner(kubeConfig, cfg.KubeNodesThreshold, cfg.ETCDConfig)
 	if err != nil {
 		return trace.Wrap(err)
 	}
