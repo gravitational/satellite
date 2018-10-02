@@ -135,6 +135,6 @@ func NewDNSChecker() health.Checker {
 		QuestionA: []string{
 			"leader.telekube.local",
 			"kubernetes.default.svc.cluster.local",
-		}
+		},
 	}
 }
