@@ -56,7 +56,7 @@ func DefaultProcessChecker() health.Checker {
 	return &ProcessChecker{[]string{
 		"dockerd",
 		"lxd",
-		"dnsmasq",
+		"coredns",
 		"kube-apiserver",
 		"kube-scheduler",
 		"kube-controller-manager",
@@ -127,4 +127,14 @@ func DefaultBootConfigParams() health.Checker {
 			KernelConstraint: KernelVersionLessThan(KernelVersion{Release: 4, Major: 7}),
 		},
 	)
+}
+
+// NewDNSChecker sends some default queries to monitor DNS / service discovery health
+func NewDNSChecker() health.Checker {
+	return DNSChecker{
+		QuestionA: []string{
+			"leader.telekube.local",
+			"kubernetes.default.svc.cluster.local",
+		}
+	}
 }

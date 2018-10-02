@@ -84,3 +84,8 @@ type StorageConfig struct {
 	// MinFreeBytes define minimum free volume capacity
 	MinFreeBytes uint64
 }
+
+// NewDNSChecker sends some default queries to monitor DNS / service discovery health
+func NewDNSChecker() health.Checker {
+	return noopChecker{}
+}

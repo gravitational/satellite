@@ -29,7 +29,7 @@ var (
 		"flanneld.service",
 		"serf.service",
 		"planet-agent.service",
-		"dnsmasq.service",
+		"coredns.service",
 		"registry.service",
 		"docker.service",
 		"etcd.service",
