@@ -131,7 +131,7 @@ func DefaultBootConfigParams() health.Checker {
 
 // NewDNSChecker sends some default queries to monitor DNS / service discovery health
 func NewDNSChecker() health.Checker {
-	return DNSChecker{
+	return &DNSChecker{
 		QuestionA: []string{
 			"leader.telekube.local",
 			"kubernetes.default.svc.cluster.local",
