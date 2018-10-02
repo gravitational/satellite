@@ -36,7 +36,7 @@ func (r *DNSChecker) Name() string { return "dns" }
 
 // Check checks if the DNS servers are responding
 func (r *DNSChecker) Check(ctx context.Context, reporter health.Reporter) {
-	checkFailed = false
+	checkFailed := false
 	for _, question := range r.QuestionA {
 		_, err := net.LookupHost(question)
 		if err != nil {
