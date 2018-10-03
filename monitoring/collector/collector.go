@@ -30,8 +30,6 @@ import (
 const (
 	namespace             = "satellite"
 	collectMetricsTimeout = 5 * time.Second
-	// schedulerConfigPath is the path to kube-scheduler configuration file
-	schedulerConfigPath = "/etc/kubernetes/scheduler.kubeconfig"
 )
 
 var (
@@ -54,12 +52,11 @@ var (
 // metrics and additionally exposes metrics about the duration
 // of each scrape as well as whether the scrapes were successful.
 type MetricsCollector struct {
-	configEtcd monitoring.ETCDConfig
 	collectors map[string]Collector
 }
 
 // NewMetricsCollector creates a new MetricsCollector
-func NewMetricsCollector(configEtcd *monitoring.ETCDConfig, kubeAddr string, role agent.Role) (*MetricsCollector, error) {
+func NewMetricsCollector(configEtcd *monitoring.ETCDConfig, kubeConfig monitoring.KubeConfig, role agent.Role) (*MetricsCollector, error) {
 	collectorEtcd, err := NewEtcdCollector(configEtcd)
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -76,7 +73,7 @@ func NewMetricsCollector(configEtcd *monitoring.ETCDConfig, kubeAddr string, rol
 
 	collectors := make(map[string]Collector)
 	if role == agent.RoleMaster {
-		collectorKubernetes, err := NewKubernetesCollector(kubeAddr)
+		collectorKubernetes, err := NewKubernetesCollector(kubeConfig)
 		if err != nil {
 			return nil, trace.Wrap(err)
 		}

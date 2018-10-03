@@ -118,9 +118,10 @@ func (_ *AgentSuite) TestSetsSystemStatusFromNodeStatuses(c *C) {
 			},
 			Probes: []*pb.Probe{
 				{
-					Checker: "qux",
-					Status:  pb.Probe_Failed,
-					Error:   "not available",
+					Checker:  "qux",
+					Status:   pb.Probe_Failed,
+					Severity: pb.Probe_Critical,
+					Error:    "not available",
 				},
 			},
 		},

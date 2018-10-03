@@ -342,9 +342,10 @@ func runChecker(ctx context.Context, checker health.Checker, probeCh chan<- heal
 		if err := recover(); err != nil {
 			var probes health.Probes
 			probes.Add(&pb.Probe{
-				Checker: checker.Name(),
-				Status:  pb.Probe_Failed,
-				Error:   trace.Errorf("checker panicked: %v\n%s", err, debug.Stack()).Error(),
+				Checker:  checker.Name(),
+				Status:   pb.Probe_Failed,
+				Severity: pb.Probe_Critical,
+				Error:    trace.Errorf("checker panicked: %v\n%s", err, debug.Stack()).Error(),
 			})
 			probeCh <- probes
 		}

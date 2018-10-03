@@ -37,15 +37,15 @@ type Runner struct {
 }
 
 // NewRunner creates Runner with checks configured using provided options
-func NewRunner(kubeAddr string, kubeNodesReadyThreshold int, etcdConfig monitoring.ETCDConfig) (*Runner, error) {
+func NewRunner(kubeConfig monitoring.KubeConfig, kubeNodesReadyThreshold int, etcdConfig monitoring.ETCDConfig) (*Runner, error) {
 	etcdChecker, err := monitoring.EtcdHealth(&etcdConfig)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
 	runner := &Runner{}
 	runner.AddChecker(etcdChecker)
-	runner.AddChecker(monitoring.KubeAPIServerHealth(kubeAddr, ""))
-	runner.AddChecker(monitoring.NodesStatusHealth(kubeAddr, kubeNodesReadyThreshold))
+	runner.AddChecker(monitoring.KubeAPIServerHealth(kubeConfig))
+	runner.AddChecker(monitoring.NodesStatusHealth(kubeConfig, kubeNodesReadyThreshold))
 	return runner, nil
 }
 

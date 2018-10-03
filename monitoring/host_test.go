@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	"github.com/gravitational/satellite/agent/health"
-	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/test"
 
 	sigar "github.com/cloudfoundry/gosigar"
@@ -31,6 +30,7 @@ import (
 
 func (*MonitoringSuite) TestValidatesHostEnviron(c *C) {
 	// setup
+	prober := newErrorProber(hostCheckerID)
 	var testCases = []struct {
 		config    HostConfig
 		probes    health.Probes
@@ -48,16 +48,8 @@ func (*MonitoringSuite) TestValidatesHostEnviron(c *C) {
 		{
 			config: HostConfig{MinRAMBytes: 1024, MinCPU: 4},
 			probes: health.Probes{
-				&pb.Probe{
-					Checker: hostCheckerID,
-					Detail:  "at least 1.0 kB of RAM required, only 512 B available",
-					Status:  pb.Probe_Failed,
-				},
-				&pb.Probe{
-					Checker: hostCheckerID,
-					Detail:  "at least 4 CPUs required, only 2 available",
-					Status:  pb.Probe_Failed,
-				},
+				prober.newRaised("at least 1.0 kB of RAM required, only 512 B available"),
+				prober.newRaised("at least 4 CPUs required, only 2 available"),
 			},
 			getMemory: testGetMemory(512),
 			getCPU:    testGetCPU(2),
@@ -73,12 +65,11 @@ func (*MonitoringSuite) TestValidatesHostEnviron(c *C) {
 		{
 			config: HostConfig{MinRAMBytes: 512, MinCPU: 2},
 			probes: health.Probes{
-				&pb.Probe{
-					Checker: hostCheckerID,
-					Detail:  "failed to validate host environment",
-					Error:   "failed to query memory info",
-					Status:  pb.Probe_Failed,
-				}},
+				prober.newRaisedProbe(probe{
+					detail: "failed to validate host environment",
+					error:  "failed to query memory info",
+				}),
+			},
 			getMemory: testFailingGetMemory(fmt.Errorf("unable to read")),
 			getCPU:    testGetCPU(4),
 			comment:   "fails if unable to read memory information (other than not found)",

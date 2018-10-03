@@ -24,15 +24,27 @@ import (
 
 // Config stores application configuration
 type Config struct {
-	Debug              bool
-	ListenAddr         string
-	CheckInterval      time.Duration
-	AccessKey          string
-	KubeAddr           string
-	KubeCertFile       string
+	// Debug specifies whether to log in verbose mode
+	Debug bool
+	// ListenAddr specifies the listen address
+	ListenAddr string
+	// CheckInterval is how often to execute checks
+	CheckInterval time.Duration
+	// AccessKey to protect the healthz endpoint
+	AccessKey string
+	// KubeconfigPath specifies the absolute path to kubeconfig
+	KubeconfigPath string
+	// KubeCertFile is the path to a Kubernetes API server certificate file
+	KubeCertFile string
+	// KubeNodesThreshold defines the threshold when the node availability
+	// test considers the cluster degraded
 	KubeNodesThreshold int
-	ETCDConfig         monitoring.ETCDConfig
-	CertFile           string
-	KeyFile            string
-	CAFile             string
+	// ETCDConfig specifies the configuration for etcd
+	ETCDConfig monitoring.ETCDConfig
+	// CertFile is the path to a TLS certificate file
+	CertFile string
+	// KeyFile is the path to a TLS certificate key file
+	KeyFile string
+	// CAFile is the path to a TLS CA certificate file
+	CAFile string
 }
