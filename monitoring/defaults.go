@@ -115,3 +115,6 @@ func (d HighWatermarkCheckerData) SuccessMessage() string {
 	return fmt.Sprintf("disk utilization on %s is below %v percent (%s is available out of %s)",
 		d.Path, d.HighWatermark, humanize.Bytes(d.AvailableBytes), humanize.Bytes(d.TotalBytes))
 }
+
+// DiskSpaceCheckerID is the checker that checks disk space utilization
+const DiskSpaceCheckerID = "disk-space"
