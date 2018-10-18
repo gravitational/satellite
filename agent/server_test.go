@@ -421,7 +421,7 @@ func (r *AgentSuite) TestReflectsStatusInStatusCode(c *C) {
 	client, err := r.httpClient(fmt.Sprintf("https://127.0.0.1:%v", rpcPort))
 	c.Assert(err, IsNil)
 
-	resp, err := client.Get(client.Endpoint(""), url.Values{})
+	resp, err := client.Get(context.TODO(), client.Endpoint(""), url.Values{})
 	c.Assert(err, IsNil)
 	c.Assert(resp.Code(), Equals, http.StatusServiceUnavailable)
 

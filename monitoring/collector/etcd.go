@@ -18,6 +18,7 @@ package collector
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -84,7 +85,7 @@ func NewEtcdCollector(config *monitoring.ETCDConfig) (*EtcdCollector, error) {
 
 // Collect implements the prometheus.Collector interface
 func (e *EtcdCollector) Collect(ch chan<- prometheus.Metric) error {
-	resp, err := e.client.Get(e.client.Endpoint("v2", "stats", "leader"), url.Values{})
+	resp, err := e.client.Get(context.TODO(), e.client.Endpoint("v2", "stats", "leader"), url.Values{})
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -114,7 +115,7 @@ func (e *EtcdCollector) Collect(ch chan<- prometheus.Metric) error {
 func (e *EtcdCollector) healthStatus() (healthy bool, err error) {
 	result := struct{ Health string }{}
 	nresult := struct{ Health bool }{}
-	resp, err := e.client.Get(e.client.Endpoint("health"), url.Values{})
+	resp, err := e.client.Get(context.TODO(), e.client.Endpoint("health"), url.Values{})
 	if err != nil {
 		return false, trace.Wrap(err)
 	}

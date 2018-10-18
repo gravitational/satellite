@@ -49,7 +49,7 @@
   name = "github.com/gravitational/configure"
 
 [[constraint]]
-  branch = "master"
+  version = "1.0.0"
   name = "github.com/gravitational/roundtrip"
 
 [[constraint]]

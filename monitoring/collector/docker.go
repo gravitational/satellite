@@ -17,6 +17,7 @@ limitations under the License.
 package collector
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"net/url"
@@ -85,7 +86,7 @@ func (d *DockerCollector) Collect(ch chan<- prometheus.Metric) error {
 // healthStatus determines status of docker service
 // by fetching the docker's version HTTP endpoint from daemon socket
 func (d *DockerCollector) healthStatus() (bool, error) {
-	resp, err := d.client.Get(d.client.Endpoint("version"), url.Values{})
+	resp, err := d.client.Get(context.TODO(), d.client.Endpoint("version"), url.Values{})
 	if err != nil {
 		return false, trace.Wrap(err, "HTTP request failed: %v", err)
 	}
