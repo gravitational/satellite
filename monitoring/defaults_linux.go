@@ -130,10 +130,8 @@ func DefaultBootConfigParams() health.Checker {
 }
 
 // NewDNSChecker sends some default queries to monitor DNS / service discovery health
-func NewDNSChecker() health.Checker {
+func NewDNSChecker(questionA []string) health.Checker {
 	return &DNSChecker{
-		QuestionA: []string{
-			"leader.telekube.local",
-		},
+		QuestionA: questionA,
 	}
 }
