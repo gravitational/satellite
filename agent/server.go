@@ -142,7 +142,13 @@ func newHealthHandler(s *server) http.HandlerFunc {
 			return
 		}
 
-		status, err := s.Status(context.TODO(), nil)
+		ctx := context.TODO()
+		if r.URL.Path == "/local" || r.URL.Path == "/local/" {
+			handleLocalStatus(ctx, s, w, r)
+			return
+		}
+
+		status, err := s.Status(ctx, nil)
 		if err != nil {
 			roundtrip.ReplyJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
 			return
@@ -155,6 +161,21 @@ func newHealthHandler(s *server) http.HandlerFunc {
 
 		roundtrip.ReplyJSON(w, httpStatus, status.GetStatus())
 	}
+}
+
+func handleLocalStatus(ctx context.Context, s *server, w http.ResponseWriter, r *http.Request) {
+	status, err := s.LocalStatus(ctx, nil)
+	if err != nil {
+		roundtrip.ReplyJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+		return
+	}
+
+	httpStatus := http.StatusOK
+	if isNodeDegraded(*status.GetStatus()) {
+		httpStatus = http.StatusServiceUnavailable
+	}
+
+	roundtrip.ReplyJSON(w, httpStatus, status.GetStatus())
 }
 
 // grpcHandlerFunc returns an http.Handler that delegates to

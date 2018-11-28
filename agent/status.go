@@ -84,6 +84,14 @@ func isDegraded(status pb.SystemStatus) bool {
 	return false
 }
 
+func isNodeDegraded(status pb.NodeStatus) bool {
+	switch status.Status {
+	case pb.NodeStatus_Unknown, pb.NodeStatus_Degraded:
+		return true
+	}
+	return false
+}
+
 func (r memberMap) String() string {
 	var buf bytes.Buffer
 	for member := range r {
