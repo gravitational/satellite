@@ -142,12 +142,13 @@ func newHealthHandler(s *server) http.HandlerFunc {
 			return
 		}
 
+		ctx := context.TODO()
 		if r.URL.Path == "/local" || r.URL.Path == "/local/" {
-			handleLocalStatus(s, w, r)
+			handleLocalStatus(ctx, s, w, r)
 			return
 		}
 
-		status, err := s.Status(context.TODO(), nil)
+		status, err := s.Status(ctx, nil)
 		if err != nil {
 			roundtrip.ReplyJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
 			return
@@ -162,8 +163,8 @@ func newHealthHandler(s *server) http.HandlerFunc {
 	}
 }
 
-func handleLocalStatus(s *server, w http.ResponseWriter, r *http.Request) {
-	status, err := s.LocalStatus(context.TODO(), nil)
+func handleLocalStatus(ctx context.Context, s *server, w http.ResponseWriter, r *http.Request) {
+	status, err := s.LocalStatus(ctx, nil)
 	if err != nil {
 		roundtrip.ReplyJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
 		return
