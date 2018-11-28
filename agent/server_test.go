@@ -385,7 +385,7 @@ func (r *AgentSuite) TestIsMember(c *C) {
 	c.Assert(agent.IsMember(), Equals, true)
 }
 
-func (r *AgentSuite) TestReflectsStatusInStatusCode(c *C) {
+func (r *AgentSuite) TestReflectsSystemStatusInStatusCode(c *C) {
 	// setup
 	member := newMember("master", "alive")
 	cluster := []serf.Member{member}
@@ -432,6 +432,51 @@ func (r *AgentSuite) TestReflectsStatusInStatusCode(c *C) {
 
 	expected.Timestamp = pb.NewTimeToProto(clock.Now())
 	sort.Sort(byChecker(status.Nodes[0].Probes))
+	c.Assert(status, test.DeepCompare, expected)
+}
+
+func (r *AgentSuite) TestReflectsNodeStatusInStatusCode(c *C) {
+	// setup
+	member := newMember("master", "alive")
+	cluster := []serf.Member{member}
+	checkers := []health.Checker{healthyTest, failedTest}
+	clock := clockwork.NewFakeClock()
+	expected := pb.NodeStatus{
+		Name:   "master",
+		Status: pb.NodeStatus_Degraded,
+		MemberStatus: &pb.MemberStatus{
+			Name:   "master",
+			Addr:   "<nil>:0",
+			Status: pb.MemberStatus_Alive,
+			Tags:   tags{"role": string(RoleMaster)},
+		},
+		Probes: []*pb.Probe{failedProbe, healthyProbe},
+	}
+	rpcPort := 7575
+
+	// exercise
+	agent := r.newRemoteNode(member.Name, rpcPort, cluster, checkers, clock, c)
+	c.Assert(agent.Start(), IsNil)
+	defer agent.Close()
+
+	// wait until agent has started waiting to collect statuses
+	clock.BlockUntil(1)
+	clock.Advance(statusUpdateTimeout + time.Second)
+	// ensure that the status update loop has finished updating status
+	clock.BlockUntil(1)
+
+	client, err := r.httpClient(fmt.Sprintf("https://127.0.0.1:%v/local", rpcPort))
+	c.Assert(err, IsNil)
+
+	resp, err := client.Get(client.Endpoint(""), url.Values{})
+	c.Assert(err, IsNil)
+	c.Assert(resp.Code(), Equals, http.StatusServiceUnavailable)
+
+	// verify
+	var status pb.NodeStatus
+	err = json.Unmarshal(resp.Bytes(), &status)
+	c.Assert(err, IsNil)
+	sort.Sort(byChecker(status.Probes))
 	c.Assert(status, test.DeepCompare, expected)
 }
 
