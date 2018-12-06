@@ -645,21 +645,20 @@ func (r *testSerfClient) Members() ([]serf.Member, error) {
 	return r.members, nil
 }
 
-// Stream returns a dummy stream handle.
-func (r *testSerfClient) Stream(filter string, eventc chan<- map[string]interface{}) (serf.StreamHandle, error) {
-	return serf.StreamHandle(0), nil
-}
-
 func (r *testSerfClient) Stop(handle serf.StreamHandle) error {
 	return nil
 }
 
-func (r *testSerfClient) Close() error {
+func (r *testSerfClient) UpdateTags(tags map[string]string, delTags []string) error {
 	return nil
 }
 
 func (r *testSerfClient) Join(peers []string, replay bool) (int, error) {
 	return 0, nil
+}
+
+func (r *testSerfClient) Close() error {
+	return nil
 }
 
 func newTestCache(c *C, clock clockwork.Clock) *testCache {

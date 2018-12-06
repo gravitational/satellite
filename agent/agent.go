@@ -101,10 +101,10 @@ func New(config *Config) (Agent, error) {
 		return nil, trace.Wrap(err)
 	}
 
-	clientConfig := &serf.Config{
+	clientConfig := serf.Config{
 		Addr: config.SerfRPCAddr,
 	}
-	client, err := serf.ClientFromConfig(clientConfig)
+	client, err := newRetryingClient(clientConfig)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to connect to serf")
 	}
@@ -433,6 +433,7 @@ func (r *agent) collectStatus(ctx context.Context) (systemStatus *pb.SystemStatu
 
 	members, err := r.serfClient.Members()
 	if err != nil {
+		log.WithError(err).Warn("Failed to query serf members.")
 		return nil, trace.Wrap(err, "failed to query serf members")
 	}
 	members = filterLeft(members)

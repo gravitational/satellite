@@ -17,6 +17,7 @@ limitations under the License.
 package agent
 
 import (
+	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
 )
 
@@ -25,15 +26,92 @@ import (
 type serfClient interface {
 	// Members lists members of the serf cluster.
 	Members() ([]serf.Member, error)
-	// Stream subcribes the caller to the serf event stream.
-	// Filter can be used to restrict the events.
-	// Returns an opaque handle to be used with Stop.
-	Stream(filter string, eventc chan<- map[string]interface{}) (serf.StreamHandle, error)
 	// Stop cancels the serf event delivery and removes the subscription.
 	Stop(serf.StreamHandle) error
 	// Close closes the client.
 	Close() error
 	// Join attempts to join an existing serf cluster identified by peers.
 	// Replay controls if previous user events are replayed once this node has joined the cluster.
+	// Returns the number of nodes joined
 	Join(peers []string, replay bool) (int, error)
+	// UpdateTags will modify the tags on a running serf agent
+	UpdateTags(tags map[string]string, delTags []string) error
+}
+
+func newRetryingClient(clientConfig serf.Config) (*retryingClient, error) {
+	client, err := reinit(clientConfig)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	return &retryingClient{
+		client: client,
+		config: clientConfig,
+	}, nil
+}
+
+// Members lists members of the serf cluster.
+func (r *retryingClient) Members() ([]serf.Member, error) {
+	if err := r.reinit(); err != nil {
+		return nil, trace.Wrap(err)
+	}
+	return r.client.Members()
+}
+
+// Stop cancels the serf event delivery and removes the subscription.
+func (r *retryingClient) Stop(handle serf.StreamHandle) error {
+	if err := r.reinit(); err != nil {
+		return trace.Wrap(err)
+	}
+	return r.client.Stop(handle)
+}
+
+// Join attempts to join an existing serf cluster identified by peers.
+// Replay controls if previous user events are replayed once this node has joined the cluster.
+// Returns the number of nodes joined
+func (r *retryingClient) Join(peers []string, replay bool) (int, error) {
+	if err := r.reinit(); err != nil {
+		return 0, trace.Wrap(err)
+	}
+	return r.client.Join(peers, replay)
+}
+
+// UpdateTags will modify the tags on a running serf agent
+func (r *retryingClient) UpdateTags(tags map[string]string, delTags []string) error {
+	if err := r.reinit(); err != nil {
+		return trace.Wrap(err)
+	}
+	return r.client.UpdateTags(tags, delTags)
+}
+
+// Close closes the client
+func (r *retryingClient) Close() error {
+	if r.client.IsClosed() {
+		return nil
+	}
+	return r.client.Close()
+}
+
+func (r *retryingClient) reinit() error {
+	if !r.client.IsClosed() {
+		return nil
+	}
+	client, err := reinit(r.config)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	r.client = client
+	return nil
+}
+
+func reinit(clientConfig serf.Config) (*serf.RPCClient, error) {
+	client, err := serf.ClientFromConfig(&clientConfig)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	return client, nil
+}
+
+type retryingClient struct {
+	client *serf.RPCClient
+	config serf.Config
 }
