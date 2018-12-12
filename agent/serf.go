@@ -17,6 +17,8 @@ limitations under the License.
 package agent
 
 import (
+	"sync"
+
 	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
 )
@@ -54,6 +56,8 @@ func (r *retryingClient) Members() ([]serf.Member, error) {
 	if err := r.reinit(); err != nil {
 		return nil, trace.Wrap(err)
 	}
+	r.RLock()
+	defer r.RUnlock()
 	return r.client.Members()
 }
 
@@ -62,6 +66,8 @@ func (r *retryingClient) Stop(handle serf.StreamHandle) error {
 	if err := r.reinit(); err != nil {
 		return trace.Wrap(err)
 	}
+	r.RLock()
+	defer r.RUnlock()
 	return r.client.Stop(handle)
 }
 
@@ -72,6 +78,8 @@ func (r *retryingClient) Join(peers []string, replay bool) (int, error) {
 	if err := r.reinit(); err != nil {
 		return 0, trace.Wrap(err)
 	}
+	r.RLock()
+	defer r.RUnlock()
 	return r.client.Join(peers, replay)
 }
 
@@ -80,26 +88,35 @@ func (r *retryingClient) UpdateTags(tags map[string]string, delTags []string) er
 	if err := r.reinit(); err != nil {
 		return trace.Wrap(err)
 	}
+	r.RLock()
+	defer r.RUnlock()
 	return r.client.UpdateTags(tags, delTags)
 }
 
 // Close closes the client
 func (r *retryingClient) Close() error {
+	r.RLock()
+	defer r.RUnlock()
 	if r.client.IsClosed() {
 		return nil
 	}
 	return r.client.Close()
 }
 
-func (r *retryingClient) reinit() error {
-	if !r.client.IsClosed() {
+func (r *retryingClient) reinit() (err error) {
+	r.RLock()
+	client := r.client
+	r.RUnlock()
+	if !client.IsClosed() {
 		return nil
 	}
-	client, err := reinit(r.config)
+	client, err = reinit(r.config)
 	if err != nil {
 		return trace.Wrap(err)
 	}
+	r.Lock()
 	r.client = client
+	r.Unlock()
 	return nil
 }
 
@@ -112,6 +129,7 @@ func reinit(clientConfig serf.Config) (*serf.RPCClient, error) {
 }
 
 type retryingClient struct {
+	sync.RWMutex
 	client *serf.RPCClient
 	config serf.Config
 }
