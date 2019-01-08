@@ -50,7 +50,7 @@ func (_ *MonitoringSuite) TestLoadsModules(c *C) {
 				Module{Name: "ebtable_nat", ModuleState: ModuleStateLive, Instances: 1},
 				Module{Name: "ebtable_broute", ModuleState: ModuleStateLive, Instances: 1},
 			),
-			getModules: moduleReader(modulesData),
+			getModules: moduleReader(modulesPayload),
 			comment:    "loades modules",
 		},
 		{
@@ -84,12 +84,13 @@ func (_ *MonitoringSuite) TestLoadsModules(c *C) {
 
 func (_ *MonitoringSuite) TestHasModules(c *C) {
 	// exercise
-	kernelModules, err := ReadModulesFrom(bytes.NewReader(modulesData))
+	kernelModules, err := readModulesFrom(bytes.NewReader(modulesPayload), parseModule)
 
 	// verify
 	c.Assert(err, IsNil)
+	modulesMap := NewModules(kernelModules...)
 	for _, module := range modules("ebtables", "br_netfilter") {
-		c.Assert(kernelModules.IsLoaded(module), Equals, true)
+		c.Assert(modulesMap.IsLoaded(module), Equals, true)
 	}
 }
 
@@ -104,13 +105,13 @@ func (_ *MonitoringSuite) TestValidatesModules(c *C) {
 	}{
 		{
 			modules: modules("ebtables", "br_netfilter"),
-			reader:  moduleReader(modulesData),
+			reader:  moduleReader(modulesPayload),
 			probes:  health.Probes{prober.newSuccess()},
 			comment: "running",
 		},
 		{
 			modules: modules("required"),
-			reader:  moduleReader(modulesData),
+			reader:  moduleReader(modulesPayload),
 			probes: health.Probes{
 				prober.newRaisedProbe(probe{
 					detail: `kernel module "required" not loaded`,
@@ -121,7 +122,7 @@ func (_ *MonitoringSuite) TestValidatesModules(c *C) {
 		},
 		{
 			modules: nil,
-			reader:  moduleReader(modulesData),
+			reader:  moduleReader(modulesPayload),
 			probes:  health.Probes{prober.newSuccess()},
 			comment: "skip test for empty requirements",
 		},
@@ -149,7 +150,7 @@ func (_ *MonitoringSuite) TestValidatesModules(c *C) {
 					Names: []string{"alternative_required"},
 				},
 			},
-			reader:  moduleReader(modulesData),
+			reader:  moduleReader(modulesPayload),
 			probes:  health.Probes{prober.newSuccess()},
 			comment: "successful match based on alternative module name",
 		},
@@ -167,9 +168,23 @@ func (_ *MonitoringSuite) TestValidatesModules(c *C) {
 	}
 }
 
+func (*MonitoringSuite) TestReadsBuiltinModules(c *C) {
+	modules, err := readModulesFrom(bytes.NewReader(builtinsPayload), parseBuiltinModule)
+	c.Assert(err, IsNil)
+	c.Assert(byName(modules), test.SortedSliceEquals, byName([]Module{
+		Module{Name: "dns_resolver", ModuleState: ModuleBuiltin},
+		Module{Name: "ipv6", ModuleState: ModuleBuiltin},
+		Module{Name: "usb-common", ModuleState: ModuleBuiltin},
+	}))
+}
+
 func moduleReader(data []byte) func() (Modules, error) {
 	return func() (Modules, error) {
-		return ReadModulesFrom(bytes.NewReader(data))
+		modules, err := readModulesFrom(bytes.NewReader(data), parseModule)
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
+		return NewModules(modules...), nil
 	}
 }
 
@@ -195,7 +210,7 @@ func modules(names ...string) (result []ModuleRequest) {
 	return result
 }
 
-var modulesData = []byte(`br_netfilter 22209 0 - Live 0xffffffffc063f000
+var modulesPayload = []byte(`br_netfilter 22209 0 - Live 0xffffffffc063f000
 nf_conntrack_netlink 40449 0 - Live 0xffffffffc0659000
 alternative_required 1 0 - Live 0xffffffffb123a019
 ebtable_filter 12827 1 - Live 0xffffffffc0415000
@@ -203,3 +218,13 @@ ebtables 35009 3 ebtable_nat,ebtable_broute,ebtable_filter, Live 0xffffffffc0407
 nfsd 342857 1 - Live 0xffffffffc033f000
 ebtable_nat 12807 1 - Live 0xffffffffc058c000
 ebtable_broute 12731 1 - Live 0xffffffffc0597000`)
+
+var builtinsPayload = []byte(`kernel/net/dns_resolver/dns_resolver.ko
+kernel/net/ipv6/ipv6.ko
+kernel/drivers/usb/common/usb-common.ko`)
+
+type byName []Module
+
+func (r byName) Len() int           { return len(r) }
+func (r byName) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
+func (r byName) Less(i, j int) bool { return r[i].Name < r[j].Name }
