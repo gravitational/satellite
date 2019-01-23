@@ -18,6 +18,7 @@ package test
 
 import (
 	"reflect"
+	"sort"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/kylelemons/godebug/diff"
@@ -41,10 +42,37 @@ func (checker *deepCompareChecker) Check(params []interface{}, names []string) (
 	return result, error
 }
 
+// SortedSliceEquals is a gocheck checker that compares two slices after sorting them.
+// It expects the slice parameters to implement sort.Interface
+var SortedSliceEquals check.Checker = &sliceEqualsChecker{
+	&check.CheckerInfo{Name: "SortedSliceEquals", Params: []string{"obtained", "expected"}},
+}
+
+// Check expects two slices in params (obtained and expected).
+// The slices are sorted before comparison, hence they are expected to implement sort.Interface.
+// If comparison fails, it returns a readable diff in error.
+// Implements gocheck checker interface
+func (checker *sliceEqualsChecker) Check(params []interface{}, names []string) (result bool, error string) {
+	obtained := params[0].(sort.Interface)
+	sort.Sort(obtained)
+	expected := params[1].(sort.Interface)
+	sort.Sort(expected)
+
+	result = reflect.DeepEqual(obtained, expected)
+	if !result {
+		error = Diff(obtained, expected)
+	}
+	return result, error
+}
+
 // Diff returns user friendly difference between two objects
 func Diff(a, b interface{}) string {
 	d := &spew.ConfigState{Indent: " ", DisableMethods: true, DisablePointerMethods: true, DisablePointerAddresses: true}
 	return diff.Diff(d.Sdump(a), d.Sdump(b))
+}
+
+type sliceEqualsChecker struct {
+	*check.CheckerInfo
 }
 
 type deepCompareChecker struct {
