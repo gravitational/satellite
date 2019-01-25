@@ -40,7 +40,7 @@ type serfClient interface {
 	UpdateTags(tags map[string]string, delTags []string) error
 }
 
-func newRetryingClient(clientConfig serf.Config) (*retryingClient, error) {
+func newSerfClient(clientConfig serf.Config) (*retryingClient, error) {
 	client, err := reinit(clientConfig)
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -104,9 +104,9 @@ func (r *retryingClient) Close() error {
 }
 
 func (r *retryingClient) reinit() (err error) {
-	r.RLock()
+	r.Lock()
+	defer r.Unlock()
 	client := r.client
-	r.RUnlock()
 	if !client.IsClosed() {
 		return nil
 	}
@@ -114,9 +114,7 @@ func (r *retryingClient) reinit() (err error) {
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	r.Lock()
 	r.client = client
-	r.Unlock()
 	return nil
 }
 

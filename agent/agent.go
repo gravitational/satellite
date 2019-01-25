@@ -104,7 +104,7 @@ func New(config *Config) (Agent, error) {
 	clientConfig := serf.Config{
 		Addr: config.SerfRPCAddr,
 	}
-	client, err := newRetryingClient(clientConfig)
+	client, err := newSerfClient(clientConfig)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to connect to serf")
 	}
