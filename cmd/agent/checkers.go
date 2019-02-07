@@ -68,6 +68,7 @@ func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeCon
 	node.AddChecker(monitoring.DockerHealth(config.dockerAddr))
 	node.AddChecker(etcdChecker)
 	node.AddChecker(monitoring.SystemdHealth())
+	node.AddChecker(monitoring.PingHealth(node, config.role))
 
 	if !config.disableInterPodCheck {
 		node.AddChecker(monitoring.InterPodCommunication(kubeConfig, config.nettestContainerImage))
