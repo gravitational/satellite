@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/agent/health"
 	"github.com/gravitational/trace"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -57,6 +58,12 @@ func KubeletHealth(addr string) health.Checker {
 // NodesStatusHealth creates a checker that reports a number of ready kubernetes nodes
 func NodesStatusHealth(config KubeConfig, nodesReadyThreshold int) health.Checker {
 	return NewNodesStatusChecker(config, nodesReadyThreshold)
+}
+
+// PingHealth creates a checker that monitors ping values between Master nodes
+// and other nodes
+func PingHealth(node agent.Agent, role string) health.Checker {
+	return &PingChecker{}
 }
 
 // EtcdHealth creates a checker that checks health of etcd
