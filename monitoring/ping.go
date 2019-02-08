@@ -37,7 +37,7 @@ func (c *PingChecker) Name() string {
 	return PingCheckerID
 }
 
-// Check verifies that all nodes' ping with Master Nodes is lowed than the
+// Check verifies that all nodes' ping with Master Nodes is lower than the
 // desired threshold
 // Implements health.Checker
 func (c *PingChecker) Check(ctx context.Context, r health.Reporter) {
