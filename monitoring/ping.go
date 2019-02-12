@@ -46,7 +46,7 @@ type PingChecker struct {
 	role        string
 }
 
-// Name returns the check name
+// Name returns the checker name
 // Implements health.Checker
 func (c *PingChecker) Name() string {
 	return PingCheckerID
