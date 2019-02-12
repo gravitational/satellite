@@ -30,7 +30,7 @@ import (
 	"github.com/gravitational/version"
 
 	log "github.com/sirupsen/logrus"
-	kingpin "gopkg.in/alecthomas/kingpin.v2"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 func init() {
