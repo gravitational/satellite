@@ -30,7 +30,7 @@ import (
 	"github.com/gravitational/version"
 
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/alecthomas/kingpin.v2"
+	kingpin "gopkg.in/alecthomas/kingpin.v2"
 )
 
 func init() {
@@ -148,6 +148,7 @@ func run() error {
 		}
 		monitoringConfig := &config{
 			role:                 agent.Role(agentRole),
+			serfRPCAddr:          *cagentSerfRPCAddr,
 			kubeconfigPath:       *cagentKubeconfig,
 			kubeletAddr:          *cagentKubeletAddr,
 			dockerAddr:           *cagentDockerAddr,
