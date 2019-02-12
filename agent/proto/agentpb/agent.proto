@@ -112,12 +112,37 @@ message Probe {
   Severity severity = 7;
 }
 
+service Agent {
+  rpc Status(StatusRequest) returns (StatusResponse) {}
+  rpc LocalStatus(LocalStatusRequest) returns (LocalStatusResponse) {}
+}
+
 message Timestamp {
   int64 seconds = 1;
   int32 nanoseconds = 2;
 }
 
-service Agent {
-  rpc Status(StatusRequest) returns (StatusResponse) {}
-  rpc LocalStatus(LocalStatusRequest) returns (LocalStatusResponse) {}
+message Heartbeat {
+  enum Type {
+    UNKNOWN = 0;
+    REQUEST = 1;
+    ACK = 2;
+  }
+  // Type marks this message as a request or response
+  Type type = 1;
+
+  // timestamp embeds the timestamp of the request in the message, used for RTT calculations
+  // copied from request to ack to calcualte rtt
+  string timestamp = 2;
+  // node_name is the name of the node that the pod is running on
+  string node_name = 3;
+  // restart_id is a UUID assigned to each pod during start
+  // used to detect if the pod / node has restarted
+  // only used in the request
+  string restart_id = 4;
+  // count is an incremental id assigned to each request
+  // jumps in the count are used to detect packet loss
+  int64 count = 5;
 }
+
+
