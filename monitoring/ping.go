@@ -82,7 +82,7 @@ func (c *PingChecker) Check(ctx context.Context, r health.Reporter) {
 	for node := range nodes {
 		// FIXME: BEGINIF if other node is master {
 		pinger, err := ping.NewPinger(node.Addr)
-		if err != nill {
+		if err != nil {
 			log.Printf("got an error while trying to ping %v - %v", node.Addr,
 				trace.Wrap(err))
 			return
