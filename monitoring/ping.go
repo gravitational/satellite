@@ -100,11 +100,6 @@ func (c *PingChecker) Check(ctx context.Context, r health.Reporter) {
 				Status:  pb.Probe_Failed,
 			})
 		}
-
-		r.Add(&pb.Probe{
-			Checker: c.Name(),
-			Status:  pb.Probe_Terminated,
-		})
 		// FIXME: ENDIF}
 	}
 
