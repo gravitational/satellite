@@ -30,6 +30,7 @@ import (
 
 const (
 	PingCheckerID = "ping-checker"
+	slidingWindowSize := 10 // number of ping results to consider per iteration
 )
 
 func NewPingChecker(serfRPCaddr string, role string) health.Checker {
@@ -57,7 +58,6 @@ func (c *PingChecker) Name() string {
 // Implements health.Checker
 func (c *PingChecker) Check(ctx context.Context, r health.Reporter) {
 	RttThreshold := 100     // ms
-	slidingWindowSize := 10 // number of ping results to consider per iteration
 
 	// set Probe to be running
 	r.Add(&pb.Probe{
