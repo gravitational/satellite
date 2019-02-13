@@ -57,7 +57,9 @@ func (c *PingChecker) Name() string {
 // desired threshold
 // Implements health.Checker
 func (c *PingChecker) Check(ctx context.Context, r health.Reporter) {
-	RttThreshold := 100     // ms
+	RttThreshold := 25     // ms
+	// FIXME: #1 RttThreshold will become configurable in future
+	// FIXME: #2 Send RttThreshold value to metrics
 
 	// set Probe to be running
 	r.Add(&pb.Probe{
