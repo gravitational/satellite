@@ -77,16 +77,6 @@ func (c *PingChecker) Check(ctx context.Context, r health.Reporter) {
 	}
 	defer client.Close()
 
-	// only run PingCheck between masters
-	role := c.role
-	if role != agent.RoleMaster {
-		r.Add(&pb.Probe{
-			Checker: c.Name(),
-			Status:  pb.Probe_Terminated,
-		})
-		return // skip check if the node is not a master
-	}
-
 	// ping other Master nodes and store results in Serf
 	nodes := client.Members()
 	for node := range nodes {
