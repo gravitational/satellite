@@ -85,6 +85,10 @@ func (c *PingChecker) Check(ctx context.Context, r health.Reporter) {
 		if err != nil {
 			log.Printf("got an error while trying to ping %v - %v", node.Addr,
 				trace.Wrap(err))
+			r.Add(&pb.Probe{
+				Checker: c.Name(),
+				Status:  pb.Probe_Failed,
+			})
 			return
 		}
 		pinger.Count = slidingWindowSize // FIXME: does need to be set to actually use the last nth check results?
