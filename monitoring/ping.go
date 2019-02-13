@@ -94,10 +94,10 @@ func (c *PingChecker) Check(ctx context.Context, r health.Reporter) {
 		pinger.Count = slidingWindowSize // FIXME: does need to be set to actually use the last nth check results?
 		pinger.Run()
 		stats := pinger.Statistics()
-		if stats.AvgRtt <= RttThreshold {
+		if stats.AvgRtt >= RttThreshold {
 			r.Add(&pb.Probe{
 				Checker: c.Name(),
-				Status:  pb.Probe_Critical,
+				Status:  pb.Probe_Failed,
 			})
 		}
 
