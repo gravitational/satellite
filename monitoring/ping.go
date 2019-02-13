@@ -40,8 +40,8 @@ func NewPingChecker(serfRPCaddr string, role string) health.Checker {
 	}
 }
 
-// PingChecker is a checker that verifies if ping between Master Nodes and other
-// ones is below a specified threshold
+// PingChecker is a checker that verify that ping times (RTT) between nodes in
+// the cluster are within a predefined threshold
 type PingChecker struct {
 	serfRPCAddr string
 	role        string
