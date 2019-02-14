@@ -54,7 +54,7 @@ func (c *PingChecker) Name() string {
 // desired threshold
 // Implements health.Checker
 func (c *PingChecker) Check(ctx context.Context, r health.Reporter) {
-	RttThreshold := 25     // ms
+	RttThreshold := int64(25) // ms
 	// FIXME: #1 RttThreshold will become configurable in future
 	// FIXME: #2 Send RttThreshold value to metrics
 
@@ -95,7 +95,7 @@ func (c *PingChecker) Check(ctx context.Context, r health.Reporter) {
 		pinger.Count = slidingWindowSize // FIXME: does need to be set to actually use the last nth check results?
 		pinger.Run()
 		stats := pinger.Statistics()
-		if stats.AvgRtt >= RttThreshold {
+		if stats.AvgRtt.Nanoseconds()/1000 >= RttThreshold { // convert to ms then compare
 			r.Add(&pb.Probe{
 				Checker: c.Name(),
 				Status:  pb.Probe_Failed,
