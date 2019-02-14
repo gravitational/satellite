@@ -20,7 +20,6 @@ import (
 	"context"
 	"log"
 
-	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/trace"
@@ -29,14 +28,13 @@ import (
 )
 
 const (
-	PingCheckerID = "ping-checker"
-	slidingWindowSize := 10 // number of ping results to consider per iteration
+	PingCheckerID     = "ping-checker"
+	slidingWindowSize = 10 // number of ping results to consider per iteration
 )
 
-func NewPingChecker(serfRPCaddr string, role string) health.Checker {
+func NewPingChecker(serfRPCAddr string) health.Checker {
 	return &PingChecker{
-		serfRPCAddr: serfRPCaddr,
-		role:        role,
+		serfRPCAddr: serfRPCAddr,
 	}
 }
 
@@ -44,7 +42,6 @@ func NewPingChecker(serfRPCaddr string, role string) health.Checker {
 // the cluster are within a predefined threshold
 type PingChecker struct {
 	serfRPCAddr string
-	role        string
 }
 
 // Name returns the checker name
@@ -71,19 +68,23 @@ func (c *PingChecker) Check(ctx context.Context, r health.Reporter) {
 	clientConfig := serf.Config{
 		Addr: c.serfRPCAddr,
 	}
-	client, err := serf.ClientFromConfig(clientConfig)
+	client, err := serf.ClientFromConfig(&clientConfig)
 	if err != nil {
 		return // nil, trace.Wrap(err, "failed to connect to serf")
 	}
 	defer client.Close()
 
 	// ping other Master nodes and store results in Serf
-	nodes := client.Members()
-	for node := range nodes {
+	nodes, err := client.Members()
+	if err != nil {
+		log.Printf("failed to fetch Serf Members - %v", trace.Wrap(err))
+		return
+	}
+	for _, node := range nodes {
 		// FIXME: BEGINIF if other node is master {
-		pinger, err := ping.NewPinger(node.Addr)
+		pinger, err := ping.NewPinger(node.Addr.String())
 		if err != nil {
-			log.Printf("got an error while trying to ping %v - %v", node.Addr,
+			log.Printf("got an error while trying to ping %v - %v", node.Addr.String(),
 				trace.Wrap(err))
 			r.Add(&pb.Probe{
 				Checker: c.Name(),
