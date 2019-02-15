@@ -87,7 +87,6 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 	// threshold
 	// FIXME: need to skip pinging "self"
 	for _, node := range nodes {
-		// FIXME: BEGINIF if other node is master {
 		pinger, err := ping.NewPinger(node.Addr.String())
 		if err != nil {
 			log.Printf("got an error while trying to ping %v - %v", node.Addr.String(),
@@ -114,7 +113,6 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 				Status:  pb.Probe_Failed,
 			})
 		}
-		// FIXME: ENDIF}
 	}
 
 	return
