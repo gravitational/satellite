@@ -30,7 +30,8 @@ import (
 
 const (
 	pingCheckerID     = "ping-checker"
-	slidingWindowSize = 10 // number of ping results to consider per iteration
+	slidingWindowSize = 10   // number of ping results to consider per iteration
+	pingRttQuantile   = 95.0 // quantile used to check against Rtt results
 )
 
 // NewPingChecker implements and return an health.Checker
@@ -56,7 +57,7 @@ func (c *pingChecker) Name() string {
 // desired threshold
 // Implements health.Checker
 func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
-	RttThreshold := int64(25) // ms
+	RttThreshold := int64(25 * 1e6) // ms to nanoseconds used by comparison
 	// FIXME: #1 RttThreshold will become configurable in future
 	// FIXME: #2 Send RttThreshold value to metrics
 
@@ -94,10 +95,17 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 			})
 			return
 		}
-		pinger.Count = slidingWindowSize // FIXME: does need to be set to actually use the last nth check results?
-		pinger.Run()
-		stats := pinger.Statistics()
-		if stats.AvgRtt.Nanoseconds()/1000 >= RttThreshold { // convert to ms then compare
+
+		// pingStats store ping statistics from 0 to 10000 ms (10 seconds)
+		// up to 3 digits precision
+		pingStats := hdrhistogram.New(0, 10000, 3)
+		for i := 0; i < slidingWindowSize; i++ {
+			pinger.Run()
+			rttNanoSec := pinger.Statistics().MaxRtt.Nanoseconds()
+			pingStats.RecordValue(rttNanoSec)
+		}
+
+		if pingStats.ValueAtQuantile(pingRttQuantile) >= RttThreshold {
 			r.Add(&pb.Probe{
 				Checker: c.Name(),
 				Status:  pb.Probe_Failed,
