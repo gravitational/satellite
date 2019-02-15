@@ -29,32 +29,32 @@ import (
 )
 
 const (
-	PingCheckerID     = "ping-checker"
+	pingCheckerID     = "ping-checker"
 	slidingWindowSize = 10 // number of ping results to consider per iteration
 )
 
 func NewPingChecker(serfRPCAddr string) health.Checker {
-	return &PingChecker{
+	return &pingChecker{
 		serfRPCAddr: serfRPCAddr,
 	}
 }
 
-// PingChecker is a checker that verify that ping times (RTT) between nodes in
+// pingChecker is a checker that verify that ping times (RTT) between nodes in
 // the cluster are within a predefined threshold
-type PingChecker struct {
+type pingChecker struct {
 	serfRPCAddr string
 }
 
 // Name returns the checker name
 // Implements health.Checker
-func (c *PingChecker) Name() string {
-	return PingCheckerID
+func (c *pingChecker) Name() string {
+	return pingCheckerID
 }
 
 // Check verifies that all nodes' ping with Master Nodes is lower than the
 // desired threshold
 // Implements health.Checker
-func (c *PingChecker) Check(ctx context.Context, r health.Reporter) {
+func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 	RttThreshold := int64(25) // ms
 	// FIXME: #1 RttThreshold will become configurable in future
 	// FIXME: #2 Send RttThreshold value to metrics
