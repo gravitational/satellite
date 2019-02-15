@@ -77,12 +77,15 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 	}
 	defer client.Close()
 
-	// ping other Master nodes and store results in Serf
+	// retrieve other nodes using Serf members
 	nodes, err := client.Members()
 	if err != nil {
 		log.Printf("failed to fetch Serf Members - %v", trace.Wrap(err))
 		return
 	}
+	// ping each other node and fail in case the results are over a specified
+	// threshold
+	// FIXME: need to skip pinging "self"
 	for _, node := range nodes {
 		// FIXME: BEGINIF if other node is master {
 		pinger, err := ping.NewPinger(node.Addr.String())
