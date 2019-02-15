@@ -20,6 +20,7 @@ import (
 	"context"
 	"log"
 
+	"github.com/codahale/hdrhistogram"
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/trace"
