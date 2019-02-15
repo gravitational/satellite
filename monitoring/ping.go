@@ -33,6 +33,7 @@ const (
 	slidingWindowSize = 10 // number of ping results to consider per iteration
 )
 
+// NewPingChecker implements and return an health.Checker
 func NewPingChecker(serfRPCAddr string) health.Checker {
 	return &pingChecker{
 		serfRPCAddr: serfRPCAddr,
