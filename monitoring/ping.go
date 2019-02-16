@@ -19,13 +19,13 @@ package monitoring
 import (
 	"context"
 	"log"
+	"strings"
 
 	"github.com/codahale/hdrhistogram"
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
-	ping "github.com/sparrc/go-ping"
 )
 
 const (
@@ -83,27 +83,48 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 		log.Printf("failed to fetch Serf Members - %v", trace.Wrap(err))
 		return
 	}
+
+	// finding what is the current node
+	var selfNode serf.Member
+	for _, node := range nodes {
+		// cut the port portion of the address after the ":" away
+		serfRPCAddrIP := strings.SplitN(c.serfRPCAddr, ":", 1)[0]
+		if node.Addr.String() == serfRPCAddrIP {
+			selfNode = node
+		}
+	}
+
+	selfCoord, err := client.GetCoordinate(selfNode.Name)
+	if err != nil || selfCoord == nil {
+		log.Printf("Error getting coordinates: %s", err)
+		r.Add(&pb.Probe{
+			Checker: c.Name(),
+			Status:  pb.Probe_Failed,
+		})
+		return
+	}
 	// ping each other node and fail in case the results are over a specified
 	// threshold
-	// FIXME: need to skip pinging "self"
 	for _, node := range nodes {
-		pinger, err := ping.NewPinger(node.Addr.String())
+		// skip pinging self
+		if node.Addr.String() == selfNode.Addr.String() {
+			continue
+		}
+		coord2, err := client.GetCoordinate(node.Name)
 		if err != nil {
-			log.Printf("got an error while trying to ping %v - %v", node.Addr.String(),
-				trace.Wrap(err))
-			r.Add(&pb.Probe{
-				Checker: c.Name(),
-				Status:  pb.Probe_Failed,
-			})
-			return
+			log.Printf("Error getting coordinates: %s", err)
+			continue
+		}
+		if coord2 == nil {
+			log.Printf("Could not find a coordinate for node %q", nodes[1])
+			continue
 		}
 
 		// pingStats store ping statistics from 0 to 10000 ms (10 seconds)
 		// up to 3 digits precision
 		pingStats := hdrhistogram.New(0, 10000, 3)
 		for i := 0; i < slidingWindowSize; i++ {
-			pinger.Run()
-			rttNanoSec := pinger.Statistics().MaxRtt.Nanoseconds()
+			rttNanoSec := selfCoord.DistanceTo(coord2).Nanoseconds()
 			pingStats.RecordValue(rttNanoSec)
 		}
 
