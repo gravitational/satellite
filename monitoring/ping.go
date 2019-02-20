@@ -96,7 +96,7 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 
 	selfCoord, err := client.GetCoordinate(selfNode.Name)
 	if err != nil || selfCoord == nil {
-		log.Printf("Error getting coordinates: %s", err)
+		log.Printf("error getting coordinates: %s", err)
 		r.Add(&pb.Probe{
 			Checker: c.Name(),
 			Status:  pb.Probe_Failed,
@@ -112,11 +112,11 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 		}
 		coord2, err := client.GetCoordinate(node.Name)
 		if err != nil {
-			log.Printf("Error getting coordinates: %s", err)
+			log.Printf("error getting coordinates: %s", err)
 			continue
 		}
 		if coord2 == nil {
-			log.Printf("Could not find a coordinate for node %q", nodes[1])
+			log.Printf("could not find a coordinate for node %q", nodes[1])
 			continue
 		}
 
@@ -129,6 +129,7 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 		}
 
 		if pingStats.ValueAtQuantile(pingRttQuantile) >= RttThreshold {
+			log.Printf("slow ping between nodes detected. Value %v over threshold %v", pingRttQuantile, RttThreshold)
 			r.Add(&pb.Probe{
 				Checker: c.Name(),
 				Status:  pb.Probe_Failed,
@@ -136,5 +137,6 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 		}
 	}
 
+	log.Printf("ping value %v below threshold %v", pingRttQuantile, RttThreshold)
 	return
 }
