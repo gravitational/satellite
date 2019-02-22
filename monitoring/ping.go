@@ -59,7 +59,7 @@ func (c *pingChecker) Name() string {
 // desired threshold
 // Implements health.Checker
 func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
-	RttThreshold := int64(25 * 1e6) // ms to nanoseconds used by comparison
+	RttThreshold := int64(1000 * 1e6) // ms to nanoseconds used by comparison
 	// FIXME: #1 RttThreshold will become configurable in future
 	// FIXME: #2 Send RttThreshold value to metrics
 
