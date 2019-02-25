@@ -18,7 +18,6 @@ package monitoring
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/gravitational/satellite/agent/health"
@@ -69,7 +68,7 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 	}
 	client, err := serf.ClientFromConfig(&clientConfig)
 	if err != nil {
-		log.Printf("error while connecting to Serf: %v", err)
+		log.Errorf("error while connecting to Serf: %v", err.Error())
 		r.Add(&pb.Probe{
 			Checker: c.Name(),
 			Status:  pb.Probe_Failed,
@@ -81,7 +80,7 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 	// retrieve other nodes using Serf members
 	nodes, err := client.Members()
 	if err != nil {
-		log.Printf("failed fetching Serf Members - %v", trace.Wrap(err))
+		log.Errorf("failed fetching Serf Members - %v", err.Error())
 		r.Add(&pb.Probe{
 			Checker: c.Name(),
 			Status:  pb.Probe_Failed,
@@ -101,7 +100,7 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 
 	selfCoord, err := client.GetCoordinate(selfNode.Name)
 	if err != nil || selfCoord == nil {
-		log.Printf("error getting coordinates: %s", err)
+		log.Errorf("error getting coordinates: %s", err)
 		r.Add(&pb.Probe{
 			Checker: c.Name(),
 			Status:  pb.Probe_Failed,
@@ -119,7 +118,7 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 
 		coord2, err := client.GetCoordinate(node.Name)
 		if err != nil {
-			log.Printf("error getting coordinates: %s", err)
+			log.Errorf("error getting coordinates: %s", err)
 			r.Add(&pb.Probe{
 				Checker: c.Name(),
 				Status:  pb.Probe_Failed,
@@ -127,7 +126,8 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 			continue
 		}
 		if coord2 == nil {
-			log.Printf("could not find a coordinate for node %q", nodes[1])
+			err = trace.NotFound("could not find a coordinate for node %q", nodes[1])
+			log.Error(err)
 			r.Add(&pb.Probe{
 				Checker: c.Name(),
 				Status:  pb.Probe_Failed,
@@ -146,9 +146,8 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 		log.Debugf("%s <-ping-> $s = %v", selfNode.Name, node.Name, pingStats.ValueAtQuantile(pingRttQuantile))
 
 		if pingStats.ValueAtQuantile(pingRttQuantile) >= RttThreshold {
-			errMsg := fmt.Sprintf("slow ping between nodes detected. Value %v over threshold %v",
+			log.Errorf("slow ping between nodes detected. Value %v over threshold %v",
 				pingRttQuantile, RttThreshold)
-			log.Print(errMsg)
 			r.Add(&pb.Probe{
 				Checker: c.Name(),
 				Status:  pb.Probe_Failed,
