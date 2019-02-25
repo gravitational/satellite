@@ -69,7 +69,8 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 	}
 	client, err := serf.ClientFromConfig(&clientConfig)
 	if err != nil {
-		log.Errorf("error while connecting to Serf: %v", err.Error())
+		log.Errorf("error while connecting to Serf via IP %v. Error: %v",
+			c.serfRPCAddr, err.Error())
 		r.Add(&pb.Probe{
 			Checker: c.Name(),
 			Status:  pb.Probe_Failed,
