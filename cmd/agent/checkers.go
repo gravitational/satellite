@@ -17,6 +17,8 @@ limitations under the License.
 package main
 
 import (
+	log "github.com/sirupsen/logrus"
+
 	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/cmd"
 	"github.com/gravitational/satellite/monitoring"
@@ -62,6 +64,8 @@ func addCheckers(node agent.Agent, config *config) (err error) {
 }
 
 func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeConfig) error {
+	log.Debugf("Monitoring Agent started with config %#v", config)
+
 	etcdChecker, err := monitoring.EtcdHealth(config.etcd)
 	if err != nil {
 		return trace.Wrap(err)
