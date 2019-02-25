@@ -63,6 +63,7 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 	// FIXME: #2 Send RttThreshold value to metrics
 
 	// fetch serf config and intantiate client
+	log.Debugf("Using Serf IP: %v", c.serfRPCAddr)
 	clientConfig := serf.Config{
 		Addr: c.serfRPCAddr,
 	}
