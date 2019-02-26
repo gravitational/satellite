@@ -18,7 +18,6 @@ package monitoring
 
 import (
 	"context"
-	"strings"
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
@@ -36,9 +35,10 @@ const (
 )
 
 // NewPingChecker implements and return an health.Checker
-func NewPingChecker(serfRPCAddr string) health.Checker {
+func NewPingChecker(serfRPCAddr string, serfRPCName string) health.Checker {
 	return &pingChecker{
 		serfRPCAddr: serfRPCAddr,
+		serfRPCName: serfRPCName,
 	}
 }
 
@@ -46,6 +46,7 @@ func NewPingChecker(serfRPCAddr string) health.Checker {
 // the cluster are within a predefined threshold
 type pingChecker struct {
 	serfRPCAddr string
+	serfRPCName string
 }
 
 // Name returns the checker name
@@ -64,6 +65,7 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 
 	// fetch serf config and intantiate client
 	log.Debugf("Using Serf IP: %v", c.serfRPCAddr)
+	log.Debugf("Using Serf Name: %v", c.serfRPCName)
 	clientConfig := serf.Config{
 		Addr: c.serfRPCAddr,
 	}
@@ -94,10 +96,17 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 	var selfNode serf.Member
 	for _, node := range nodes {
 		// cut the port portion of the address after the ":" away
-		serfRPCAddrIP := strings.SplitN(c.serfRPCAddr, ":", 1)[0]
-		if node.Addr.String() == serfRPCAddrIP {
+		if node.Name == c.serfRPCName {
 			selfNode = node
 		}
+	}
+	if selfNode.Name == "" {
+		log.Errorf("error getting selfNode config: %s", c.serfRPCName)
+		r.Add(&pb.Probe{
+			Checker: c.Name(),
+			Status:  pb.Probe_Failed,
+		})
+		return
 	}
 
 	selfCoord, err := client.GetCoordinate(selfNode.Name)
