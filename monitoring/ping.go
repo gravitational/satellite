@@ -102,7 +102,7 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 
 	selfCoord, err := client.GetCoordinate(selfNode.Name)
 	if err != nil || selfCoord == nil {
-		log.Errorf("error getting coordinates: %s", err)
+		log.Errorf("error getting selfNode coordinates: %s -> %#v", selfNode.Name, err)
 		r.Add(&pb.Probe{
 			Checker: c.Name(),
 			Status:  pb.Probe_Failed,
@@ -120,7 +120,7 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 
 		coord2, err := client.GetCoordinate(node.Name)
 		if err != nil {
-			log.Errorf("error getting coordinates: %s", err)
+			log.Errorf("error getting coordinates: %s -> %#v", node.Name, err)
 			r.Add(&pb.Probe{
 				Checker: c.Name(),
 				Status:  pb.Probe_Failed,
