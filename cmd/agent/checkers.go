@@ -32,6 +32,8 @@ type config struct {
 	role agent.Role
 	// serfRPCAddr is the Serf RPC endpoint address
 	serfRPCAddr string
+	// serfRPCName is the Serf RPC endpoint address
+	serfRPCName string
 	// kubeconfigPath is the path to the kubeconfig file
 	kubeconfigPath string
 	// kubeletAddr is the address of the kubelet
@@ -73,7 +75,7 @@ func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeCon
 	node.AddChecker(monitoring.DockerHealth(config.dockerAddr))
 	node.AddChecker(etcdChecker)
 	node.AddChecker(monitoring.SystemdHealth())
-	node.AddChecker(monitoring.PingHealth(config.serfRPCAddr))
+	node.AddChecker(monitoring.PingHealth(config.serfRPCAddr, config.serfRPCName))
 
 	if !config.disableInterPodCheck {
 		node.AddChecker(monitoring.InterPodCommunication(kubeConfig, config.nettestContainerImage))
