@@ -52,8 +52,9 @@ func addCheckers(node agent.Agent, config *config) (err error) {
 	if err != nil {
 		return trace.Wrap(err)
 	}
-
 	kubeConfig := monitoring.KubeConfig{Client: client}
+
+	log.Debugf("Monitoring Agent started with config %#v", config)
 	switch config.role {
 	case agent.RoleMaster:
 		err = addToMaster(node, config, kubeConfig)
@@ -64,8 +65,6 @@ func addCheckers(node agent.Agent, config *config) (err error) {
 }
 
 func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeConfig) error {
-	log.Debugf("Monitoring Agent started with config %#v", config)
-
 	etcdChecker, err := monitoring.EtcdHealth(config.etcd)
 	if err != nil {
 		return trace.Wrap(err)
