@@ -29,10 +29,13 @@ import (
 )
 
 const (
-	pingCheckerID     = "ping-checker"
-	slidingWindowSize = 10   // number of ping results to consider per iteration
-	pingRttThreshold  = 15.0 // pingRTT threshold expressed in ms
-	pingRttQuantile   = 95.0 // quantile used to check against Rtt results
+	pingCheckerID               = "ping-checker"
+	slidingWindowSize           = 10    // number of ping results to consider per iteration
+	pingRttMin                  = 0     // pingRttMin set the minim value that can be recorded
+	pingRttMax                  = 10000 // pingRttMax set the maximum value that can be recorded
+	pingRttSignificativeFigures = 3     // pingRttSignificativeFigures specifies how many decimals should be recorded
+	pingRttThreshold            = 15.0  // pingRTT threshold expressed in ms
+	pingRttQuantile             = 95.0  // quantile used to check against Rtt results
 )
 
 // NewPingChecker implements and return an health.Checker
@@ -40,6 +43,7 @@ func NewPingChecker(serfRPCAddr string, serfRPCName string) health.Checker {
 	return &pingChecker{
 		serfRPCAddr: serfRPCAddr,
 		serfRPCName: serfRPCName,
+		rttStats:    nil,
 	}
 }
 
@@ -48,6 +52,7 @@ func NewPingChecker(serfRPCAddr string, serfRPCName string) health.Checker {
 type pingChecker struct {
 	serfRPCAddr string
 	serfRPCName string
+	rttStats    map[string]hdrhistogram.Histogram
 }
 
 // Name returns the checker name
@@ -151,6 +156,11 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 		pingStats := hdrhistogram.New(0, 10000, 3)
 		for i := 0; i < slidingWindowSize; i++ {
 			rttNanoSec := selfCoord.DistanceTo(coord2).Nanoseconds()
+
+			if c.rttStats[node.Name] == nil { // FIXME: NOT WORKING
+				c.rttStats[node.Name] = *hdrhistogram.New(pingRttMin, pingRttMax, pingRttSignificativeFigures)
+			}
+
 			pingStats.RecordValue(rttNanoSec)
 		}
 
