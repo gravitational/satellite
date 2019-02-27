@@ -31,6 +31,7 @@ import (
 const (
 	pingCheckerID     = "ping-checker"
 	slidingWindowSize = 10   // number of ping results to consider per iteration
+	pingRttThreshold  = 15.0 // pingRTT threshold expressed in ms
 	pingRttQuantile   = 95.0 // quantile used to check against Rtt results
 )
 
@@ -59,7 +60,6 @@ func (c *pingChecker) Name() string {
 // desired threshold
 // Implements health.Checker
 func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
-	RttThreshold := int64(15 * 1e6) // ms to nanoseconds used by comparison
 	// FIXME: #1 RttThreshold will become configurable in future
 	// FIXME: #2 Send RttThreshold value to metrics
 
@@ -154,19 +154,20 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 			pingStats.RecordValue(rttNanoSec)
 		}
 
-		log.Debugf("%s <-ping-> $s = %v", selfNode.Name, node.Name, pingStats.ValueAtQuantile(pingRttQuantile))
+		log.Debugf("%s <-ping-> %s = %d", selfNode.Name, node.Name, pingStats.ValueAtQuantile(pingRttQuantile))
 
-		if pingStats.ValueAtQuantile(pingRttQuantile) >= RttThreshold {
+		if pingStats.ValueAtQuantile(pingRttQuantile) >= int64(pingRttThreshold*1e6) { // converting from ms to nanoseconds for comparison
 			log.Errorf("slow ping between nodes detected. Value %v over threshold %v",
-				pingRttQuantile, RttThreshold)
+				pingRttQuantile, pingRttThreshold)
 			r.Add(&pb.Probe{
 				Checker: c.Name(),
 				Status:  pb.Probe_Failed,
 			})
+		} else {
+			log.Debugf("ping value %v below threshold %v ms", pingStats.ValueAtQuantile(pingRttQuantile), pingRttThreshold)
 		}
 	}
 
-	log.Debugf("ping value %v below threshold %v", pingRttQuantile, RttThreshold)
 	// set Probe to be running
 	if err != nil {
 		r.Add(&pb.Probe{
