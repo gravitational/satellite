@@ -32,7 +32,7 @@ type config struct {
 	role agent.Role
 	// serfRPCAddr is the Serf RPC endpoint address
 	serfRPCAddr string
-	// serfRPCName is the Serf RPC endpoint address
+	// serfRPCName is the Node name used in the Serf cluster as the member name
 	serfRPCName string
 	// kubeconfigPath is the path to the kubeconfig file
 	kubeconfigPath string
