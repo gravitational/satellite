@@ -158,7 +158,8 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 		for i := 0; i < slidingWindowSize; i++ {
 			rttNanoSec := selfCoord.DistanceTo(coord2).Nanoseconds()
 
-			if c.rttStats[node.Name] == nil { // FIXME: NOT WORKING
+			_, exists := c.rttStats[node.Name]
+			if !exists {
 				c.rttStats[node.Name] = *hdrhistogram.New(pingRttMin, pingRttMax, pingRttSignificativeFigures)
 			}
 
