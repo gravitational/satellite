@@ -28,8 +28,10 @@ import (
 // DNSMonitor will monitor a list of DNS servers for valid responses
 type DNSChecker struct {
 	// QuestionA is a slice of questions to ask for A (Host) records
-	QuestionA   []string
-	QuestionNS  []string
+	QuestionA []string
+	// QuestionNS is a slice of questions to ask for NS (Nameserver) records
+	QuestionNS []string
+	// Nameservers is a slice of nameserver addresses to use
 	Nameservers []string
 }
 
