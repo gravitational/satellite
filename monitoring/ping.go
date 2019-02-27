@@ -36,6 +36,7 @@ const (
 	pingRttSignificativeFigures = 3     // pingRttSignificativeFigures specifies how many decimals should be recorded
 	pingRttThreshold            = 15.0  // pingRTT threshold expressed in ms
 	pingRttQuantile             = 95.0  // quantile used to check against Rtt results
+	msToNanoSec                 = 1e6   // convert nanoSeconds to milliSeconds by multiplying by this factor
 )
 
 // NewPingChecker implements and return an health.Checker
@@ -166,7 +167,7 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 
 		log.Debugf("%s <-ping-> %s = %d", self.Name, node.Name, pingStats.ValueAtQuantile(pingRttQuantile))
 
-		if pingStats.ValueAtQuantile(pingRttQuantile) >= int64(pingRttThreshold*1e6) { // converting from ms to nanoseconds for comparison
+		if pingStats.ValueAtQuantile(pingRttQuantile) >= int64(pingRttThreshold*msToNanoSec) {
 			log.Errorf("slow ping between nodes detected. Value %v over threshold %v",
 				pingRttQuantile, pingRttThreshold)
 			r.Add(&pb.Probe{
