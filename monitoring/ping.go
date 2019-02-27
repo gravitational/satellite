@@ -93,14 +93,14 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 	}
 
 	// finding what is the current node
-	var selfNode serf.Member
+	var self serf.Member
 	for _, node := range nodes {
 		// cut the port portion of the address after the ":" away
 		if node.Name == c.serfRPCName {
-			selfNode = node
+			self = node
 		}
 	}
-	if selfNode.Name == "" {
+	if self.Name == "" {
 		log.Errorf("error getting selfNode config: %s", c.serfRPCName)
 		r.Add(&pb.Probe{
 			Checker: c.Name(),
@@ -109,9 +109,9 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 		return
 	}
 
-	selfCoord, err := client.GetCoordinate(selfNode.Name)
+	selfCoord, err := client.GetCoordinate(self.Name)
 	if err != nil || selfCoord == nil {
-		log.Errorf("error getting selfNode coordinates: %s -> %#v", selfNode.Name, err)
+		log.Errorf("error getting selfNode coordinates: %s -> %#v", self.Name, err)
 		r.Add(&pb.Probe{
 			Checker: c.Name(),
 			Status:  pb.Probe_Failed,
@@ -123,7 +123,7 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 	err = nil
 	for _, node := range nodes {
 		// skip pinging self
-		if node.Addr.String() == selfNode.Addr.String() {
+		if node.Addr.String() == self.Addr.String() {
 			continue
 		}
 
@@ -154,7 +154,7 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 			pingStats.RecordValue(rttNanoSec)
 		}
 
-		log.Debugf("%s <-ping-> %s = %d", selfNode.Name, node.Name, pingStats.ValueAtQuantile(pingRttQuantile))
+		log.Debugf("%s <-ping-> %s = %d", self.Name, node.Name, pingStats.ValueAtQuantile(pingRttQuantile))
 
 		if pingStats.ValueAtQuantile(pingRttQuantile) >= int64(pingRttThreshold*1e6) { // converting from ms to nanoseconds for comparison
 			log.Errorf("slow ping between nodes detected. Value %v over threshold %v",
