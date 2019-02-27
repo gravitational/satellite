@@ -17,13 +17,12 @@ limitations under the License.
 package main
 
 import (
-	log "github.com/sirupsen/logrus"
-
 	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/cmd"
 	"github.com/gravitational/satellite/monitoring"
 
 	"github.com/gravitational/trace"
+	log "github.com/sirupsen/logrus"
 )
 
 // config represents configuration for setting up monitoring checkers.
