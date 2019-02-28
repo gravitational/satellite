@@ -41,7 +41,7 @@ const (
 	// pingRoundtripMinimum set the minim value that can be recorded
 	pingRoundtripMinimum = 0 * second
 	// pingRoundtripMaximum set the maximum value that can be recorded
-	pingRoundtripMaximum = 10 * second
+	pingRoundtripMaximum = 10 * msToNanoSec * second
 	// pingRoundtripSignificativeFigures specifies how many decimals should be recorded
 	pingRoundtripSignificativeFigures = 3
 	// pingRoundtripThreshold sets the RTT threshold expressed in milliseconds (ms)
@@ -162,20 +162,26 @@ func (c *pingChecker) tempFunc(nodes []serf.Member, client *serf.RPCClient) erro
 			return errors.New(errMsg)
 		}
 
-		rttNanoSec := selfCoord.DistanceTo(coord2).Nanoseconds()
+		rttNanoSec := int64(selfCoord.DistanceTo(coord2).Nanoseconds())
 
 		_, exists := c.rttStats[node.Name]
 		if !exists {
 			c.rttStats[node.Name] = hdrhistogram.NewWindowed(slidingWindowSize, pingRoundtripMinimum, pingRoundtripMaximum, pingRoundtripSignificativeFigures)
 		}
 
+		log.Debugf("%d recorded values for node %s",
+			c.rttStats[node.Name].Current.TotalCount(),
+			node.Name)
 		log.Debugf("%s <-ping-> %s = %dms(latest)", self.Name, node.Name, rttNanoSec)
 		log.Debugf("%s <-ping-> %s = %dms(%.3f percentile)",
 			self.Name, node.Name,
 			c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile),
 			pingRoundtripQuantile)
 
-		c.rttStats[node.Name].Current.RecordValue(rttNanoSec)
+		err = c.rttStats[node.Name].Current.RecordValue(rttNanoSec)
+		if err != nil {
+			return err
+		}
 
 		if c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile) >= int64(pingRoundtripThreshold*msToNanoSec) {
 			errMsg := fmt.Sprintf("slow ping between nodes detected. Value %v over threshold %v",
