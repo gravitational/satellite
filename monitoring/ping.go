@@ -29,14 +29,24 @@ import (
 )
 
 const (
-	pingCheckerID               = "ping-checker" // pingCheckerID specifies the check name
-	slidingWindowSize           = 10             // slidingWindowSize specifies the sliding window use by checks
-	pingRttMin                  = 0              // pingRttMin set the minim value that can be recorded
-	pingRttMax                  = 10000          // pingRttMax set the maximum value that can be recorded
-	pingRttSignificativeFigures = 3              // pingRttSignificativeFigures specifies how many decimals should be recorded
-	pingRttThreshold            = 15.0           // pingRttThreshold sets the RTT threshold expressed in milliseconds (ms)
-	pingRttQuantile             = 95.0           // pingRttQuantile sets the quantile used while checking Histograms against Rtt results
-	msToNanoSec                 = 1e6            // msToNanoSec is used to convert nanoSeconds to milliSeconds
+	// pingCheckerID specifies the check name
+	pingCheckerID = "ping-checker"
+	// slidingWindowSize specifies the sliding window use by checks
+	slidingWindowSize = 10
+	// msToNanoSec is used to convert nanoSeconds to milliSeconds
+	msToNanoSec = 1e6
+	// second constant is used to represent a second, expressed in milliseconds
+	second = 1000
+	// pingRoundtripMinimum set the minim value that can be recorded
+	pingRoundtripMinimum = 0 * second
+	// pingRoundtripMaximum set the maximum value that can be recorded
+	pingRoundtripMaximum = 10 * second
+	// pingRoundtripSignificativeFigures specifies how many decimals should be recorded
+	pingRoundtripSignificativeFigures = 3
+	// pingRoundtripThreshold sets the RTT threshold expressed in milliseconds (ms)
+	pingRoundtripThreshold = 15.0
+	// pingRoundtripQuantile sets the quantile used while checking Histograms against Rtt results
+	pingRoundtripQuantile = 95.0
 )
 
 // NewPingChecker implements and return an health.Checker
