@@ -119,6 +119,7 @@ func (c *pingChecker) check(ctx context.Context, r health.Reporter) error {
 	return err
 }
 
+// tempFunc FIXME
 func (c *pingChecker) tempFunc(nodes []serf.Member, client *serf.RPCClient) error {
 	// finding what is the current node
 	var self serf.Member
@@ -186,7 +187,7 @@ func (c *pingChecker) tempFunc(nodes []serf.Member, client *serf.RPCClient) erro
 	return err
 }
 
-// setProbeFailed logs the error and set the Probe status to Failed
+// setProbeStatus set the Probe according to status or raise an error if one is passed via arguments
 func (c *pingChecker) setProbeStatus(ctx context.Context, r health.Reporter, err error, status pb.Probe_Type) {
 	switch status {
 	case pb.Probe_Failed:
