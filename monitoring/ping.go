@@ -55,7 +55,7 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) health.Checker {
 	return &pingChecker{
 		serfRPCAddr:    serfRPCAddr,
 		serfMemberName: serfMemberName,
-		rttStats:       make(map[string]*hdrhistogram.Histogram),
+		rttStats:       make(map[string]*hdrhistogram.WindowedHistogram),
 	}
 }
 
@@ -64,7 +64,7 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) health.Checker {
 type pingChecker struct {
 	serfRPCAddr    string
 	serfMemberName string
-	rttStats       map[string]*hdrhistogram.Histogram
+	rttStats       map[string]*hdrhistogram.WindowedHistogram
 }
 
 // Name returns the checker name
@@ -162,25 +162,22 @@ func (c *pingChecker) tempFunc(nodes []serf.Member, client *serf.RPCClient) erro
 			return errors.New(errMsg)
 		}
 
-		for i := 0; i < slidingWindowSize; i++ {
-			rttNanoSec := selfCoord.DistanceTo(coord2).Nanoseconds()
+		rttNanoSec := selfCoord.DistanceTo(coord2).Nanoseconds()
 
-			_, exists := c.rttStats[node.Name]
-			if !exists {
-				c.rttStats[node.Name] = hdrhistogram.New(pingRoundtripMinimum, pingRoundtripMaximum, pingRoundtripSignificativeFigures)
-			}
-
-			c.rttStats[node.Name].RecordValue(rttNanoSec)
+		_, exists := c.rttStats[node.Name]
+		if !exists {
+			c.rttStats[node.Name] = hdrhistogram.NewWindowed(slidingWindowSize, pingRoundtripMinimum, pingRoundtripMaximum, pingRoundtripSignificativeFigures)
 		}
 
-		log.Debugf("%s <-ping-> %s = %d", self.Name, node.Name, c.rttStats[node.Name].ValueAtQuantile(pingRoundtripQuantile))
+		c.rttStats[node.Name].Current.RecordValue(rttNanoSec)
+		log.Debugf("%s <-ping-> %s = %d", self.Name, node.Name, c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile))
 
-		if c.rttStats[node.Name].ValueAtQuantile(pingRoundtripQuantile) >= int64(pingRoundtripThreshold*msToNanoSec) {
+		if c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile) >= int64(pingRoundtripThreshold*msToNanoSec) {
 			errMsg := fmt.Sprintf("slow ping between nodes detected. Value %v over threshold %v",
 				pingRoundtripQuantile, pingRoundtripThreshold)
 			return errors.New(errMsg)
 		} else {
-			log.Debugf("ping value %v below threshold %v ms", c.rttStats[node.Name].ValueAtQuantile(pingRoundtripQuantile), pingRoundtripThreshold)
+			log.Debugf("ping value %v below threshold %v ms", c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile), pingRoundtripThreshold)
 		}
 	}
 
