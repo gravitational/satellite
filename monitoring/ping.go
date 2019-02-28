@@ -169,8 +169,13 @@ func (c *pingChecker) tempFunc(nodes []serf.Member, client *serf.RPCClient) erro
 			c.rttStats[node.Name] = hdrhistogram.NewWindowed(slidingWindowSize, pingRoundtripMinimum, pingRoundtripMaximum, pingRoundtripSignificativeFigures)
 		}
 
+		log.Debugf("%s <-ping-> %s = %dms(latest)", self.Name, node.Name, rttNanoSec)
+		log.Debugf("%s <-ping-> %s = %dms(%.3f percentile)",
+			self.Name, node.Name,
+			c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile),
+			pingRoundtripQuantile)
+
 		c.rttStats[node.Name].Current.RecordValue(rttNanoSec)
-		log.Debugf("%s <-ping-> %s = %d", self.Name, node.Name, c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile))
 
 		if c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile) >= int64(pingRoundtripThreshold*msToNanoSec) {
 			errMsg := fmt.Sprintf("slow ping between nodes detected. Value %v over threshold %v",
