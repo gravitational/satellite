@@ -188,7 +188,7 @@ func (c *pingChecker) tempFunc(nodes []serf.Member, client *serf.RPCClient) erro
 				pingRoundtripQuantile, pingRoundtripThreshold)
 			return errors.New(errMsg)
 		} else {
-			log.Debugf("ping value %dns below threshold %dns(%dms)",
+			log.Debugf("ping value %dns below threshold %vns(%vms)",
 				c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile),
 				pingRoundtripThreshold*msToNanoSec,
 				pingRoundtripThreshold)
