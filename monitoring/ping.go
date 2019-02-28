@@ -40,20 +40,16 @@ const (
 )
 
 // NewPingChecker implements and return an health.Checker
-func NewPingChecker(serfRPCAddr string, serfRPCName string) health.Checker {
+func NewPingChecker(serfRPCAddr string, serfMemberName string) health.Checker {
 	return &pingChecker{
-		serfRPCAddr: serfRPCAddr,
-		serfRPCName: serfRPCName,
-		rttStats:    nil,
+		serfMemberName: serfMemberName,
 	}
 }
 
 // pingChecker is a checker that verify that ping times (RTT) between nodes in
 // the cluster are within a predefined threshold
 type pingChecker struct {
-	serfRPCAddr string
-	serfRPCName string
-	rttStats    map[string]hdrhistogram.Histogram
+	serfMemberName string
 }
 
 // Name returns the checker name
