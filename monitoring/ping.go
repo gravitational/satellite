@@ -55,7 +55,7 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) health.Checker {
 	return &pingChecker{
 		serfRPCAddr:    serfRPCAddr,
 		serfMemberName: serfMemberName,
-		rttStats:       nil,
+		rttStats:       make(map[string]*hdrhistogram.Histogram),
 	}
 }
 
