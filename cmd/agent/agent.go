@@ -32,8 +32,6 @@ func runAgent(config *agent.Config, monitoringConfig *config, peers []string) er
 	if len(peers) > 0 {
 		log.Infof("initial cluster=%v", peers)
 	}
-	log.Debugf("starting with agentConfig=%#v", config)
-	log.Debugf("starting with monitoringConfig=%#v", monitoringConfig)
 
 	monitoringAgent, err := agent.New(config)
 	if err != nil {

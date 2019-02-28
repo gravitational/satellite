@@ -146,7 +146,6 @@ func run() error {
 			CertFile:    *cagentCertFile,
 			KeyFile:     *cagentKeyFile,
 		}
-		log.Debugf("Agent started using agentConfig %#v", agentConfig)
 		monitoringConfig := &config{
 			role:                 agent.Role(agentRole),
 			serfRPCAddr:          *cagentSerfRPCAddr,
@@ -163,7 +162,6 @@ func run() error {
 			},
 			nettestContainerImage: *cagentNettestContainerImage,
 		}
-		log.Debugf("Agent started using MonitoringConfig %#v", monitoringConfig)
 		err = runAgent(agentConfig, monitoringConfig, toAddrList(*cagentInitialCluster))
 	case cstatus.FullCommand():
 		_, err = status(*cstatusRPCPort, *cstatusLocal, *cstatusPrettyPrint, *cstatusCAFile, *cstatusCertFile, *cstatusKeyFile)
