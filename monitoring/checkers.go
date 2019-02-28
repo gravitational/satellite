@@ -61,8 +61,8 @@ func NodesStatusHealth(config KubeConfig, nodesReadyThreshold int) health.Checke
 
 // PingHealth creates a checker that monitors ping values between Master nodes
 // and other nodes
-func PingHealth(serfRPCAddr, serfRPCName string) health.Checker {
-	return NewPingChecker(serfRPCAddr, serfRPCName)
+func PingHealth(serfRPCAddr, serfMemberName string) health.Checker {
+	return NewPingChecker(serfRPCAddr, serfMemberName)
 }
 
 // EtcdHealth creates a checker that checks health of etcd

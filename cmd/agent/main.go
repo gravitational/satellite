@@ -149,7 +149,7 @@ func run() error {
 		monitoringConfig := &config{
 			role:                 agent.Role(agentRole),
 			serfRPCAddr:          *cagentSerfRPCAddr,
-			serfRPCName:          agentConfig.Name,
+			serfMemberName:       agentConfig.Name,
 			kubeconfigPath:       *cagentKubeconfig,
 			kubeletAddr:          *cagentKubeletAddr,
 			dockerAddr:           *cagentDockerAddr,
