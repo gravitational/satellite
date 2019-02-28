@@ -169,7 +169,7 @@ func (c *pingChecker) tempFunc(nodes []serf.Member, client *serf.RPCClient) erro
 			c.rttStats[node.Name] = hdrhistogram.NewWindowed(slidingWindowSize, pingRoundtripMinimum, pingRoundtripMaximum, pingRoundtripSignificativeFigures)
 		}
 
-		log.Debugf("%d recorded values for node %s",
+		log.Debugf("%d recorded ping RoundTrip values for node %s",
 			c.rttStats[node.Name].Current.TotalCount(),
 			node.Name)
 		log.Debugf("%s <-ping-> %s = %dms(latest)", self.Name, node.Name, rttNanoSec)
@@ -188,7 +188,10 @@ func (c *pingChecker) tempFunc(nodes []serf.Member, client *serf.RPCClient) erro
 				pingRoundtripQuantile, pingRoundtripThreshold)
 			return errors.New(errMsg)
 		} else {
-			log.Debugf("ping value %v below threshold %v ms", c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile), pingRoundtripThreshold)
+			log.Debugf("ping value %dns below threshold %dns(%dms)",
+				c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile),
+				pingRoundtripThreshold*msToNanoSec,
+				pingRoundtripThreshold)
 		}
 	}
 
