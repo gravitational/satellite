@@ -34,18 +34,20 @@ const (
 	pingCheckerID = "ping-checker"
 	// slidingWindowSize specifies the sliding window use by checks
 	slidingWindowSize = 10
-	// msToNanoSec is used to convert nanoSeconds to milliSeconds
-	msToNanoSec = 1e6
-	// second constant is used to represent a second, expressed in milliseconds
-	second = 1000
+	// nanosecond is used to represent nanoseconds (ns)
+	nanosecond = 1
+	// millisecond is used to represent milliseconds (ms) in nanoseconds
+	millisecond = 1e6
+	// second is used to represent seconds (s) in nanoseconds (ns)
+	second = 1e9
 	// pingRoundtripMinimum set the minim value that can be recorded
 	pingRoundtripMinimum = 0 * second
 	// pingRoundtripMaximum set the maximum value that can be recorded
-	pingRoundtripMaximum = 10 * msToNanoSec * second
+	pingRoundtripMaximum = 10 * second
 	// pingRoundtripSignificativeFigures specifies how many decimals should be recorded
 	pingRoundtripSignificativeFigures = 3
 	// pingRoundtripThreshold sets the RTT threshold expressed in milliseconds (ms)
-	pingRoundtripThreshold = 15.0
+	pingRoundtripThreshold = 15.0 * millisecond
 	// pingRoundtripQuantile sets the quantile used while checking Histograms against Rtt results
 	pingRoundtripQuantile = 95.0
 )
@@ -162,18 +164,20 @@ func (c *pingChecker) tempFunc(nodes []serf.Member, client *serf.RPCClient) erro
 			return errors.New(errMsg)
 		}
 
-		rttNanoSec := int64(selfCoord.DistanceTo(coord2).Nanoseconds())
+		rttNanoSec := selfCoord.DistanceTo(coord2).Nanoseconds()
 
 		_, exists := c.rttStats[node.Name]
 		if !exists {
-			c.rttStats[node.Name] = hdrhistogram.NewWindowed(slidingWindowSize, pingRoundtripMinimum, pingRoundtripMaximum, pingRoundtripSignificativeFigures)
+			c.rttStats[node.Name] = hdrhistogram.NewWindowed(slidingWindowSize,
+				pingRoundtripMinimum, pingRoundtripMaximum,
+				pingRoundtripSignificativeFigures)
 		}
 
 		log.Debugf("%d recorded ping RoundTrip values for node %s",
 			c.rttStats[node.Name].Current.TotalCount(),
 			node.Name)
-		log.Debugf("%s <-ping-> %s = %dms(latest)", self.Name, node.Name, rttNanoSec)
-		log.Debugf("%s <-ping-> %s = %dms(%.3f percentile)",
+		log.Debugf("%s <-ping-> %s = %dns(latest)", self.Name, node.Name, rttNanoSec)
+		log.Debugf("%s <-ping-> %s = %dns(%.2f percentile)",
 			self.Name, node.Name,
 			c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile),
 			pingRoundtripQuantile)
@@ -183,15 +187,15 @@ func (c *pingChecker) tempFunc(nodes []serf.Member, client *serf.RPCClient) erro
 			return err
 		}
 
-		if c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile) >= int64(pingRoundtripThreshold*msToNanoSec) {
+		if c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile) >= int64(pingRoundtripThreshold) {
 			errMsg := fmt.Sprintf("slow ping between nodes detected. Value %v over threshold %v",
 				pingRoundtripQuantile, pingRoundtripThreshold)
 			return errors.New(errMsg)
 		} else {
-			log.Debugf("ping value %dns below threshold %vns(%vms)",
+			log.Debugf("ping value %dns below threshold %dns(%.3fms)",
 				c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile),
-				pingRoundtripThreshold*msToNanoSec,
-				pingRoundtripThreshold)
+				pingRoundtripThreshold,
+				float64(pingRoundtripThreshold/millisecond))
 		}
 	}
 
