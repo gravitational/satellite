@@ -47,7 +47,7 @@ const (
 	// pingRoundtripSignificativeFigures specifies how many decimals should be recorded
 	pingRoundtripSignificativeFigures = 3
 	// pingRoundtripThreshold sets the RTT threshold expressed in milliseconds (ms)
-	pingRoundtripThreshold = 15.0 * millisecond
+	pingRoundtripThreshold = 15 * millisecond
 	// pingRoundtripQuantile sets the quantile used while checking Histograms against Rtt results
 	pingRoundtripQuantile = 95.0
 )
@@ -176,8 +176,8 @@ func (c *pingChecker) tempFunc(nodes []serf.Member, client *serf.RPCClient) erro
 		log.Debugf("%d recorded ping RoundTrip values for node %s",
 			c.rttStats[node.Name].Current.TotalCount(),
 			node.Name)
-		log.Debugf("%s <-ping-> %s = %dns(latest)", self.Name, node.Name, rttNanoSec)
-		log.Debugf("%s <-ping-> %s = %dns(%.2f percentile)",
+		log.Debugf("%s <-ping-> %s = %dns [latest]", self.Name, node.Name, rttNanoSec)
+		log.Debugf("%s <-ping-> %s = %dns [%.2f percentile]",
 			self.Name, node.Name,
 			c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile),
 			pingRoundtripQuantile)
@@ -192,10 +192,9 @@ func (c *pingChecker) tempFunc(nodes []serf.Member, client *serf.RPCClient) erro
 				pingRoundtripQuantile, pingRoundtripThreshold)
 			return errors.New(errMsg)
 		} else {
-			log.Debugf("ping value %dns below threshold %dns(%.3fms)",
+			log.Debugf("ping value %dns below threshold %.3fms (%dns)",
 				c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile),
-				pingRoundtripThreshold,
-				float64(pingRoundtripThreshold/millisecond))
+				float64(pingRoundtripThreshold/millisecond), pingRoundtripThreshold)
 		}
 	}
 
