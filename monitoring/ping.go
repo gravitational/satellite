@@ -137,13 +137,17 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 	// ping each other node and fail in case the results are over a specified
 	// threshold
 	for _, node := range nodes {
+		// skip pinging self
+		if self.Addr.String() == node.Addr.String() {
+			continue
+		}
 
 		rttNanoSec, err := calculateRTT(client, self, node)
 		if err != nil {
 			return err
 		}
 
-		err = c.storePingInHDR(rttNanoSec, self)
+		err = c.storePingInHDR(rttNanoSec, node)
 		if err != nil {
 			return err
 		}
@@ -198,11 +202,6 @@ func calculateRTT(serfClient *serf.RPCClient, self serf.Member, node serf.Member
 	if selfCoord == nil {
 		errMsg := fmt.Sprintf("self node %s coordinates not found", self.Name)
 		return 0, errors.New(errMsg)
-	}
-
-	// skip pinging self
-	if self.Addr.String() == node.Addr.String() {
-		return 0, nil
 	}
 
 	otherNodeCoord, err := serfClient.GetCoordinate(node.Name)
