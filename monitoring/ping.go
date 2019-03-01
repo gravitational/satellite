@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
@@ -109,7 +110,7 @@ func (c *pingChecker) check(ctx context.Context, r health.Reporter) error {
 		return err
 	}
 
-	err = c.tempFunc(nodes, client)
+	err = c.checkNodesRTT(nodes, client)
 	if err != nil {
 		return err
 	}
@@ -117,8 +118,8 @@ func (c *pingChecker) check(ctx context.Context, r health.Reporter) error {
 	return err
 }
 
-// tempFunc FIXME
-func (c *pingChecker) tempFunc(nodes []serf.Member, client *serf.RPCClient) error {
+// checkNodesRTT FIXME
+func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient) error {
 	// finding what is the current node
 	var self serf.Member
 	for _, node := range nodes {
@@ -133,33 +134,27 @@ func (c *pingChecker) tempFunc(nodes []serf.Member, client *serf.RPCClient) erro
 		return errors.New(errMsg)
 	}
 
-	selfCoord, err := client.GetCoordinate(self.Name)
-	if err != nil {
-		return err
-	}
-	if selfCoord == nil {
-		errMsg := fmt.Sprintf("self node %s coordinates not found", self.Name)
-		return errors.New(errMsg)
-	}
-
 	// ping each other node and fail in case the results are over a specified
 	// threshold
 	for _, node := range nodes {
-		// skip pinging self
-		if node.Addr.String() == self.Addr.String() {
-			continue
+
+		rttNanoSec, err := calculateRTT(client, self, node)
+		if err != nil {
+			return err
 		}
 
-		coord2, err := client.GetCoordinate(node.Name)
+		err = c.storePingInHDR(rttNanoSec, self)
 		if err != nil {
-			errMsg := fmt.Sprintf("error getting coordinates: %s -> %#v", node.Name, err)
-			return errors.New(errMsg)
+			return err
 		}
+
 		log.Debugf("%s <-ping-> %s = %dns [latest]", self.Name, node.Name, rttNanoSec)
 		log.Debugf("%s <-ping-> %s = %dns [%.2f percentile]",
 			self.Name, node.Name,
 			c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile),
 			pingRoundtripQuantile)
+
+		pingRoundtripHDR := c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile)
 		if pingRoundtripHDR >= pingRoundtripThreshold.Nanoseconds() {
 			log.Warningf("%s <-ping-> %s : slow ping RoundTrip detected. Value %dns over threshold %dms (%dns)",
 				self.Name, node.Name, pingRoundtripHDR,
@@ -169,42 +164,58 @@ func (c *pingChecker) tempFunc(nodes []serf.Member, client *serf.RPCClient) erro
 				self.Name, node.Name, pingRoundtripHDR,
 				pingRoundtripThreshold, pingRoundtripThreshold.Nanoseconds())
 		}
-
-		rttNanoSec := selfCoord.DistanceTo(coord2).Nanoseconds()
-
-		_, exists := c.rttStats[node.Name]
-		if !exists {
-			c.rttStats[node.Name] = hdrhistogram.NewWindowed(slidingWindowSize,
-			pingRoundtripMinimum.Nanoseconds(), pingRoundtripMaximum.Nanoseconds(),
-				pingRoundtripSignificativeFigures)
-		}
-
-		log.Debugf("%d recorded ping RoundTrip values for node %s",
-			c.rttStats[node.Name].Current.TotalCount(),
-			node.Name)
-		log.Debugf("%s <-ping-> %s = %dns [latest]", self.Name, node.Name, rttNanoSec)
-		log.Debugf("%s <-ping-> %s = %dns [%.2f percentile]",
-			self.Name, node.Name,
-			c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile),
-			pingRoundtripQuantile)
-
-		err = c.rttStats[node.Name].Current.RecordValue(rttNanoSec)
-		if err != nil {
-			return err
-		}
-
-		if c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile) >= int64(pingRoundtripThreshold) {
-			errMsg := fmt.Sprintf("slow ping between nodes detected. Value %v over threshold %v",
-				pingRoundtripQuantile, pingRoundtripThreshold)
-			return errors.New(errMsg)
-		} else {
-			log.Debugf("ping value %dns below threshold %.3fms (%dns)",
-				c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile),
-				float64(pingRoundtripThreshold/millisecond), pingRoundtripThreshold)
-		}
 	}
 
-	return err
+	return nil
+}
+
+func (c *pingChecker) storePingInHDR(pingRttStats int64, node serf.Member) error {
+	_, exists := c.rttStats[node.Name]
+	if !exists {
+		c.rttStats[node.Name] = hdrhistogram.NewWindowed(slidingWindowSize,
+			pingRoundtripMinimum.Nanoseconds(), pingRoundtripMaximum.Nanoseconds(),
+			pingRoundtripSignificativeFigures)
+	}
+
+	err := c.rttStats[node.Name].Current.RecordValue(pingRttStats)
+	if err != nil {
+		return err
+	}
+
+	log.Debugf("%d recorded ping RoundTrip values for node %s",
+		c.rttStats[node.Name].Current.TotalCount(),
+		node.Name)
+
+	return nil
+}
+
+// calculateRTT FIXME
+func calculateRTT(serfClient *serf.RPCClient, self serf.Member, node serf.Member) (int64, error) {
+	selfCoord, err := serfClient.GetCoordinate(self.Name)
+	if err != nil {
+		return 0, err
+	}
+	if selfCoord == nil {
+		errMsg := fmt.Sprintf("self node %s coordinates not found", self.Name)
+		return 0, errors.New(errMsg)
+	}
+
+	// skip pinging self
+	if self.Addr.String() == node.Addr.String() {
+		return 0, nil
+	}
+
+	otherNodeCoord, err := serfClient.GetCoordinate(node.Name)
+	if err != nil {
+		errMsg := fmt.Sprintf("error getting coordinates: %s -> %v", node.Name, err)
+		return 0, errors.New(errMsg)
+	}
+	if otherNodeCoord == nil {
+		errMsg := fmt.Sprintf("could not find a coordinate for node %s -> %v", node.Name, err)
+		return 0, errors.New(errMsg)
+	}
+
+	return selfCoord.DistanceTo(otherNodeCoord).Nanoseconds(), nil
 }
 
 // setProbeStatus set the Probe according to status or raise an error if one is passed via arguments
