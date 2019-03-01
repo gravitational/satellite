@@ -32,22 +32,18 @@ import (
 const (
 	// pingCheckerID specifies the check name
 	pingCheckerID = "ping-checker"
-	// slidingWindowSize specifies the sliding window use by checks
+	// slidingWindowSize specifies the number of retained check results
 	slidingWindowSize = 10
-	// nanosecond is used to represent nanoseconds (ns)
-	nanosecond = 1
-	// millisecond is used to represent milliseconds (ms) in nanoseconds
-	millisecond = 1e6
-	// second is used to represent seconds (s) in nanoseconds (ns)
-	second = 1e9
+	// slidingWindowDuration specifies how long check results will be kept before being dropped
+	slidingWindowDuration = 1 * time.Hour
 	// pingRoundtripMinimum set the minim value that can be recorded
-	pingRoundtripMinimum = 0 * second
+	pingRoundtripMinimum = 0 * time.Second
 	// pingRoundtripMaximum set the maximum value that can be recorded
-	pingRoundtripMaximum = 10 * second
+	pingRoundtripMaximum = 10 * time.Second
 	// pingRoundtripSignificativeFigures specifies how many decimals should be recorded
 	pingRoundtripSignificativeFigures = 3
 	// pingRoundtripThreshold sets the RTT threshold expressed in milliseconds (ms)
-	pingRoundtripThreshold = 15 * millisecond
+	pingRoundtripThreshold = 15 * time.Millisecond
 	// pingRoundtripQuantile sets the quantile used while checking Histograms against Rtt results
 	pingRoundtripQuantile = 95.0
 )
@@ -159,9 +155,19 @@ func (c *pingChecker) tempFunc(nodes []serf.Member, client *serf.RPCClient) erro
 			errMsg := fmt.Sprintf("error getting coordinates: %s -> %#v", node.Name, err)
 			return errors.New(errMsg)
 		}
-		if coord2 == nil {
-			errMsg := fmt.Sprintf("could not find a coordinate for node %q", nodes[1])
-			return errors.New(errMsg)
+		log.Debugf("%s <-ping-> %s = %dns [latest]", self.Name, node.Name, rttNanoSec)
+		log.Debugf("%s <-ping-> %s = %dns [%.2f percentile]",
+			self.Name, node.Name,
+			c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile),
+			pingRoundtripQuantile)
+		if pingRoundtripHDR >= pingRoundtripThreshold.Nanoseconds() {
+			log.Warningf("%s <-ping-> %s : slow ping RoundTrip detected. Value %dns over threshold %dms (%dns)",
+				self.Name, node.Name, pingRoundtripHDR,
+				pingRoundtripThreshold, pingRoundtripThreshold.Nanoseconds())
+		} else {
+			log.Debugf("%s <-ping-> %s : ping RoundTrip okay. Value %dns within threshold %dms (%dns)",
+				self.Name, node.Name, pingRoundtripHDR,
+				pingRoundtripThreshold, pingRoundtripThreshold.Nanoseconds())
 		}
 
 		rttNanoSec := selfCoord.DistanceTo(coord2).Nanoseconds()
@@ -169,7 +175,7 @@ func (c *pingChecker) tempFunc(nodes []serf.Member, client *serf.RPCClient) erro
 		_, exists := c.rttStats[node.Name]
 		if !exists {
 			c.rttStats[node.Name] = hdrhistogram.NewWindowed(slidingWindowSize,
-				pingRoundtripMinimum, pingRoundtripMaximum,
+			pingRoundtripMinimum.Nanoseconds(), pingRoundtripMaximum.Nanoseconds(),
 				pingRoundtripSignificativeFigures)
 		}
 
