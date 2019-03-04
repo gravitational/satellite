@@ -118,7 +118,8 @@ func (c *pingChecker) check(ctx context.Context, r health.Reporter) error {
 	return err
 }
 
-// checkNodesRTT FIXME
+// checkNodesRTT implements the bulk of the logic by checking the ping RoundTrip time
+// between this node (self) and the other Serf Cluster member nodes
 func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient) error {
 	// finding what is the current node
 	var self serf.Member
@@ -173,6 +174,7 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 	return nil
 }
 
+// storePingInHDR is used to store ping RoundTrip values in HDR Histograms in memory
 func (c *pingChecker) storePingInHDR(pingRttStats int64, node serf.Member) error {
 	_, exists := c.rttStats[node.Name]
 	if !exists {
@@ -193,7 +195,7 @@ func (c *pingChecker) storePingInHDR(pingRttStats int64, node serf.Member) error
 	return nil
 }
 
-// calculateRTT FIXME
+// calculateRTT calculates the RoundTrip time between two Serf Cluster members
 func calculateRTT(serfClient *serf.RPCClient, self serf.Member, node serf.Member) (int64, error) {
 	selfCoord, err := serfClient.GetCoordinate(self.Name)
 	if err != nil {
