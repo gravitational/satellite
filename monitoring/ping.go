@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/gravitational/ttlmap"
 	"time"
 
 	"github.com/gravitational/satellite/agent/health"
@@ -43,7 +44,7 @@ const (
 	pingRoundtripMaximum = 10 * time.Second
 	// pingRoundtripSignificativeFigures specifies how many decimals should be recorded
 	pingRoundtripSignificativeFigures = 3
-	// pingRoundtripThreshold sets the RTT threshold expressed in milliseconds (ms)
+	// pingRoundtripThreshold sets the RTT threshold
 	pingRoundtripThreshold = 15 * time.Millisecond
 	// pingRoundtripQuantile sets the quantile used while checking Histograms against Rtt results
 	pingRoundtripQuantile = 95.0
@@ -51,10 +52,15 @@ const (
 
 // NewPingChecker implements and return an health.Checker
 func NewPingChecker(serfRPCAddr string, serfMemberName string) health.Checker {
+	rttStatsTTLMap, err := ttlmap.New(int(slidingWindowDuration.Seconds()))
+	if err != nil {
+		log.Error(err)
+		return nil
+	}
 	return &pingChecker{
 		serfRPCAddr:    serfRPCAddr,
 		serfMemberName: serfMemberName,
-		rttStats:       make(map[string]*hdrhistogram.WindowedHistogram),
+		rttStats:       *rttStatsTTLMap,
 	}
 }
 
@@ -63,7 +69,7 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) health.Checker {
 type pingChecker struct {
 	serfRPCAddr    string
 	serfMemberName string
-	rttStats       map[string]*hdrhistogram.WindowedHistogram
+	rttStats       ttlmap.TTLMap
 }
 
 // Name returns the checker name
@@ -153,20 +159,22 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 			return err
 		}
 
+		rttStatsHDRInterface, _ := c.rttStats.Get(node.Name)
+		rttStatsHDR := rttStatsHDRInterface.(hdrhistogram.WindowedHistogram)
 		log.Debugf("%s <-ping-> %s = %dns [latest]", self.Name, node.Name, rttNanoSec)
 		log.Debugf("%s <-ping-> %s = %dns [%.2f percentile]",
 			self.Name, node.Name,
-			c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile),
+			rttStatsHDR.Current.ValueAtQuantile(pingRoundtripQuantile),
 			pingRoundtripQuantile)
 
-		pingRoundtripHDR := c.rttStats[node.Name].Current.ValueAtQuantile(pingRoundtripQuantile)
-		if pingRoundtripHDR >= pingRoundtripThreshold.Nanoseconds() {
+		pingRoundtripPercentile := rttStatsHDR.Current.ValueAtQuantile(pingRoundtripQuantile)
+		if pingRoundtripPercentile >= pingRoundtripThreshold.Nanoseconds() {
 			log.Warningf("%s <-ping-> %s : slow ping RoundTrip detected. Value %dns over threshold %dms (%dns)",
-				self.Name, node.Name, pingRoundtripHDR,
+				self.Name, node.Name, pingRoundtripPercentile,
 				pingRoundtripThreshold, pingRoundtripThreshold.Nanoseconds())
 		} else {
 			log.Debugf("%s <-ping-> %s : ping RoundTrip okay. Value %dns within threshold %dms (%dns)",
-				self.Name, node.Name, pingRoundtripHDR,
+				self.Name, node.Name, pingRoundtripPercentile,
 				pingRoundtripThreshold, pingRoundtripThreshold.Nanoseconds())
 		}
 	}
@@ -176,21 +184,24 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 
 // storePingInHDR is used to store ping RoundTrip values in HDR Histograms in memory
 func (c *pingChecker) storePingInHDR(pingRttStats int64, node serf.Member) error {
-	_, exists := c.rttStats[node.Name]
+	nodeTTLMapInterface, exists := c.rttStats.Get(node.Name)
+	nodeTTLMap := nodeTTLMapInterface.(hdrhistogram.WindowedHistogram)
+
 	if !exists {
-		c.rttStats[node.Name] = hdrhistogram.NewWindowed(slidingWindowSize,
-			pingRoundtripMinimum.Nanoseconds(), pingRoundtripMaximum.Nanoseconds(),
-			pingRoundtripSignificativeFigures)
+		c.rttStats.Set(node.Name,
+			hdrhistogram.NewWindowed(slidingWindowSize,
+				pingRoundtripMinimum.Nanoseconds(), pingRoundtripMaximum.Nanoseconds(),
+				pingRoundtripSignificativeFigures),
+			slidingWindowDuration)
 	}
 
-	err := c.rttStats[node.Name].Current.RecordValue(pingRttStats)
+	err := nodeTTLMap.Current.RecordValue(pingRttStats)
 	if err != nil {
 		return err
 	}
 
 	log.Debugf("%d recorded ping RoundTrip values for node %s",
-		c.rttStats[node.Name].Current.TotalCount(),
-		node.Name)
+		nodeTTLMap.Current.TotalCount(), node.Name)
 
 	return nil
 }
@@ -223,7 +234,7 @@ func calculateRTT(serfClient *serf.RPCClient, self serf.Member, node serf.Member
 func (c *pingChecker) setProbeStatus(ctx context.Context, r health.Reporter, err error, status pb.Probe_Type) {
 	switch status {
 	case pb.Probe_Failed:
-		log.Error("%v", err.Error())
+		log.Error(err.Error())
 		r.Add(NewProbeFromErr(c.Name(), "", err))
 	case pb.Probe_Running:
 		r.Add(&pb.Probe{
