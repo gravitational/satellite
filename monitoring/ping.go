@@ -99,8 +99,8 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 // in case issues arise in the process
 func (c *pingChecker) check(ctx context.Context, r health.Reporter) error {
 	// fetch serf config and intantiate client
-	log.Debugf("Using Serf IP: %v", c.serfRPCAddr)
-	log.Debugf("Using Serf Name: %v", c.serfMemberName)
+	log.Debugf("[ping] using Serf IP: %v", c.serfRPCAddr)
+	log.Debugf("[ping] using Serf Name: %v", c.serfMemberName)
 	clientConfig := serf.Config{
 		Addr: c.serfRPCAddr,
 	}
@@ -169,11 +169,11 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 
 		pingRoundtripPercentile := rttStatsHDR.ValueAtQuantile(pingRoundtripQuantile)
 		if pingRoundtripPercentile >= pingRoundtripThreshold.Nanoseconds() {
-			log.Warningf("%s <-ping-> %s : slow ping RoundTrip detected. Value %dns over threshold %dms (%dns)",
+			log.Warningf("%s <-ping-> %s = slow ping RoundTrip detected. Value %dns over threshold %dms (%dns)",
 				self.Name, node.Name, pingRoundtripPercentile,
 				pingRoundtripThreshold, pingRoundtripThreshold.Nanoseconds())
 		} else {
-			log.Debugf("%s <-ping-> %s : ping RoundTrip okay. Value %dns within threshold %dms (%dns)",
+			log.Debugf("%s <-ping-> %s = ping RoundTrip okay. Value %dns within threshold %dms (%dns)",
 				self.Name, node.Name, pingRoundtripPercentile,
 				pingRoundtripThreshold, pingRoundtripThreshold.Nanoseconds())
 		}
