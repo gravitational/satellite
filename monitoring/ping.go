@@ -160,14 +160,14 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 		}
 
 		rttStatsHDRInterface, _ := c.rttStats.Get(node.Name)
-		rttStatsHDR := rttStatsHDRInterface.(hdrhistogram.WindowedHistogram)
+		rttStatsHDR := rttStatsHDRInterface.(hdrhistogram.Histogram)
 		log.Debugf("%s <-ping-> %s = %dns [latest]", self.Name, node.Name, rttNanoSec)
 		log.Debugf("%s <-ping-> %s = %dns [%.2f percentile]",
 			self.Name, node.Name,
-			rttStatsHDR.Current.ValueAtQuantile(pingRoundtripQuantile),
+			rttStatsHDR.ValueAtQuantile(pingRoundtripQuantile),
 			pingRoundtripQuantile)
 
-		pingRoundtripPercentile := rttStatsHDR.Current.ValueAtQuantile(pingRoundtripQuantile)
+		pingRoundtripPercentile := rttStatsHDR.ValueAtQuantile(pingRoundtripQuantile)
 		if pingRoundtripPercentile >= pingRoundtripThreshold.Nanoseconds() {
 			log.Warningf("%s <-ping-> %s : slow ping RoundTrip detected. Value %dns over threshold %dms (%dns)",
 				self.Name, node.Name, pingRoundtripPercentile,
@@ -185,23 +185,31 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 // storePingInHDR is used to store ping RoundTrip values in HDR Histograms in memory
 func (c *pingChecker) storePingInHDR(pingRttStats int64, node serf.Member) error {
 	nodeTTLMapInterface, exists := c.rttStats.Get(node.Name)
-	nodeTTLMap := nodeTTLMapInterface.(hdrhistogram.WindowedHistogram)
+	nodeTTLMap := nodeTTLMapInterface.(hdrhistogram.Histogram)
 
 	if !exists {
 		c.rttStats.Set(node.Name,
-			hdrhistogram.NewWindowed(slidingWindowSize,
-				pingRoundtripMinimum.Nanoseconds(), pingRoundtripMaximum.Nanoseconds(),
+			hdrhistogram.New(pingRoundtripMinimum.Nanoseconds(),
+				pingRoundtripMaximum.Nanoseconds(),
 				pingRoundtripSignificativeFigures),
 			slidingWindowDuration)
 	}
 
-	err := nodeTTLMap.Current.RecordValue(pingRttStats)
+	if nodeTTLMap.TotalCount() >= slidingWindowSize {
+		tmpSnapshot := nodeTTLMap.Export()
+		// pop element at index 0 (oldest)
+		_, tmpSnapshot.Counts = tmpSnapshot.Counts[0], tmpSnapshot.Counts[1:]
+		c.rttStats.Set(node.Name, hdrhistogram.Import(tmpSnapshot),
+			slidingWindowDuration)
+	}
+
+	err := nodeTTLMap.RecordValue(pingRttStats)
 	if err != nil {
 		return err
 	}
 
 	log.Debugf("%d recorded ping RoundTrip values for node %s",
-		nodeTTLMap.Current.TotalCount(), node.Name)
+		nodeTTLMap.TotalCount(), node.Name)
 
 	return nil
 }
