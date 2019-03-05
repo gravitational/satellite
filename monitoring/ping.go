@@ -36,8 +36,8 @@ const (
 	pingCheckerID = "ping-checker"
 	// slidingWindowSize specifies the number of retained check results
 	slidingWindowSize = 10
-	// slidingWindowDuration specifies how long check results will be kept before being dropped
-	slidingWindowDuration = 1 * time.Hour
+	// statsTTLPeriod specifies how long check results will be kept before being dropped
+	statsTTLPeriod = 1 * time.Hour
 	// pingRoundtripMinimum set the minim value that can be recorded
 	pingRoundtripMinimum = 0 * time.Second
 	// pingRoundtripMaximum set the maximum value that can be recorded
@@ -52,7 +52,7 @@ const (
 
 // NewPingChecker implements and return an health.Checker
 func NewPingChecker(serfRPCAddr string, serfMemberName string) health.Checker {
-	rttStatsTTLMap, err := ttlmap.New(int(slidingWindowDuration.Seconds()))
+	rttStatsTTLMap, err := ttlmap.New(int(statsTTLPeriod.Seconds()))
 	if err != nil {
 		log.Error(err)
 		return nil
@@ -192,7 +192,7 @@ func (c *pingChecker) storePingInHDR(pingRttStats int64, node serf.Member) error
 			hdrhistogram.New(pingRoundtripMinimum.Nanoseconds(),
 				pingRoundtripMaximum.Nanoseconds(),
 				pingRoundtripSignificativeFigures),
-			slidingWindowDuration)
+			statsTTLPeriod)
 	}
 
 	if nodeTTLMap.TotalCount() >= slidingWindowSize {
@@ -200,7 +200,7 @@ func (c *pingChecker) storePingInHDR(pingRttStats int64, node serf.Member) error
 		// pop element at index 0 (oldest)
 		_, tmpSnapshot.Counts = tmpSnapshot.Counts[0], tmpSnapshot.Counts[1:]
 		c.rttStats.Set(node.Name, hdrhistogram.Import(tmpSnapshot),
-			slidingWindowDuration)
+			statsTTLPeriod)
 	}
 
 	err := nodeTTLMap.RecordValue(pingRttStats)
