@@ -198,7 +198,8 @@ func (c *pingChecker) storePingInHDR(pingRttStats int64, node serf.Member) error
 	if nodeTTLMap.TotalCount() >= slidingWindowSize {
 		tmpSnapshot := nodeTTLMap.Export()
 		// pop element at index 0 (oldest)
-		_, tmpSnapshot.Counts = tmpSnapshot.Counts[0], tmpSnapshot.Counts[1:]
+		countsLen := len(tmpSnapshot.Counts) - 1
+		tmpSnapshot.Counts = tmpSnapshot.Counts[countsLen-slidingWindowSize : countsLen]
 		c.rttStats.Set(node.Name, hdrhistogram.Import(tmpSnapshot),
 			statsTTLPeriod)
 	}
