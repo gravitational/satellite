@@ -194,7 +194,7 @@ func (c *pingChecker) storePingInHDR(pingRttStats int64, node serf.Member) error
 		nodeTTLMapInterface, _ = c.rttStats.Get(node.Name)
 	}
 
-	nodeTTLMap := nodeTTLMapInterface.(hdrhistogram.Histogram)
+	nodeTTLMap := nodeTTLMapInterface.(*hdrhistogram.Histogram)
 
 	if nodeTTLMap.TotalCount() >= slidingWindowSize {
 		tmpSnapshot := nodeTTLMap.Export()
