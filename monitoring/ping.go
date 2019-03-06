@@ -184,17 +184,17 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 
 // storePingInHDR is used to store ping RoundTrip values in HDR Histograms in memory
 func (c *pingChecker) storePingInHDR(pingroundtripLatency int64, node serf.Member) error {
-	nodeTTLMapInterface, exists := c.roundtripLatency.Get(node.Name)
+	s, exists := c.roundtripLatency.Get(node.Name)
 	if !exists {
 		c.roundtripLatency.Set(node.Name,
 			hdrhistogram.New(pingRoundtripMinimum.Nanoseconds(),
 				pingRoundtripMaximum.Nanoseconds(),
 				pingRoundtripSignificativeFigures),
 			statsTTLPeriod)
-		nodeTTLMapInterface, _ = c.roundtripLatency.Get(node.Name)
+		s, _ = c.roundtripLatency.Get(node.Name)
 	}
 
-	nodeTTLMap, ok := nodeTTLMapInterface.(*hdrhistogram.Histogram)
+	nodeLatencies, ok := s.(*hdrhistogram.Histogram)
 	if !ok {
 		return trace.BadParameter("couldn't parse roundtripLatency as HDRHistogram on %s", c.serfMemberName)
 	}
@@ -212,7 +212,7 @@ func (c *pingChecker) storePingInHDR(pingroundtripLatency int64, node serf.Membe
 			statsTTLPeriod)
 	}
 
-	err := nodeTTLMap.RecordValue(pingroundtripLatency)
+	err := nodeLatencies.RecordValue(pingroundtripLatency)
 	if err != nil {
 		return err
 	}
