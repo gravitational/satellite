@@ -52,24 +52,24 @@ const (
 
 // NewPingChecker implements and return an health.Checker
 func NewPingChecker(serfRPCAddr string, serfMemberName string) health.Checker {
-	rttStatsTTLMap, err := ttlmap.New(int(statsTTLPeriod.Seconds()))
+	roundtripLatencyTTLMap, err := ttlmap.New(int(statsTTLPeriod.Seconds()))
 	if err != nil {
 		log.Error(err)
 		return nil
 	}
 	return &pingChecker{
-		serfRPCAddr:    serfRPCAddr,
-		serfMemberName: serfMemberName,
-		rttStats:       *rttStatsTTLMap,
+		serfRPCAddr:      serfRPCAddr,
+		serfMemberName:   serfMemberName,
+		roundtripLatency: *roundtripLatencyTTLMap,
 	}
 }
 
 // pingChecker is a checker that verify that ping times (RTT) between nodes in
 // the cluster are within a predefined threshold
 type pingChecker struct {
-	serfRPCAddr    string
-	serfMemberName string
-	rttStats       ttlmap.TTLMap
+	serfRPCAddr      string
+	serfMemberName   string
+	roundtripLatency ttlmap.TTLMap
 }
 
 // Name returns the checker name
@@ -159,15 +159,15 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 			return err
 		}
 
-		rttStatsHDRInterface, _ := c.rttStats.Get(node.Name)
-		rttStatsHDR := rttStatsHDRInterface.(*hdrhistogram.Histogram)
+		roundtripLatencyInterface, _ := c.roundtripLatency.Get(node.Name)
+		roundtripLatency, ok := roundtripLatencyInterface.(*hdrhistogram.Histogram)
 		log.Debugf("%s <-ping-> %s = %dns [latest]", self.Name, node.Name, rttNanoSec)
 		log.Debugf("%s <-ping-> %s = %dns [%.2f percentile]",
 			self.Name, node.Name,
-			rttStatsHDR.ValueAtQuantile(pingRoundtripQuantile),
+			roundtripLatency.ValueAtQuantile(pingRoundtripQuantile),
 			pingRoundtripQuantile)
 
-		pingRoundtripPercentile := rttStatsHDR.ValueAtQuantile(pingRoundtripQuantile)
+		pingRoundtripPercentile := roundtripLatency.ValueAtQuantile(pingRoundtripQuantile)
 		if pingRoundtripPercentile >= pingRoundtripThreshold.Nanoseconds() {
 			log.Warningf("%s <-ping-> %s = slow ping RoundTrip detected. Value %dns over threshold %dms (%dns)",
 				self.Name, node.Name, pingRoundtripPercentile,
@@ -183,29 +183,28 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 }
 
 // storePingInHDR is used to store ping RoundTrip values in HDR Histograms in memory
-func (c *pingChecker) storePingInHDR(pingRttStats int64, node serf.Member) error {
-	nodeTTLMapInterface, exists := c.rttStats.Get(node.Name)
+func (c *pingChecker) storePingInHDR(pingroundtripLatency int64, node serf.Member) error {
+	nodeTTLMapInterface, exists := c.roundtripLatency.Get(node.Name)
 	if !exists {
-		c.rttStats.Set(node.Name,
+		c.roundtripLatency.Set(node.Name,
 			hdrhistogram.New(pingRoundtripMinimum.Nanoseconds(),
 				pingRoundtripMaximum.Nanoseconds(),
 				pingRoundtripSignificativeFigures),
 			statsTTLPeriod)
-		nodeTTLMapInterface, _ = c.rttStats.Get(node.Name)
+		nodeTTLMapInterface, _ = c.roundtripLatency.Get(node.Name)
 	}
 
-	nodeTTLMap := nodeTTLMapInterface.(*hdrhistogram.Histogram)
+	nodeTTLMap, ok := nodeTTLMapInterface.(*hdrhistogram.Histogram)
 
 	if nodeTTLMap.TotalCount() >= slidingWindowSize {
 		tmpSnapshot := nodeTTLMap.Export()
 		// pop element at index 0 (oldest)
 		countsLen := len(tmpSnapshot.Counts) - 1
-		tmpSnapshot.Counts = tmpSnapshot.Counts[countsLen-slidingWindowSize : countsLen]
-		c.rttStats.Set(node.Name, hdrhistogram.Import(tmpSnapshot),
+		c.roundtripLatency.Set(node.Name, hdrhistogram.Import(tmpSnapshot),
 			statsTTLPeriod)
 	}
 
-	err := nodeTTLMap.RecordValue(pingRttStats)
+	err := nodeTTLMap.RecordValue(pingroundtripLatency)
 	if err != nil {
 		return err
 	}
