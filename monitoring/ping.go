@@ -160,7 +160,7 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 		}
 
 		rttStatsHDRInterface, _ := c.rttStats.Get(node.Name)
-		rttStatsHDR := rttStatsHDRInterface.(hdrhistogram.Histogram)
+		rttStatsHDR := rttStatsHDRInterface.(*hdrhistogram.Histogram)
 		log.Debugf("%s <-ping-> %s = %dns [latest]", self.Name, node.Name, rttNanoSec)
 		log.Debugf("%s <-ping-> %s = %dns [%.2f percentile]",
 			self.Name, node.Name,
