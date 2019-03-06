@@ -200,6 +200,11 @@ func (c *pingChecker) storePingInHDR(pingroundtripLatency int64, node serf.Membe
 		tmpSnapshot := nodeTTLMap.Export()
 		// pop element at index 0 (oldest)
 		countsLen := len(tmpSnapshot.Counts) - 1
+		lowerLimit := countsLen - slidingWindowSize
+		if lowerLimit < 0 {
+			lowerLimit = 0
+		}
+		tmpSnapshot.Counts = tmpSnapshot.Counts[lowerLimit:countsLen]
 		c.roundtripLatency.Set(node.Name, hdrhistogram.Import(tmpSnapshot),
 			statsTTLPeriod)
 	}
