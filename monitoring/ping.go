@@ -18,8 +18,6 @@ package monitoring
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"github.com/gravitational/ttlmap"
 	"time"
 
@@ -27,6 +25,7 @@ import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
 	"github.com/codahale/hdrhistogram"
+	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
 	log "github.com/sirupsen/logrus"
 )
@@ -136,9 +135,7 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 		}
 	}
 	if self.Name == "" {
-		errMsg := fmt.Sprintf("self node Serf Member not found for %s",
-			c.serfMemberName)
-		return errors.New(errMsg)
+		return trace.NotFound("self node Serf Member not found for %s", c.serfMemberName)
 	}
 
 	// ping each other node and fail in case the results are over a specified
@@ -162,9 +159,7 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 		roundtripLatencyInterface, _ := c.roundtripLatency.Get(node.Name)
 		roundtripLatency, ok := roundtripLatencyInterface.(*hdrhistogram.Histogram)
 		if !ok {
-			errMsg := fmt.Sprintf("couldn't parse roundtripLatency as HDRHistogram on %s",
-				c.serfMemberName)
-			return errors.New(errMsg)
+			return trace.Errorf("couldn't parse roundtripLatency as HDRHistogram on %s", c.serfMemberName)
 		}
 		log.Debugf("%s <-ping-> %s = %dns [latest]", self.Name, node.Name, rttNanoSec)
 		log.Debugf("%s <-ping-> %s = %dns [%.2f percentile]",
@@ -201,9 +196,7 @@ func (c *pingChecker) storePingInHDR(pingroundtripLatency int64, node serf.Membe
 
 	nodeTTLMap, ok := nodeTTLMapInterface.(*hdrhistogram.Histogram)
 	if !ok {
-		errMsg := fmt.Sprintf("couldn't parse roundtripLatency as HDRHistogram on %s",
-			c.serfMemberName)
-		return errors.New(errMsg)
+		return trace.BadParameter("couldn't parse roundtripLatency as HDRHistogram on %s", c.serfMemberName)
 	}
 
 	if nodeTTLMap.TotalCount() >= slidingWindowSize {
@@ -237,18 +230,15 @@ func calculateRTT(serfClient *serf.RPCClient, self serf.Member, node serf.Member
 		return 0, err
 	}
 	if selfCoord == nil {
-		errMsg := fmt.Sprintf("self node %s coordinates not found", self.Name)
-		return 0, errors.New(errMsg)
+		return 0, trace.NotFound("self node %s coordinates not found", self.Name)
 	}
 
 	otherNodeCoord, err := serfClient.GetCoordinate(node.Name)
 	if err != nil {
-		errMsg := fmt.Sprintf("error getting coordinates: %s -> %v", node.Name, err)
-		return 0, errors.New(errMsg)
+		return 0, trace.NotFound("error getting coordinates: %s -> %v", node.Name, err)
 	}
 	if otherNodeCoord == nil {
-		errMsg := fmt.Sprintf("could not find a coordinate for node %s -> %v", node.Name, err)
-		return 0, errors.New(errMsg)
+		return 0, trace.NotFound("could not find a coordinate for node %s -> %v", node.Name, err)
 	}
 
 	return selfCoord.DistanceTo(otherNodeCoord).Nanoseconds(), nil
