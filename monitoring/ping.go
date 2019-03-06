@@ -161,6 +161,11 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 
 		roundtripLatencyInterface, _ := c.roundtripLatency.Get(node.Name)
 		roundtripLatency, ok := roundtripLatencyInterface.(*hdrhistogram.Histogram)
+		if !ok {
+			errMsg := fmt.Sprintf("couldn't parse roundtripLatency as HDRHistogram on %s",
+				c.serfMemberName)
+			return errors.New(errMsg)
+		}
 		log.Debugf("%s <-ping-> %s = %dns [latest]", self.Name, node.Name, rttNanoSec)
 		log.Debugf("%s <-ping-> %s = %dns [%.2f percentile]",
 			self.Name, node.Name,
@@ -195,6 +200,11 @@ func (c *pingChecker) storePingInHDR(pingroundtripLatency int64, node serf.Membe
 	}
 
 	nodeTTLMap, ok := nodeTTLMapInterface.(*hdrhistogram.Histogram)
+	if !ok {
+		errMsg := fmt.Sprintf("couldn't parse roundtripLatency as HDRHistogram on %s",
+			c.serfMemberName)
+		return errors.New(errMsg)
+	}
 
 	if nodeTTLMap.TotalCount() >= slidingWindowSize {
 		tmpSnapshot := nodeTTLMap.Export()
