@@ -199,8 +199,8 @@ func (c *pingChecker) storePingInHDR(pingroundtripLatency int64, node serf.Membe
 		return trace.BadParameter("couldn't parse roundtripLatency as HDRHistogram on %s", c.serfMemberName)
 	}
 
-	if nodeTTLMap.TotalCount() >= slidingWindowSize {
-		tmpSnapshot := nodeTTLMap.Export()
+	tmpSnapshot := nodeLatencies.Export()
+	if len(tmpSnapshot.Counts) >= slidingWindowSize {
 		// pop element at index 0 (oldest)
 		countsLen := len(tmpSnapshot.Counts) - 1
 		lowerLimit := countsLen - slidingWindowSize
@@ -218,7 +218,7 @@ func (c *pingChecker) storePingInHDR(pingroundtripLatency int64, node serf.Membe
 	}
 
 	log.Debugf("%d recorded ping RoundTrip values for node %s",
-		nodeTTLMap.TotalCount(), node.Name)
+		tmpSnapshot.Counts, node.Name)
 
 	return nil
 }
