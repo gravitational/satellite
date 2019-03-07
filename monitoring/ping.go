@@ -218,7 +218,7 @@ func (c *pingChecker) storePingInHDR(pingroundtripLatency int64, node serf.Membe
 	}
 
 	log.Debugf("%d recorded ping RoundTrip values for node %s",
-		tmpSnapshot.Counts, node.Name)
+		len(tmpSnapshot.Counts), node.Name)
 
 	return nil
 }
