@@ -208,7 +208,7 @@ func (c *pingChecker) storePingInHDR(pingroundtripLatency int64, node serf.Membe
 		if lowerLimit < 0 {
 			lowerLimit = 0
 		}
-		for i := lowerLimit; i < len(tmpSnapshot.Counts); i++ {
+		for i := lowerLimit; i < len(tmpSnapshot.Counts)-1; i++ {
 			nodeLatencies.RecordValue(tmpSnapshot.Counts[i])
 		}
 	}
