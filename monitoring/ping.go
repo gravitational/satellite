@@ -202,14 +202,15 @@ func (c *pingChecker) storePingInHDR(pingroundtripLatency int64, node serf.Membe
 	tmpSnapshot := nodeLatencies.Export()
 	if len(tmpSnapshot.Counts) >= slidingWindowSize {
 		// pop element at index 0 (oldest)
-		countsLen := len(tmpSnapshot.Counts) - 1
-		lowerLimit := countsLen - slidingWindowSize
+		nodeLatencies.Reset()
+
+		lowerLimit := len(tmpSnapshot.Counts) - slidingWindowSize
 		if lowerLimit < 0 {
 			lowerLimit = 0
 		}
-		tmpSnapshot.Counts = tmpSnapshot.Counts[lowerLimit:countsLen]
-		c.roundtripLatency.Set(node.Name, hdrhistogram.Import(tmpSnapshot),
-			statsTTLPeriod)
+		for i := lowerLimit; i < len(tmpSnapshot.Counts); i++ {
+			nodeLatencies.RecordValue(tmpSnapshot.Counts[i])
+		}
 	}
 
 	err := nodeLatencies.RecordValue(pingroundtripLatency)
@@ -218,7 +219,7 @@ func (c *pingChecker) storePingInHDR(pingroundtripLatency int64, node serf.Membe
 	}
 
 	log.Debugf("%d recorded ping RoundTrip values for node %s",
-		len(tmpSnapshot.Counts), node.Name)
+		nodeLatencies.TotalCount(), node.Name)
 
 	return nil
 }
