@@ -169,13 +169,13 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 
 		pingRoundtripPercentile := roundtripLatency.ValueAtQuantile(pingRoundtripQuantile)
 		if pingRoundtripPercentile >= pingRoundtripThreshold.Nanoseconds() {
-			log.Warningf("%s <-ping-> %s = slow ping RoundTrip detected. Value %dns over threshold %dms (%dns)",
+			log.Warningf("%s <-ping-> %s = slow ping RoundTrip detected. Value %dns over threshold %s (%dns)",
 				self.Name, node.Name, pingRoundtripPercentile,
-				pingRoundtripThreshold, pingRoundtripThreshold.Nanoseconds())
+				pingRoundtripThreshold.String(), pingRoundtripThreshold.Nanoseconds())
 		} else {
-			log.Debugf("%s <-ping-> %s = ping RoundTrip okay. Value %dns within threshold %dms (%dns)",
+			log.Debugf("%s <-ping-> %s = ping RoundTrip okay. Value %dns within threshold %s (%dns)",
 				self.Name, node.Name, pingRoundtripPercentile,
-				pingRoundtripThreshold, pingRoundtripThreshold.Nanoseconds())
+				pingRoundtripThreshold.String(), pingRoundtripThreshold.Nanoseconds())
 		}
 	}
 
