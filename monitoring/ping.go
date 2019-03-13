@@ -118,15 +118,15 @@ func (c *pingChecker) check(ctx context.Context, r health.Reporter) error {
 	// retrieve other nodes using Serf members
 	nodes, err := client.Members()
 	if err != nil {
-		return err
+		return trace.Wrap(err)
 	}
 
 	err = c.checkNodesRTT(nodes, client)
 	if err != nil {
-		return err
+		return trace.Wrap(err)
 	}
 
-	return err
+	return trace.Wrap(err)
 }
 
 // checkNodesRTT implements the bulk of the logic by checking the ping RoundTrip time
@@ -154,12 +154,12 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 
 		rttNanoSec, err := calculateRTT(client, self, node)
 		if err != nil {
-			return err
+			return trace.Wrap(err)
 		}
 
 		err = c.storePingInHDR(rttNanoSec, node)
 		if err != nil {
-			return err
+			return trace.Wrap(err)
 		}
 
 		roundtripLatencyInterface, _ := c.roundtripLatency.Get(node.Name)
@@ -223,7 +223,7 @@ func (c *pingChecker) storePingInHDR(pingroundtripLatency int64, node serf.Membe
 
 	err := nodeLatencies.RecordValue(pingroundtripLatency)
 	if err != nil {
-		return err
+		return trace.Wrap(err)
 	}
 
 	log.Debugf("%d recorded ping RoundTrip values for node %s",
@@ -235,7 +235,7 @@ func (c *pingChecker) storePingInHDR(pingroundtripLatency int64, node serf.Membe
 // calculateRTT calculates and returns the RoundTrip time (in nanoseconds) between two Serf Cluster members
 	selfCoord, err := serfClient.GetCoordinate(self.Name)
 	if err != nil {
-		return 0, err
+		return 0, trace.Wrap(err)
 	}
 	if selfCoord == nil {
 		return 0, trace.NotFound("self node %s coordinates not found", self.Name)
@@ -246,7 +246,7 @@ func (c *pingChecker) storePingInHDR(pingroundtripLatency int64, node serf.Membe
 		return 0, trace.NotFound("error getting coordinates: %s -> %v", node.Name, err)
 	}
 	if otherNodeCoord == nil {
-		return 0, trace.NotFound("could not find a coordinate for node %s -> %v", node.Name, err)
+		return 0, trace.NotFound("could not find a coordinate for node %s", node.Name)
 	}
 
 	return selfCoord.DistanceTo(otherNodeCoord).Nanoseconds(), nil
