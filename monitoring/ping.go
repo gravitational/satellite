@@ -68,7 +68,24 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker
 	}
 	defer client.Close()
 
+	// retrieve other nodes using Serf members
+	nodes, err := client.Members()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	// finding what is the current node
+	var self serf.Member
+	for _, node := range nodes {
+		if node.Name == serfMemberName {
+			self = node
+		}
+	}
+	if self.Name == "" {
+		return nil, trace.NotFound("failed to find Serf member with name %s", serfMemberName)
+	}
+
 	return &pingChecker{
+		self:             self,
 		serfClient:       *client,
 		serfMemberName:   serfMemberName,
 		roundtripLatency: *roundtripLatencyTTLMap,
@@ -133,27 +150,15 @@ func (c *pingChecker) check(ctx context.Context, r health.Reporter) error {
 // checkNodesRTT implements the bulk of the logic by checking the ping RoundTrip time
 // between this node (self) and the other Serf Cluster member nodes
 func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient) error {
-	// finding what is the current node
-	var self serf.Member
-	for _, node := range nodes {
-		// cut the port portion of the address after the ":" away
-		if node.Name == c.serfMemberName {
-			self = node
-		}
-	}
-	if self.Name == "" {
-		return trace.NotFound("self node Serf Member not found for %s", c.serfMemberName)
-	}
-
 	// ping each other node and fail in case the results are over a specified
 	// threshold
 	for _, node := range nodes {
 		// skip pinging self
-		if self.Addr.String() == node.Addr.String() {
+		if c.self.Addr.String() == node.Addr.String() {
 			continue
 		}
 
-		rttNanoSec, err := calculateRTT(client, self, node)
+		rttNanoSec, err := calculateRTT(client, c.self, node)
 		if err != nil {
 			return trace.Wrap(err)
 		}
@@ -177,12 +182,11 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 		pingRoundtripPercentile := roundtripLatency.ValueAtQuantile(pingRoundtripQuantile)
 		if pingRoundtripPercentile >= pingRoundtripThreshold.Nanoseconds() {
 			log.Warningf("%s <-ping-> %s = slow ping RoundTrip detected. Value %dns over threshold %s (%dns)",
-				self.Name, node.Name, pingRoundtripPercentile,
-				pingRoundtripThreshold.String(), pingRoundtripThreshold.Nanoseconds())
+				c.self.Name, node.Name, latencyPercentile,
 		} else {
 			log.Debugf("%s <-ping-> %s = ping RoundTrip okay. Value %dns within threshold %s (%dns)",
-				self.Name, node.Name, pingRoundtripPercentile,
-				pingRoundtripThreshold.String(), pingRoundtripThreshold.Nanoseconds())
+				c.self.Name, node.Name, latencyPercentile,
+				latencyThreshold.String(), latencyThreshold.Nanoseconds())
 		}
 	}
 
