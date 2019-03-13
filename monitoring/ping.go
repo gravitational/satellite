@@ -69,7 +69,7 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker
 	defer client.Close()
 
 	return &pingChecker{
-		serfRPCAddr:      serfRPCAddr,
+		serfClient:       *client,
 		serfMemberName:   serfMemberName,
 		roundtripLatency: *roundtripLatencyTTLMap,
 	}, nil
@@ -78,7 +78,7 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker
 // pingChecker is a checker that verifies that ping times (RTT) between nodes in
 // the cluster are within a predefined threshold
 type pingChecker struct {
-	serfRPCAddr      string
+	serfClient       serf.RPCClient
 	serfMemberName   string
 	roundtripLatency ttlmap.TTLMap
 }
