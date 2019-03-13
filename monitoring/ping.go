@@ -49,6 +49,7 @@ const (
 	pingRoundtripQuantile = 95.0
 )
 
+// NewPingChecker returns a checker that verifies accessibility of nodes in the cluster by exchanging ping requests
 func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker, err error) {
 	roundtripLatencyTTLMap, err := ttlmap.New(int(statsTTLPeriod.Seconds()))
 	if err != nil {
@@ -74,7 +75,7 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker
 	}, nil
 }
 
-// pingChecker is a checker that verify that ping times (RTT) between nodes in
+// pingChecker is a checker that verifies that ping times (RTT) between nodes in
 // the cluster are within a predefined threshold
 type pingChecker struct {
 	serfRPCAddr      string
@@ -231,8 +232,7 @@ func (c *pingChecker) storePingInHDR(pingroundtripLatency int64, node serf.Membe
 	return nil
 }
 
-// calculateRTT calculates the RoundTrip time between two Serf Cluster members
-func calculateRTT(serfClient *serf.RPCClient, self serf.Member, node serf.Member) (int64, error) {
+// calculateRTT calculates and returns the RoundTrip time (in nanoseconds) between two Serf Cluster members
 	selfCoord, err := serfClient.GetCoordinate(self.Name)
 	if err != nil {
 		return 0, err
@@ -252,7 +252,7 @@ func calculateRTT(serfClient *serf.RPCClient, self serf.Member, node serf.Member
 	return selfCoord.DistanceTo(otherNodeCoord).Nanoseconds(), nil
 }
 
-// setProbeStatus set the Probe according to status or raise an error if one is passed via arguments
+// setProbeStatus sets the Probe according to status or raises an error if one is passed via arguments
 func (c *pingChecker) setProbeStatus(ctx context.Context, r health.Reporter, err error, status pb.Probe_Type) {
 	switch status {
 	case pb.Probe_Failed:
