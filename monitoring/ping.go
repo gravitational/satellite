@@ -18,7 +18,6 @@ package monitoring
 
 import (
 	"context"
-	"github.com/gravitational/ttlmap"
 	"time"
 
 	"github.com/gravitational/satellite/agent/health"
@@ -26,6 +25,7 @@ import (
 
 	"github.com/codahale/hdrhistogram"
 	"github.com/gravitational/trace"
+	"github.com/gravitational/ttlmap"
 	serf "github.com/hashicorp/serf/client"
 	log "github.com/sirupsen/logrus"
 )
@@ -37,7 +37,7 @@ const (
 	slidingWindowSize = 10
 	// statsTTLPeriod specifies how long check results will be kept before being dropped
 	statsTTLPeriod = 1 * time.Hour
-	// pingRoundtripMinimum set the minim value that can be recorded
+	// pingRoundtripMinimum set the minimum value that can be recorded
 	pingRoundtripMinimum = 0 * time.Second
 	// pingRoundtripMaximum set the maximum value that can be recorded
 	pingRoundtripMaximum = 10 * time.Second
@@ -100,9 +100,10 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 
 	if err != nil {
 		c.setProbeStatus(ctx, r, err, pb.Probe_Failed)
-	} else {
-		c.setProbeStatus(ctx, r, nil, pb.Probe_Running)
+		return
 	}
+		c.setProbeStatus(ctx, r, nil, pb.Probe_Running)
+
 	return
 }
 
@@ -205,19 +206,12 @@ func (c *pingChecker) storePingInHDR(pingroundtripLatency int64, node serf.Membe
 		return trace.BadParameter("couldn't parse roundtripLatency as HDRHistogram on %s", c.serfMemberName)
 	}
 
-	tmpSnapshot := nodeLatencies.Export()
-	if len(tmpSnapshot.Counts) >= slidingWindowSize {
-		// pop element at index 0 (oldest)
+	snapshot := nodeLatencies.Export()
+	if len(snapshot.Counts) > slidingWindowSize {
 		nodeLatencies.Reset()
 
-		lowerLimit := len(tmpSnapshot.Counts) - slidingWindowSize
-		if lowerLimit < 0 {
-			lowerLimit = 0
-		}
-		// using len(tmpSnapshot.Counts)-1 as the upper limit as another value
-		// will be added a few lines below
-		for i := lowerLimit; i < len(tmpSnapshot.Counts)-1; i++ {
-			nodeLatencies.RecordValue(tmpSnapshot.Counts[i])
+		for _, latency := range snapshot.Counts[slidingWindowSize:] {
+			nodeLatencies.RecordValue(latency)
 		}
 	}
 
@@ -233,6 +227,7 @@ func (c *pingChecker) storePingInHDR(pingroundtripLatency int64, node serf.Membe
 }
 
 // calculateRTT calculates and returns the RoundTrip time (in nanoseconds) between two Serf Cluster members
+func calculateRTT(serfClient *serf.RPCClient, self, node serf.Member) (rttNanos int64, err error) {
 	selfCoord, err := serfClient.GetCoordinate(self.Name)
 	if err != nil {
 		return 0, trace.Wrap(err)
