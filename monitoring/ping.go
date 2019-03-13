@@ -145,7 +145,7 @@ func (c *pingChecker) check(ctx context.Context, r health.Reporter) error {
 		return trace.Wrap(err)
 	}
 
-	return trace.Wrap(err)
+	return nil
 }
 
 // checkNodesRTT implements the bulk of the logic by checking the ping RoundTrip time
@@ -169,21 +169,25 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 			return trace.Wrap(err)
 		}
 
-		roundtripLatencyInterface, _ := c.roundtripLatency.Get(node.Name)
-		roundtripLatency, ok := roundtripLatencyInterface.(*hdrhistogram.Histogram)
-		if !ok {
-			return trace.Errorf("couldn't parse roundtripLatency as HDRHistogram on %s", c.serfMemberName)
+		roundtripLatencyInterface, exists := c.roundtripLatency.Get(node.Name)
+		if !exists {
+			return trace.NotFound("roundTrip for %s not found", node.Name)
 		}
-		log.Debugf("%s <-ping-> %s = %dns [latest]", self.Name, node.Name, rttNanoSec)
+		latency, ok := roundtripLatencyInterface.(*hdrhistogram.Histogram)
+		if !ok {
+			return trace.BadParameter("expected roundtripLatency for %s to be *hdrhistogram.Histogram, got %T", c.serfMemberName, latency)
+		}
+		log.Debugf("%s <-ping-> %s = %dns [latest]", c.self.Name, node.Name, rttNanoSec)
 		log.Debugf("%s <-ping-> %s = %dns [%.2f percentile]",
-			self.Name, node.Name,
-			roundtripLatency.ValueAtQuantile(pingRoundtripQuantile),
-			pingRoundtripQuantile)
+			c.self.Name, node.Name,
+			latency.ValueAtQuantile(latencyQuantile),
+			latencyQuantile)
 
-		pingRoundtripPercentile := roundtripLatency.ValueAtQuantile(pingRoundtripQuantile)
-		if pingRoundtripPercentile >= pingRoundtripThreshold.Nanoseconds() {
+		latencyPercentile := latency.ValueAtQuantile(latencyQuantile)
+		if latencyPercentile >= latencyThreshold.Nanoseconds() {
 			log.Warningf("%s <-ping-> %s = slow ping RoundTrip detected. Value %dns over threshold %s (%dns)",
 				c.self.Name, node.Name, latencyPercentile,
+				latencyThreshold.String(), latencyThreshold.Nanoseconds())
 		} else {
 			log.Debugf("%s <-ping-> %s = ping RoundTrip okay. Value %dns within threshold %s (%dns)",
 				c.self.Name, node.Name, latencyPercentile,
@@ -198,12 +202,18 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 func (c *pingChecker) storePingInHDR(pingroundtripLatency int64, node serf.Member) error {
 	s, exists := c.roundtripLatency.Get(node.Name)
 	if !exists {
-		c.roundtripLatency.Set(node.Name,
+		err := c.roundtripLatency.Set(node.Name,
 			hdrhistogram.New(pingRoundtripMinimum.Nanoseconds(),
 				pingRoundtripMaximum.Nanoseconds(),
 				pingRoundtripSignificantFigures),
 			statsTTLPeriod)
-		s, _ = c.roundtripLatency.Get(node.Name)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+		s, exists = c.roundtripLatency.Get(node.Name)
+		if !exists {
+			return trace.NotFound("latency for %s not found", node.Name)
+		}
 	}
 
 	nodeLatencies, ok := s.(*hdrhistogram.Histogram)
@@ -264,5 +274,4 @@ func (c *pingChecker) setProbeStatus(ctx context.Context, r health.Reporter, err
 			Status:  pb.Probe_Running,
 		})
 	}
-	return
 }
