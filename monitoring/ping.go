@@ -49,18 +49,16 @@ const (
 	pingRoundtripQuantile = 95.0
 )
 
-// NewPingChecker implements and return an health.Checker
-func NewPingChecker(serfRPCAddr string, serfMemberName string) health.Checker {
+func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker, err error) {
 	roundtripLatencyTTLMap, err := ttlmap.New(int(statsTTLPeriod.Seconds()))
 	if err != nil {
-		log.Error(err)
-		return nil
+		return nil, trace.Wrap(err)
 	}
 	return &pingChecker{
 		serfRPCAddr:      serfRPCAddr,
 		serfMemberName:   serfMemberName,
 		roundtripLatency: *roundtripLatencyTTLMap,
-	}
+	}, nil
 }
 
 // pingChecker is a checker that verify that ping times (RTT) between nodes in
