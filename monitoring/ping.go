@@ -37,16 +37,16 @@ const (
 	slidingWindowSize = 10
 	// statsTTLPeriod specifies how long check results will be kept before being dropped
 	statsTTLPeriod = 1 * time.Hour
-	// pingRoundtripMinimum set the minimum value that can be recorded
+	// pingRoundtripMinimum sets the minimum value that can be recorded
 	pingRoundtripMinimum = 0 * time.Second
-	// pingRoundtripMaximum set the maximum value that can be recorded
+	// pingRoundtripMaximum sets the maximum value that can be recorded
 	pingRoundtripMaximum = 10 * time.Second
-	// pingRoundtripSignificativeFigures specifies how many decimals should be recorded
-	pingRoundtripSignificativeFigures = 3
+	// pingRoundtripSignificantFigures specifies how many decimals should be recorded
+	pingRoundtripSignificantFigures = 3
 	// pingRoundtripThreshold sets the RTT threshold
-	pingRoundtripThreshold = 15 * time.Millisecond
+	latencyThreshold = 15 * time.Millisecond
 	// pingRoundtripQuantile sets the quantile used while checking Histograms against Rtt results
-	pingRoundtripQuantile = 95.0
+	latencyQuantile = 95.0
 )
 
 // NewPingChecker returns a checker that verifies accessibility of nodes in the cluster by exchanging ping requests
@@ -58,7 +58,7 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker
 
 	log.Debugf("[ping] using Serf IP: %v", serfRPCAddr)
 	log.Debugf("[ping] using Serf Name: %v", serfMemberName)
-	// fetch serf config and intantiate client
+	// fetch serf config and instantiate client
 	clientConfig := serf.Config{
 		Addr: serfRPCAddr,
 	}
@@ -95,6 +95,7 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker
 // pingChecker is a checker that verifies that ping times (RTT) between nodes in
 // the cluster are within a predefined threshold
 type pingChecker struct {
+	self             serf.Member
 	serfClient       serf.RPCClient
 	serfMemberName   string
 	roundtripLatency ttlmap.TTLMap
@@ -200,7 +201,7 @@ func (c *pingChecker) storePingInHDR(pingroundtripLatency int64, node serf.Membe
 		c.roundtripLatency.Set(node.Name,
 			hdrhistogram.New(pingRoundtripMinimum.Nanoseconds(),
 				pingRoundtripMaximum.Nanoseconds(),
-				pingRoundtripSignificativeFigures),
+				pingRoundtripSignificantFigures),
 			statsTTLPeriod)
 		s, _ = c.roundtripLatency.Get(node.Name)
 	}
