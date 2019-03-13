@@ -54,6 +54,19 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
+
+	log.Debugf("[ping] using Serf IP: %v", serfRPCAddr)
+	log.Debugf("[ping] using Serf Name: %v", serfMemberName)
+	// fetch serf config and intantiate client
+	clientConfig := serf.Config{
+		Addr: serfRPCAddr,
+	}
+	client, err := serf.ClientFromConfig(&clientConfig)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	defer client.Close()
+
 	return &pingChecker{
 		serfRPCAddr:      serfRPCAddr,
 		serfMemberName:   serfMemberName,
@@ -95,17 +108,11 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 // check runs the actual system status verification code and returns an error
 // in case issues arise in the process
 func (c *pingChecker) check(ctx context.Context, r health.Reporter) error {
-	// fetch serf config and intantiate client
-	log.Debugf("[ping] using Serf IP: %v", c.serfRPCAddr)
-	log.Debugf("[ping] using Serf Name: %v", c.serfMemberName)
-	clientConfig := serf.Config{
-		Addr: c.serfRPCAddr,
+
+	client := &c.serfClient
+	if client == nil {
+		return trace.NotFound("serf client not initialized yet")
 	}
-	client, err := serf.ClientFromConfig(&clientConfig)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
 
 	// retrieve other nodes using Serf members
 	nodes, err := client.Members()
