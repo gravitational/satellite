@@ -120,7 +120,7 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 		c.setProbeStatus(ctx, r, err, pb.Probe_Failed)
 		return
 	}
-		c.setProbeStatus(ctx, r, nil, pb.Probe_Running)
+	c.setProbeStatus(ctx, r, nil, pb.Probe_Running)
 
 	return
 }
