@@ -21,7 +21,7 @@ import (
 	"github.com/gravitational/trace"
 )
 
-// NewRountripClient returns new roundtrip.Client with root URL
+// NewRoundtripClient returns new roundtrip.Client with root URL
 func NewRoundtripClient(url string, opts ...roundtrip.ClientParam) (*roundtrip.Client, error) {
 	clt, err := roundtrip.NewClient(url, "", opts...)
 	if err != nil {

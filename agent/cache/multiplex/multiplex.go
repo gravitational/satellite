@@ -47,7 +47,7 @@ func (r *multiplexer) UpdateStatus(status *pb.SystemStatus) (err error) {
 	return nil
 }
 
-// Read obtains last known system status
+// RecentStatus reads obtains last known system status
 func (r *multiplexer) RecentStatus() (*pb.SystemStatus, error) {
 	return r.cache.RecentStatus()
 }
