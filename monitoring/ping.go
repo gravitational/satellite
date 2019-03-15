@@ -88,7 +88,7 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker
 		self:           self,
 		serfClient:     *client,
 		serfMemberName: serfMemberName,
-		latency:        *latencyTTLMap,
+		latencyStats:   *latencyTTLMap,
 	}, nil
 }
 
@@ -98,7 +98,7 @@ type pingChecker struct {
 	self           serf.Member
 	serfClient     serf.RPCClient
 	serfMemberName string
-	latency        ttlmap.TTLMap
+	latencyStats   ttlmap.TTLMap
 }
 
 // Name returns the checker name
@@ -164,26 +164,31 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 			return trace.Wrap(err)
 		}
 
-		err = c.storePingInHDR(rttNanoSec, node)
+		err = c.saveLatencyStats(rttNanoSec, node)
 		if err != nil {
 			return trace.Wrap(err)
 		}
 
-		latencyInterface, exists := c.latency.Get(node.Name)
+		latencyInterface, exists := c.latencyStats.Get(node.Name)
 		if !exists {
 			return trace.NotFound("latency for %s not found", node.Name)
 		}
-		latency, ok := latencyInterface.(*hdrhistogram.Histogram)
+		latency, ok := latencyInterface.([]int64)
 		if !ok {
-			return trace.BadParameter("expected latency for %s to be *hdrhistogram.Histogram, got %T", c.serfMemberName, latency)
+			return trace.BadParameter("expected latency for %s to be []int64 got %T", c.serfMemberName, latency)
 		}
+		latencyHistogram, err := c.buildLatencyHistogram(node.Name)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+
 		log.Debugf("%s <-ping-> %s = %dns [latest]", c.self.Name, node.Name, rttNanoSec)
 		log.Debugf("%s <-ping-> %s = %dns [%.2f percentile]",
 			c.self.Name, node.Name,
-			latency.ValueAtQuantile(latencyQuantile),
+			latencyHistogram.ValueAtQuantile(latencyQuantile),
 			latencyQuantile)
 
-		latencyPercentile := latency.ValueAtQuantile(latencyQuantile)
+		latencyPercentile := latencyHistogram.ValueAtQuantile(latencyQuantile)
 		if latencyPercentile >= latencyThreshold.Nanoseconds() {
 			log.Warningf("%s <-ping-> %s = slow ping detected. Value %dns over threshold %s (%dns)",
 				c.self.Name, node.Name, latencyPercentile,
@@ -198,41 +203,53 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 	return nil
 }
 
-// storePingInHDR is used to store ping values in HDR Histograms in memory
-func (c *pingChecker) storePingInHDR(pingLatency int64, node serf.Member) error {
-	s, exists := c.latency.Get(node.Name)
+// buildLatencyHistogram converts the []int64 of latencies in a HDRHistrogram
+func (c *pingChecker) buildLatencyHistogram(nodeName string) (latencyHDR *hdrhistogram.Histogram, err error) {
+	latencyHDR = hdrhistogram.New(pingMinimum.Nanoseconds(),
+		pingMaximum.Nanoseconds(), pingSignificantFigures)
+
+	latency, exists := c.latencyStats.Get(nodeName)
 	if !exists {
-		s := hdrhistogram.New(pingMinimum.Nanoseconds(),
-			pingMaximum.Nanoseconds(),
-			pingSignificantFigures)
-
-		err := c.latency.Set(node.Name, s, statsTTLPeriod)
-		if err != nil {
-			return trace.Wrap(err)
-		}
+		return nil, trace.NotFound("latency for %s not found", nodeName)
 	}
-
-	nodeLatencies, ok := s.(*hdrhistogram.Histogram)
+	sMap, ok := latency.([]int64)
 	if !ok {
-		return trace.BadParameter("couldn't parse node latency as HDRHistogram on %s", c.serfMemberName)
+		return nil, trace.BadParameter("couldn't parse node latency as []int64 for %s", nodeName)
 	}
 
-	snapshot := nodeLatencies.Export()
-	if len(snapshot.Counts) > slidingWindowSize {
-		nodeLatencies.Reset()
+	for _, v := range sMap {
+		latencyHDR.RecordValue(v)
+	}
 
-		for _, latency := range snapshot.Counts[slidingWindowSize:] {
-			nodeLatencies.RecordValue(latency)
+	return latencyHDR, nil
+		}
+
+// saveLatencyStats is used to store ping values in HDR Histograms in memory
+func (c *pingChecker) saveLatencyStats(pingLatency int64, node serf.Member) error {
+	s, exists := c.latencyStats.Get(node.Name)
+	if !exists {
+		var s [slidingWindowSize]int64
+		s[0] = pingLatency
+	}
+
+	sMap, ok := s.([]int64)
+	if !ok {
+		return trace.BadParameter("couldn't parse node latency as []int64 on %s", c.serfMemberName)
+	}
+
+	if len(sMap) > slidingWindowSize {
+		for _, l := range sMap[1 : slidingWindowSize-2] {
+			sMap = append(sMap, l)
 		}
 	}
 
-	err := nodeLatencies.RecordValue(pingLatency)
+	sMap = append(sMap, pingLatency)
+	log.Debugf("%d recorded ping values for node %s", len(sMap), node.Name)
+
+	err := c.latencyStats.Set(node.Name, sMap, statsTTLPeriod)
 	if err != nil {
 		return trace.Wrap(err)
 	}
-
-	log.Debugf("%d recorded ping values for node %s",
-		nodeLatencies.TotalCount(), node.Name)
 
 	return nil
 }
