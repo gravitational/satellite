@@ -222,7 +222,7 @@ func (c *pingChecker) buildLatencyHistogram(nodeName string) (latencyHDR *hdrhis
 	}
 
 	return latencyHDR, nil
-		}
+}
 
 // saveLatencyStats is used to store ping values in HDR Histograms in memory
 func (c *pingChecker) saveLatencyStats(pingLatency int64, node serf.Member) error {
