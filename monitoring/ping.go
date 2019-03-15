@@ -66,7 +66,6 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	defer client.Close()
 
 	// retrieve other nodes using Serf members
 	nodes, err := client.Members()
