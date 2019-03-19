@@ -240,14 +240,14 @@ func (c *pingChecker) saveLatencyStats(pingLatency int64, node serf.Member) erro
 		}
 	}
 
-	if len(sMap) > slidingWindowSize {
+	if len(sMap) >= slidingWindowSize {
 		for _, l := range sMap[1 : slidingWindowSize-2] {
 			sMap = append(sMap, l)
 		}
 	}
 
 	sMap = append(sMap, pingLatency)
-	log.Debugf("%d recorded ping values for node %s", len(sMap), node.Name)
+	log.Debugf("%d recorded ping values for node %s => %v", len(sMap), node.Name, sMap)
 
 	err := c.latencyStats.Set(node.Name, sMap, statsTTLPeriod)
 	if err != nil {
