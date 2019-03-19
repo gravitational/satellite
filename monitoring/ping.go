@@ -66,7 +66,7 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	defer client.Close()
+	// FIXME: defer client.Close() # cannot be used here or causes error: ping-checker (set tcp 127.0.0.1:52026: use of closed network connection)
 
 	// retrieve other nodes using Serf members
 	nodes, err := client.Members()
