@@ -66,6 +66,7 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
+	defer client.Close()
 
 	// retrieve other nodes using Serf members
 	nodes, err := client.Members()
@@ -225,15 +226,18 @@ func (c *pingChecker) buildLatencyHistogram(nodeName string) (latencyHDR *hdrhis
 
 // saveLatencyStats is used to store ping values in HDR Histograms in memory
 func (c *pingChecker) saveLatencyStats(pingLatency int64, node serf.Member) error {
+	var sMap []int64
+
 	s, exists := c.latencyStats.Get(node.Name)
 	if !exists {
-		var s [slidingWindowSize]int64
-		s[0] = pingLatency
-	}
-
-	sMap, ok := s.([]int64)
-	if !ok {
-		return trace.BadParameter("couldn't parse node latency as []int64 on %s", c.serfMemberName)
+		sMap = make([]int64, slidingWindowSize)
+		sMap[0] = pingLatency
+	} else {
+		var ok bool
+		sMap, ok = s.([]int64)
+		if !ok {
+			return trace.BadParameter("couldn't parse node latency as []int64 on %s", c.serfMemberName)
+		}
 	}
 
 	if len(sMap) > slidingWindowSize {
