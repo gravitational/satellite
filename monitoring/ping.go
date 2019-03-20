@@ -213,12 +213,12 @@ func (c *pingChecker) buildLatencyHistogram(nodeName string) (latencyHDR *hdrhis
 	if !exists {
 		return nil, trace.NotFound("latency for %s not found", nodeName)
 	}
-	sMap, ok := latency.([]int64)
+	latencySlice, ok := latency.([]int64)
 	if !ok {
 		return nil, trace.BadParameter("couldn't parse node latency as []int64 for %s", nodeName)
 	}
 
-	for _, v := range sMap {
+	for _, v := range latencySlice {
 		latencyHDR.RecordValue(v)
 	}
 
@@ -227,28 +227,28 @@ func (c *pingChecker) buildLatencyHistogram(nodeName string) (latencyHDR *hdrhis
 
 // saveLatencyStats is used to store ping values in HDR Histograms in memory
 func (c *pingChecker) saveLatencyStats(pingLatency int64, node serf.Member) error {
-	var sMap []int64
+	var latencySlice []int64
 
 	s, exists := c.latencyStats.Get(node.Name)
 	if !exists {
-		sMap = make([]int64, 0, slidingWindowSize)
+		latencySlice = make([]int64, 0, slidingWindowSize)
 	} else {
 		var ok bool
-		sMap, ok = s.([]int64)
+		latencySlice, ok = s.([]int64)
 		if !ok {
 			return trace.BadParameter("couldn't parse node latency as []int64 on %s", c.serfMemberName)
 		}
 
-		// upperLimit needs to be the highest between `len(sMap)` and `slidingWindowSize`
-		upperLimit := max(len(sMap), slidingWindowSize)
+		// upperLimit needs to be the highest between `len(latencySlice)` and `slidingWindowSize`
+		upperLimit := max(len(latencySlice), slidingWindowSize)
 		// shift by popping first (older) element up to desired size
-		_, sMap = sMap[0], sMap[1:upperLimit]
+		_, latencySlice = latencySlice[0], latencySlice[1:upperLimit]
 	}
 
-	sMap = append(sMap, pingLatency)
-	log.Debugf("%d recorded ping values for node %s => %v", len(sMap), node.Name, sMap)
+	latencySlice = append(latencySlice, pingLatency)
+	log.Debugf("%d recorded ping values for node %s => %v", len(latencySlice), node.Name, latencySlice)
 
-	err := c.latencyStats.Set(node.Name, sMap, statsTTLPeriod)
+	err := c.latencyStats.Set(node.Name, latencySlice, statsTTLPeriod)
 	if err != nil {
 		return trace.Wrap(err)
 	}
