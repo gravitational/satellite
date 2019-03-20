@@ -230,7 +230,7 @@ func (c *pingChecker) saveLatencyStats(pingLatency int64, node serf.Member) erro
 
 	s, exists := c.latencyStats.Get(node.Name)
 	if !exists {
-		sMap = make([]int64, slidingWindowSize)
+		sMap = make([]int64, 0, slidingWindowSize)
 		sMap[0] = pingLatency
 	} else {
 		var ok bool
