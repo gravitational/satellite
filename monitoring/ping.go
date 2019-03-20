@@ -56,8 +56,9 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker
 		return nil, trace.Wrap(err)
 	}
 
-	log.Debugf("[ping] using Serf IP: %v", serfRPCAddr)
-	log.Debugf("[ping] using Serf Name: %v", serfMemberName)
+	log.WithFields(log.Fields{trace.Component: "ping"})
+	log.Debugf("using Serf IP: %v", serfRPCAddr)
+	log.Debugf("using Serf Name: %v", serfMemberName)
 	// fetch serf config and instantiate client
 	clientConfig := serf.Config{
 		Addr: serfRPCAddr,
