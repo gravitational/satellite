@@ -231,19 +231,18 @@ func (c *pingChecker) saveLatencyStats(pingLatency int64, node serf.Member) erro
 	s, exists := c.latencyStats.Get(node.Name)
 	if !exists {
 		sMap = make([]int64, 0, slidingWindowSize)
-		sMap = append(sMap, pingLatency)
 	} else {
 		var ok bool
 		sMap, ok = s.([]int64)
 		if !ok {
 			return trace.BadParameter("couldn't parse node latency as []int64 on %s", c.serfMemberName)
 		}
-	}
 
-	if len(sMap) >= slidingWindowSize {
-		for _, l := range sMap[1 : slidingWindowSize-2] {
-			sMap = append(sMap, l)
-		}
+		// upperLimit needs to be the highest between `len(sMap)` and `slidingWindowSize -1`
+		// slidingWindowSize needs the - 2 cause it's the desired slice size, -1 as the final element will be added later
+		upperLimit := max(len(sMap), slidingWindowSize-1)
+		// shift by popping first (older) element up to desired size
+		_, sMap = sMap[0], sMap[1:upperLimit-1]
 	}
 
 	sMap = append(sMap, pingLatency)
@@ -255,6 +254,13 @@ func (c *pingChecker) saveLatencyStats(pingLatency int64, node serf.Member) erro
 	}
 
 	return nil
+}
+
+func max(x, y int) (max int) {
+	if x > y {
+		return x
+	}
+	return y
 }
 
 // calculateRTT calculates and returns the latency time (in nanoseconds) between two Serf Cluster members
