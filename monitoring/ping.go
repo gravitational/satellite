@@ -285,7 +285,7 @@ func calculateRTT(serfClient *serf.RPCClient, self, node serf.Member) (rttNanos 
 		return 0, trace.Wrap(err)
 	}
 	if selfCoord == nil {
-		return 0, trace.NotFound("self node %s coordinates not found", self.Name)
+		return 0, trace.NotFound("could not find a coordinate for node %s", self.Name)
 	}
 
 	otherNodeCoord, err := serfClient.GetCoordinate(node.Name)
