@@ -221,7 +221,10 @@ func (c *pingChecker) buildLatencyHistogram(nodeName string) (latencyHDR *hdrhis
 	}
 
 	for _, v := range latencySlice {
-		latencyHDR.RecordValue(v)
+		err := latencyHDR.RecordValue(v)
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
 	}
 
 	return latencyHDR, nil
