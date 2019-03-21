@@ -57,9 +57,9 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker
 		return nil, trace.Wrap(err)
 	}
 
-	log.WithFields(log.Fields{trace.Component: "ping"})
-	log.Debugf("using Serf IP: %v", serfRPCAddr)
-	log.Debugf("using Serf Name: %v", serfMemberName)
+	logger := log.WithFields(log.Fields{trace.Component: "ping"})
+	logger.Debugf("using Serf IP: %v", serfRPCAddr)
+	logger.Debugf("using Serf Name: %v", serfMemberName)
 	// fetch serf config and instantiate client
 	clientConfig := serf.Config{
 		Addr: serfRPCAddr,
@@ -91,6 +91,7 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker
 		serfClient:     *client,
 		serfMemberName: serfMemberName,
 		latencyStats:   *latencyTTLMap,
+		logger:         *logger,
 	}, nil
 }
 
@@ -102,6 +103,7 @@ type pingChecker struct {
 	serfMemberName string
 	latencyStats   ttlmap.TTLMap
 	mux            sync.Mutex
+	logger         log.Entry
 }
 
 // Name returns the checker name
@@ -185,19 +187,19 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 			return trace.Wrap(err)
 		}
 
-		log.Debugf("%s <-ping-> %s = %dns [latest]", c.self.Name, node.Name, rttNanoSec)
-		log.Debugf("%s <-ping-> %s = %dns [%.2f percentile]",
+		c.logger.Debugf("%s <-ping-> %s = %dns [latest]", c.self.Name, node.Name, rttNanoSec)
+		c.logger.Debugf("%s <-ping-> %s = %dns [%.2f percentile]",
 			c.self.Name, node.Name,
 			latencyHistogram.ValueAtQuantile(latencyQuantile),
 			latencyQuantile)
 
 		latencyPercentile := latencyHistogram.ValueAtQuantile(latencyQuantile)
 		if latencyPercentile >= latencyThreshold.Nanoseconds() {
-			log.Warningf("%s <-ping-> %s = slow ping detected. Value %dns over threshold %s (%dns)",
+			c.logger.Warningf("%s <-ping-> %s = slow ping detected. Value %dns over threshold %s (%dns)",
 				c.self.Name, node.Name, latencyPercentile,
 				latencyThreshold.String(), latencyThreshold.Nanoseconds())
 		} else {
-			log.Debugf("%s <-ping-> %s = ping okay. Value %dns within threshold %s (%dns)",
+			c.logger.Debugf("%s <-ping-> %s = ping okay. Value %dns within threshold %s (%dns)",
 				c.self.Name, node.Name, latencyPercentile,
 				latencyThreshold.String(), latencyThreshold.Nanoseconds())
 		}
@@ -253,7 +255,7 @@ func (c *pingChecker) saveLatencyStats(pingLatency int64, node serf.Member) erro
 	}
 
 	latencySlice = append(latencySlice, pingLatency)
-	log.Debugf("%d recorded ping values for node %s => %v", len(latencySlice), node.Name, latencySlice)
+	c.logger.Debugf("%d recorded ping values for node %s => %v", len(latencies), node.Name, latencies)
 
 	err := c.latencyStats.Set(node.Name, latencySlice, statsTTLPeriod)
 	if err != nil {
@@ -297,7 +299,7 @@ func calculateRTT(serfClient *serf.RPCClient, self, node serf.Member) (rttNanos 
 func (c *pingChecker) setProbeStatus(ctx context.Context, r health.Reporter, err error, status pb.Probe_Type) {
 	switch status {
 	case pb.Probe_Failed:
-		log.Error(err.Error())
+		c.logger.Error(err.Error())
 		r.Add(NewProbeFromErr(c.Name(), "", err))
 	case pb.Probe_Running:
 		r.Add(&pb.Probe{
