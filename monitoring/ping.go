@@ -31,6 +31,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// TODO: latencyThreshold should be configurable
+// TODO: latency stats should be sent to metrics
+
 const (
 	// pingCheckerID specifies the check name
 	pingCheckerID = "ping-checker"
@@ -127,9 +130,6 @@ func (c *pingChecker) Name() string {
 // desired threshold
 // Implements health.Checker
 func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
-	// FIXME: #1 RTTThreshold will become configurable in future
-	// FIXME: #2 Send RTTThreshold value to metrics
-
 	err := c.check(ctx, r)
 
 	if err != nil {
