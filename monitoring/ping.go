@@ -79,6 +79,7 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker
 	for _, node := range nodes {
 		if node.Name == serfMemberName {
 			self = node
+			break // self node found, breaking out of the for loop
 		}
 	}
 	if self.Name == "" {
