@@ -133,12 +133,11 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 	err := c.check(ctx, r)
 
 	if err != nil {
-		c.setProbeStatus(ctx, r, err, pb.Probe_Failed)
+		c.logger.Error(err.Error())
+		r.Add(NewProbeFromErr(c.Name(), "", err))
 		return
 	}
-	c.setProbeStatus(ctx, r, nil, pb.Probe_Running)
-
-	return
+	r.Add(&pb.Probe{Checker: c.Name(), Status: pb.Probe_Running})
 }
 
 // check runs the actual system status verification code and returns an error
@@ -297,18 +296,4 @@ func calculateRTT(serfClient *serf.RPCClient, self, node serf.Member) (rttNanos 
 	}
 
 	return selfCoord.DistanceTo(otherNodeCoord).Nanoseconds(), nil
-}
-
-// setProbeStatus sets the Probe according to status or raises an error if one is passed via arguments
-func (c *pingChecker) setProbeStatus(ctx context.Context, r health.Reporter, err error, status pb.Probe_Type) {
-	switch status {
-	case pb.Probe_Failed:
-		c.logger.Error(err.Error())
-		r.Add(NewProbeFromErr(c.Name(), "", err))
-	case pb.Probe_Running:
-		r.Add(&pb.Probe{
-			Checker: c.Name(),
-			Status:  pb.Probe_Running,
-		})
-	}
 }
