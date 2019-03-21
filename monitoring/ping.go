@@ -169,7 +169,7 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 			return trace.Wrap(err)
 		}
 
-		err = c.saveLatencyStats(rttNanoSec, node)
+		_, err = c.saveLatencyStats(rttNanoSec, node)
 		if err != nil {
 			return trace.Wrap(err)
 		}
@@ -233,45 +233,33 @@ func (c *pingChecker) buildLatencyHistogram(nodeName string) (latencyHDR *hdrhis
 }
 
 // saveLatencyStats is used to store ping values in HDR Histograms in memory
-func (c *pingChecker) saveLatencyStats(pingLatency int64, node serf.Member) error {
+func (c *pingChecker) saveLatencyStats(pingLatency int64, node serf.Member) (latencies []int64, err error) {
 	c.mux.Lock()
-	var latencySlice []int64
+	defer c.mux.Unlock()
 
-	s, exists := c.latencyStats.Get(node.Name)
-	if !exists {
-		latencySlice = make([]int64, 0, slidingWindowSize)
-	} else {
+	if value, exists := c.latencyStats.Get(node.Name); exists {
 		var ok bool
-		latencySlice, ok = s.([]int64)
-		if !ok {
-			c.mux.Unlock()
-			return trace.BadParameter("couldn't parse node latency as []int64 on %s", c.serfMemberName)
+		if latencies, ok = value.([]int64); !ok {
+			return nil, trace.BadParameter("couldn't parse node latency as []int64 on %s", c.serfMemberName)
 		}
-
-		// upperLimit needs to be the highest between `len(latencySlice)` and `slidingWindowSize`
-		upperLimit := max(len(latencySlice), slidingWindowSize)
-		// shift by popping first (older) element up to desired size
-		_, latencySlice = latencySlice[0], latencySlice[1:upperLimit]
 	}
 
-	latencySlice = append(latencySlice, pingLatency)
+	if len(latencies) >= slidingWindowSize {
+		// pop oldest value to make room for the new one
+		copy(latencies, latencies[1:])
+		// keep the slice within the sliding window size
+		latencies = latencies[:slidingWindowSize-1]
+	}
+
+	latencies = append(latencies, pingLatency)
 	c.logger.Debugf("%d recorded ping values for node %s => %v", len(latencies), node.Name, latencies)
 
-	err := c.latencyStats.Set(node.Name, latencySlice, statsTTLPeriod)
+	err = c.latencyStats.Set(node.Name, latencies, statsTTLPeriod)
 	if err != nil {
-		c.mux.Unlock()
-		return trace.Wrap(err)
+		return nil, trace.Wrap(err)
 	}
 
-	c.mux.Unlock()
-	return nil
-}
-
-func max(x, y int) (max int) {
-	if x > y {
-		return x
-	}
-	return y
+	return latencies, nil
 }
 
 // calculateRTT calculates and returns the latency time (in nanoseconds) between two Serf Cluster members
