@@ -46,13 +46,13 @@ const (
 	pingSignificantFigures = 3
 	// latencyThreshold sets the RTT threshold
 	latencyThreshold = 15 * time.Millisecond
-	// latencyQuantile sets the quantile used while checking Histograms against Rtt results
+	// latencyQuantile sets the quantile used while checking Histograms against RTT results
 	latencyQuantile = 95.0
 )
 
 // NewPingChecker returns a checker that verifies accessibility of nodes in the cluster by exchanging ping requests
 func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker, err error) {
-	latencyTTLMap, err := ttlmap.New(int(statsTTLPeriod.Seconds()))
+	latencyTTLMap, err := ttlmap.New(int(statsTTLPeriod.Seconds())) //FIXME: why is number of seconds used as capacity?
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -114,8 +114,8 @@ func (c *pingChecker) Name() string {
 // desired threshold
 // Implements health.Checker
 func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
-	// FIXME: #1 RttThreshold will become configurable in future
-	// FIXME: #2 Send RttThreshold value to metrics
+	// FIXME: #1 RTTThreshold will become configurable in future
+	// FIXME: #2 Send RTTThreshold value to metrics
 
 	err := c.check(ctx, r)
 
