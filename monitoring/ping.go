@@ -18,6 +18,7 @@ package monitoring
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/gravitational/satellite/agent/health"
@@ -100,6 +101,7 @@ type pingChecker struct {
 	serfClient     serf.RPCClient
 	serfMemberName string
 	latencyStats   ttlmap.TTLMap
+	mux            sync.Mutex
 }
 
 // Name returns the checker name
@@ -227,6 +229,7 @@ func (c *pingChecker) buildLatencyHistogram(nodeName string) (latencyHDR *hdrhis
 
 // saveLatencyStats is used to store ping values in HDR Histograms in memory
 func (c *pingChecker) saveLatencyStats(pingLatency int64, node serf.Member) error {
+	c.mux.Lock()
 	var latencySlice []int64
 
 	s, exists := c.latencyStats.Get(node.Name)
@@ -236,6 +239,7 @@ func (c *pingChecker) saveLatencyStats(pingLatency int64, node serf.Member) erro
 		var ok bool
 		latencySlice, ok = s.([]int64)
 		if !ok {
+			c.mux.Unlock()
 			return trace.BadParameter("couldn't parse node latency as []int64 on %s", c.serfMemberName)
 		}
 
@@ -250,9 +254,11 @@ func (c *pingChecker) saveLatencyStats(pingLatency int64, node serf.Member) erro
 
 	err := c.latencyStats.Set(node.Name, latencySlice, statsTTLPeriod)
 	if err != nil {
+		c.mux.Unlock()
 		return trace.Wrap(err)
 	}
 
+	c.mux.Unlock()
 	return nil
 }
 
