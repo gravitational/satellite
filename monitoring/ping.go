@@ -50,6 +50,18 @@ const (
 	latencyQuantile = 95.0
 )
 
+// pingChecker is a checker that verifies that ping times (RTT) between nodes in
+// the cluster are within a predefined threshold
+type pingChecker struct {
+	self           serf.Member
+	serfClient     serf.RPCClient
+	serfRPCAddr    string
+	serfMemberName string
+	latencyStats   ttlmap.TTLMap
+	mux            sync.Mutex
+	logger         log.Entry
+}
+
 // NewPingChecker returns a checker that verifies accessibility of nodes in the cluster by exchanging ping requests
 func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker, err error) {
 	latencyTTLMap, err := ttlmap.New(int(statsTTLPeriod.Seconds())) //FIXME: why is number of seconds used as capacity?
@@ -60,11 +72,8 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker
 	logger := log.WithFields(log.Fields{trace.Component: "ping"})
 	logger.Debugf("using Serf IP: %v", serfRPCAddr)
 	logger.Debugf("using Serf Name: %v", serfMemberName)
-	// fetch serf config and instantiate client
-	clientConfig := serf.Config{
-		Addr: serfRPCAddr,
-	}
-	client, err := serf.ClientFromConfig(&clientConfig)
+
+	client, err := newSerfClient(serfRPCAddr)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -89,21 +98,23 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker
 	return &pingChecker{
 		self:           self,
 		serfClient:     *client,
+		serfRPCAddr:    serfRPCAddr,
 		serfMemberName: serfMemberName,
 		latencyStats:   *latencyTTLMap,
 		logger:         *logger,
 	}, nil
 }
 
-// pingChecker is a checker that verifies that ping times (RTT) between nodes in
-// the cluster are within a predefined threshold
-type pingChecker struct {
-	self           serf.Member
-	serfClient     serf.RPCClient
-	serfMemberName string
-	latencyStats   ttlmap.TTLMap
-	mux            sync.Mutex
-	logger         log.Entry
+func newSerfClient(serfRPCAddr string) (client *serf.RPCClient, err error) {
+	// fetch serf config and instantiate client
+	clientConfig := serf.Config{
+		Addr: serfRPCAddr,
+	}
+	client, err = serf.ClientFromConfig(&clientConfig)
+	if err != nil {
+		return client, trace.Wrap(err)
+	}
+	return client, nil
 }
 
 // Name returns the checker name
@@ -132,11 +143,16 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 
 // check runs the actual system status verification code and returns an error
 // in case issues arise in the process
-func (c *pingChecker) check(ctx context.Context, r health.Reporter) error {
+func (c *pingChecker) check(ctx context.Context, r health.Reporter) (err error) {
 
 	client := &c.serfClient
-	if client == nil {
-		return trace.NotFound("serf client not initialized yet")
+	// check if client connection closed and reopen it
+	if client.IsClosed() {
+		client, err = newSerfClient(c.serfRPCAddr)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+		c.serfClient = *client
 	}
 
 	// retrieve other nodes using Serf members
