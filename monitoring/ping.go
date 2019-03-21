@@ -37,10 +37,12 @@ import (
 const (
 	// pingCheckerID specifies the check name
 	pingCheckerID = "ping-checker"
-	// slidingWindowSize specifies the number of retained check results
-	slidingWindowSize = 10
-	// statsTTLPeriod specifies how long check results will be kept before being dropped
-	statsTTLPeriod = 1 * time.Hour
+	// latencyStatsTTL specifies how long check results will be kept before being dropped
+	latencyStatsTTL = 1 * time.Hour
+	// latencyStatsCapacity sets the number of TTLMaps that can be stored; this will be the size of the cluster -1
+	latencyStatsCapacity = 1000
+	// latencyStatsSlidingWindowSize specifies the number of retained check results
+	latencyStatsSlidingWindowSize = 20
 	// pingMinimum sets the minimum value that can be recorded
 	pingMinimum = 0 * time.Second
 	// pingMaximum sets the maximum value that can be recorded
@@ -67,7 +69,7 @@ type pingChecker struct {
 
 // NewPingChecker returns a checker that verifies accessibility of nodes in the cluster by exchanging ping requests
 func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker, err error) {
-	latencyTTLMap, err := ttlmap.New(int(statsTTLPeriod.Seconds())) //FIXME: why is number of seconds used as capacity?
+	latencyTTLMap, err := ttlmap.New(latencyStatsCapacity)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -184,20 +186,12 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 			return trace.Wrap(err)
 		}
 
-		_, err = c.saveLatencyStats(rttNanoSec, node)
+		latencies, err := c.saveLatencyStats(rttNanoSec, node)
 		if err != nil {
 			return trace.Wrap(err)
 		}
 
-		latencyInterface, exists := c.latencyStats.Get(node.Name)
-		if !exists {
-			return trace.NotFound("latency for %s not found", node.Name)
-		}
-		latency, ok := latencyInterface.([]int64)
-		if !ok {
-			return trace.BadParameter("expected latency for %s to be []int64 got %T", c.serfMemberName, latency)
-		}
-		latencyHistogram, err := c.buildLatencyHistogram(node.Name)
+		latencyHistogram, err := c.buildLatencyHistogram(node.Name, latencies)
 		if err != nil {
 			return trace.Wrap(err)
 		}
@@ -223,21 +217,12 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient)
 	return nil
 }
 
-// buildLatencyHistogram converts the []int64 of latencies in a HDRHistrogram
-func (c *pingChecker) buildLatencyHistogram(nodeName string) (latencyHDR *hdrhistogram.Histogram, err error) {
+// buildLatencyHistogram maps latencies to a HDRHistrogram
+func (c *pingChecker) buildLatencyHistogram(nodeName string, latencies []int64) (latencyHDR *hdrhistogram.Histogram, err error) {
 	latencyHDR = hdrhistogram.New(pingMinimum.Nanoseconds(),
 		pingMaximum.Nanoseconds(), pingSignificantFigures)
 
-	latency, exists := c.latencyStats.Get(nodeName)
-	if !exists {
-		return nil, trace.NotFound("latency for %s not found", nodeName)
-	}
-	latencySlice, ok := latency.([]int64)
-	if !ok {
-		return nil, trace.BadParameter("couldn't parse node latency as []int64 for %s", nodeName)
-	}
-
-	for _, v := range latencySlice {
+	for _, v := range latencies {
 		err := latencyHDR.RecordValue(v)
 		if err != nil {
 			return nil, trace.Wrap(err)
@@ -259,17 +244,16 @@ func (c *pingChecker) saveLatencyStats(pingLatency int64, node serf.Member) (lat
 		}
 	}
 
-	if len(latencies) >= slidingWindowSize {
-		// pop oldest value to make room for the new one
-		copy(latencies, latencies[1:])
+	if len(latencies) >= latencyStatsSlidingWindowSize {
 		// keep the slice within the sliding window size
-		latencies = latencies[:slidingWindowSize-1]
+		// slidingWindowSize is -1 because another element will be added a few lines below
+		latencies = latencies[1 : latencyStatsSlidingWindowSize-1]
 	}
 
 	latencies = append(latencies, pingLatency)
 	c.logger.Debugf("%d recorded ping values for node %s => %v", len(latencies), node.Name, latencies)
 
-	err = c.latencyStats.Set(node.Name, latencies, statsTTLPeriod)
+	err = c.latencyStats.Set(node.Name, latencies, latencyStatsTTL)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
