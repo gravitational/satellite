@@ -247,7 +247,7 @@ func (c *pingChecker) saveLatencyStats(pingLatency int64, node serf.Member) (lat
 	if len(latencies) >= latencyStatsSlidingWindowSize {
 		// keep the slice within the sliding window size
 		// slidingWindowSize is -1 because another element will be added a few lines below
-		latencies = latencies[1 : latencyStatsSlidingWindowSize-1]
+		latencies = latencies[1:latencyStatsSlidingWindowSize]
 	}
 
 	latencies = append(latencies, pingLatency)
