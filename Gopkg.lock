@@ -871,6 +871,7 @@
     "github.com/gravitational/ttlmap",
     "github.com/gravitational/version",
     "github.com/hashicorp/serf/client",
+    "github.com/hashicorp/serf/coordinate",
     "github.com/influxdata/influxdb/client/v2",
     "github.com/jonboulle/clockwork",
     "github.com/kylelemons/godebug/diff",
