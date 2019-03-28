@@ -34,8 +34,9 @@ var _ = check.Suite(&PingSuite{})
 
 func (*PingSuite) TestPingChecker(c *check.C) {
 	testCases := []struct {
-		Coords map[string]*coordinate.Coordinate
-		Status agentpb.NodeStatus_Type
+		Coords      map[string]*coordinate.Coordinate
+		Status      agentpb.NodeStatus_Type
+		Description string
 	}{
 		{
 			Coords: map[string]*coordinate.Coordinate{
@@ -46,13 +47,13 @@ func (*PingSuite) TestPingChecker(c *check.C) {
 					Vec: []float64{1.0}, // in seconds
 				},
 			},
-			Status:     agentpb.NodeStatus_Running,
-			Desciption: "blah-blah",
+			Status:      agentpb.NodeStatus_Running,
+			Description: "blah-blah",
 		},
 		{
-			Coords:     map[string]*coordinate.Coordinate{},
-			Status:     agentpb.NodeStatus_Degraded,
-			Desciption: "blah-blah",
+			Coords:      map[string]*coordinate.Coordinate{},
+			Status:      agentpb.NodeStatus_Degraded,
+			Description: "blah-blah",
 		},
 		// ...
 	}
@@ -81,7 +82,7 @@ func (*PingSuite) TestPingChecker(c *check.C) {
 		var probes health.Probes
 		pingChecker.Check(context.TODO(), &probes)
 		c.Assert(probes.Status(), check.Equals, testCase.Status,
-			check.Comment(testCase.Description))
+			check.Commentf(testCase.Description))
 	}
 
 }
