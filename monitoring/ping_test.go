@@ -33,105 +33,55 @@ type PingSuite struct{}
 var _ = check.Suite(&PingSuite{})
 
 func (*PingSuite) TestPingChecker(c *check.C) {
-	pingChecker, err := NewPingChecker(PingCheckerConfig{
-		SerfRPCAddr:    "127.0.0.1",
-		SerfMemberName: "member-1",
-		NewSerfClient: func(serf.Config) (agent.SerfClient, error) {
-			client, _ := agent.NewMockSerfClient(
-				[]serf.Member{
-					{
-						Name: "member-1",
-						Addr: net.IPv4(127, 0, 0, 1),
-					},
-					{
-						Name: "member-2",
-						Addr: net.IPv4(127, 0, 0, 2),
-					},
+	testCases := []struct {
+		Coords map[string]*coordinate.Coordinate
+		Status agentpb.NodeStatus_Type
+	}{
+		{
+			Coords: map[string]*coordinate.Coordinate{
+				"member-1": &coordinate.Coordinate{
+					Vec: []float64{1.0}, // in seconds
 				},
-				map[string]*coordinate.Coordinate{
-					"member-1": &coordinate.Coordinate{
-						Vec:        []float64{1.0}, // in seconds
-						Error:      0,
-						Adjustment: 0,
-						Height:     0,
-					},
-					"member-2": &coordinate.Coordinate{
-						Vec:        []float64{1.0}, // in seconds
-						Error:      0,
-						Adjustment: 0,
-						Height:     0,
-					},
+				"member-2": &coordinate.Coordinate{
+					Vec: []float64{1.0}, // in seconds
 				},
-			)
-			return client, nil
+			},
+			Status:     agentpb.NodeStatus_Running,
+			Desciption: "blah-blah",
 		},
-	})
-	c.Assert(err, check.IsNil)
-
-	var probes health.Probes
-	pingChecker.Check(context.TODO(), &probes)
-	c.Assert(probes.Status(), check.Equals, agentpb.NodeStatus_Running)
-
-	pingChecker, err = NewPingChecker(PingCheckerConfig{
-		SerfRPCAddr:    "127.0.0.1",
-		SerfMemberName: "member-1",
-		NewSerfClient: func(serf.Config) (agent.SerfClient, error) {
-			client, _ := agent.NewMockSerfClient(
-				[]serf.Member{
-					{
-						Name: "member-1",
-						Addr: net.IPv4(127, 0, 0, 1),
-					},
-					{
-						Name: "member-2",
-						Addr: net.IPv4(127, 0, 0, 2),
-					},
-				},
-				map[string]*coordinate.Coordinate{},
-			)
-			return client, nil
+		{
+			Coords:     map[string]*coordinate.Coordinate{},
+			Status:     agentpb.NodeStatus_Degraded,
+			Desciption: "blah-blah",
 		},
-	})
-	c.Assert(err, check.IsNil)
+		// ...
+	}
 
-	pingChecker.Check(context.TODO(), &probes)
-	c.Assert(probes.Status(), check.Equals, agentpb.NodeStatus_Degraded)
+	for _, testCase := range testCases {
+		pingChecker, err := NewPingChecker(PingCheckerConfig{
+			SerfRPCAddr:    "127.0.0.1",
+			SerfMemberName: "member-1",
+			NewSerfClient: func(serf.Config) (agent.SerfClient, error) {
+				client, _ := agent.NewMockSerfClient(
+					[]serf.Member{
+						{
+							Name: "member-1",
+							Addr: net.IPv4(127, 0, 0, 1),
+						},
+						{
+							Name: "member-2",
+							Addr: net.IPv4(127, 0, 0, 2),
+						},
+					},
+					testCase.Coords)
+				return client, nil
+			},
+		})
+		c.Assert(err, check.IsNil)
+		var probes health.Probes
+		pingChecker.Check(context.TODO(), &probes)
+		c.Assert(probes.Status(), check.Equals, testCase.Status,
+			check.Comment(testCase.Description))
+	}
 
-	pingChecker, err = NewPingChecker(PingCheckerConfig{
-		SerfRPCAddr:    "127.0.0.1",
-		SerfMemberName: "member-1",
-		NewSerfClient: func(serf.Config) (agent.SerfClient, error) {
-			client, _ := agent.NewMockSerfClient(
-				[]serf.Member{
-					{
-						Name: "member-1",
-						Addr: net.IPv4(127, 0, 0, 1),
-					},
-					{
-						Name: "member-2",
-						Addr: net.IPv4(127, 0, 0, 2),
-					},
-				},
-				map[string]*coordinate.Coordinate{
-					"member-1": &coordinate.Coordinate{
-						Vec:        []float64{1.0}, // in seconds
-						Error:      0,
-						Adjustment: 0,
-						Height:     0,
-					},
-					"member-2": &coordinate.Coordinate{
-						Vec:        []float64{1.0}, // in seconds
-						Error:      0,
-						Adjustment: 0,
-						Height:     0,
-					},
-				},
-			)
-			return client, nil
-		},
-	})
-	c.Assert(err, check.IsNil)
-
-	pingChecker.Check(context.TODO(), &probes)
-	c.Assert(probes.Status(), check.Equals, agentpb.NodeStatus_Running)
 }
