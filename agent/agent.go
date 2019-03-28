@@ -104,7 +104,7 @@ func New(config *Config) (Agent, error) {
 	clientConfig := serf.Config{
 		Addr: config.SerfRPCAddr,
 	}
-	client, err := newSerfClient(clientConfig)
+	client, err := NewSerfClient(clientConfig)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to connect to serf")
 	}
@@ -125,7 +125,7 @@ func New(config *Config) (Agent, error) {
 
 	clock := clockwork.NewRealClock()
 	agent := &agent{
-		serfClient:      client,
+		SerfClient:      client,
 		name:            config.Name,
 		cache:           config.Cache,
 		dialRPC:         defaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
@@ -174,8 +174,8 @@ type agent struct {
 
 	metricsListener net.Listener
 
-	// serfClient provides access to the serf agent.
-	serfClient serfClient
+	// SerfClient provides access to the serf agent.
+	SerfClient SerfClient
 
 	// Name of this agent.  Must be the same as the serf agent's name
 	// running on the same node.
@@ -238,7 +238,7 @@ func (r *agent) Start() error {
 
 // IsMember returns true if this agent is a member of the serf cluster
 func (r *agent) IsMember() bool {
-	members, err := r.serfClient.Members()
+	members, err := r.SerfClient.Members()
 	if err != nil {
 		log.Errorf("failed to retrieve members: %v", trace.DebugReport(err))
 		return false
@@ -259,7 +259,7 @@ func (r *agent) IsMember() bool {
 // Join attempts to join a serf cluster identified by peers.
 func (r *agent) Join(peers []string) error {
 	noReplay := false
-	numJoined, err := r.serfClient.Join(peers, noReplay)
+	numJoined, err := r.SerfClient.Join(peers, noReplay)
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -279,7 +279,7 @@ func (r *agent) Close() (err error) {
 
 	r.rpc.Stop()
 	close(r.done)
-	err = r.serfClient.Close()
+	err = r.SerfClient.Close()
 	if err != nil {
 		errors = append(errors, trace.Wrap(err))
 	}
@@ -431,7 +431,7 @@ func (r *agent) collectStatus(ctx context.Context) (systemStatus *pb.SystemStatu
 		Timestamp: pb.NewTimeToProto(r.statusClock.Now()),
 	}
 
-	members, err := r.serfClient.Members()
+	members, err := r.SerfClient.Members()
 	if err != nil {
 		log.WithError(err).Warn("Failed to query serf members.")
 		return nil, trace.Wrap(err, "failed to query serf members")

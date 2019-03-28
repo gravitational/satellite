@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
@@ -59,7 +60,7 @@ const (
 // the cluster are within a predefined threshold
 type pingChecker struct {
 	self           serf.Member
-	serfClient     serf.RPCClient
+	serfClient     agent.SerfClient
 	serfRPCAddr    string
 	serfMemberName string
 	latencyStats   ttlmap.TTLMap
@@ -67,18 +68,44 @@ type pingChecker struct {
 	logger         log.Entry
 }
 
+type PingCheckerConfig struct {
+	SerfRPCAddr    string
+	SerfMemberName string
+	NewSerfClient  agent.NewSerfClientFunc
+}
+
+func (c *PingCheckerConfig) CheckAndSetDefaults() error {
+	if c.SerfRPCAddr == "" {
+		return trace.BadParameter("serf rpc address can't be empty")
+	}
+	if c.SerfMemberName == "" {
+		return trace.BadParameter("serf member name can't be empty")
+	}
+	if c.NewSerfClient == nil {
+		c.NewSerfClient = agent.NewSerfClient
+	}
+	return nil
+}
+
 // NewPingChecker returns a checker that verifies accessibility of nodes in the cluster by exchanging ping requests
-func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker, err error) {
+func NewPingChecker(conf PingCheckerConfig) (c health.Checker, err error) {
+	err = conf.CheckAndSetDefaults()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
 	latencyTTLMap, err := ttlmap.New(latencyStatsCapacity)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
 
 	logger := log.WithFields(log.Fields{trace.Component: "ping"})
-	logger.Debugf("using Serf IP: %v", serfRPCAddr)
-	logger.Debugf("using Serf Name: %v", serfMemberName)
+	logger.Debugf("using Serf IP: %v", conf.SerfRPCAddr)
+	logger.Debugf("using Serf Name: %v", conf.SerfMemberName)
 
-	client, err := newSerfClient(serfRPCAddr)
+	client, err := conf.NewSerfClient(serf.Config{
+		Addr: conf.SerfRPCAddr,
+	})
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -91,35 +118,23 @@ func NewPingChecker(serfRPCAddr string, serfMemberName string) (c health.Checker
 	// finding what is the current node
 	var self serf.Member
 	for _, node := range nodes {
-		if node.Name == serfMemberName {
+		if node.Name == conf.SerfMemberName {
 			self = node
 			break // self node found, breaking out of the for loop
 		}
 	}
 	if self.Name == "" {
-		return nil, trace.NotFound("failed to find Serf member with name %s", serfMemberName)
+		return nil, trace.NotFound("failed to find Serf member with name %s", conf.SerfMemberName)
 	}
 
 	return &pingChecker{
 		self:           self,
-		serfClient:     *client,
-		serfRPCAddr:    serfRPCAddr,
-		serfMemberName: serfMemberName,
+		serfClient:     client,
+		serfRPCAddr:    conf.SerfRPCAddr,
+		serfMemberName: conf.SerfMemberName,
 		latencyStats:   *latencyTTLMap,
 		logger:         *logger,
 	}, nil
-}
-
-func newSerfClient(serfRPCAddr string) (client *serf.RPCClient, err error) {
-	// fetch serf config and instantiate client
-	clientConfig := serf.Config{
-		Addr: serfRPCAddr,
-	}
-	client, err = serf.ClientFromConfig(&clientConfig)
-	if err != nil {
-		return client, trace.Wrap(err)
-	}
-	return client, nil
 }
 
 // Name returns the checker name
@@ -146,15 +161,7 @@ func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
 // in case issues arise in the process
 func (c *pingChecker) check(ctx context.Context, r health.Reporter) (err error) {
 
-	client := &c.serfClient
-	// check if client connection closed and reopen it
-	if client.IsClosed() {
-		client, err = newSerfClient(c.serfRPCAddr)
-		if err != nil {
-			return trace.Wrap(err)
-		}
-		c.serfClient = *client
-	}
+	client := c.serfClient
 
 	// retrieve other nodes using Serf members
 	nodes, err := client.Members()
@@ -172,7 +179,7 @@ func (c *pingChecker) check(ctx context.Context, r health.Reporter) (err error) 
 
 // checkNodesRTT implements the bulk of the logic by checking the ping time
 // between this node (self) and the other Serf Cluster member nodes
-func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client *serf.RPCClient) error {
+func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client agent.SerfClient) error {
 	// ping each other node and fail in case the results are over a specified
 	// threshold
 	for _, node := range nodes {
@@ -262,7 +269,7 @@ func (c *pingChecker) saveLatencyStats(pingLatency int64, node serf.Member) (lat
 }
 
 // calculateRTT calculates and returns the latency time (in nanoseconds) between two Serf Cluster members
-func calculateRTT(serfClient *serf.RPCClient, self, node serf.Member) (rttNanos int64, err error) {
+func calculateRTT(serfClient agent.SerfClient, self, node serf.Member) (rttNanos int64, err error) {
 	selfCoord, err := serfClient.GetCoordinate(self.Name)
 	if err != nil {
 		return 0, trace.Wrap(err)

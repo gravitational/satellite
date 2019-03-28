@@ -29,6 +29,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"github.com/hashicorp/serf/coordinate"
 	"math/big"
 	"net"
 	"net/http"
@@ -569,7 +570,7 @@ func (r *AgentSuite) newAgent(node string, rpcPort int, members []serf.Member,
 	}
 	return &agent{
 		name:         node,
-		serfClient:   &testSerfClient{members: members},
+		SerfClient:   &testSerfClient{members: members},
 		dialRPC:      testDialRPC(rpcPort, r.certFile, r.keyFile),
 		cache:        &testCache{c: c, SystemStatus: &pb.SystemStatus{Status: pb.SystemStatus_Unknown}},
 		Checkers:     checkers,
@@ -655,6 +656,10 @@ func (r *testSerfClient) UpdateTags(tags map[string]string, delTags []string) er
 
 func (r *testSerfClient) Join(peers []string, replay bool) (int, error) {
 	return 0, nil
+}
+
+func (r *testSerfClient) GetCoordinate(node string) (coord *coordinate.Coordinate, err error) {
+	return nil, nil
 }
 
 func (r *testSerfClient) Close() error {

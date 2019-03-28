@@ -21,11 +21,12 @@ import (
 
 	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
+	"github.com/hashicorp/serf/coordinate"
 )
 
-// serfClient is the minimal interface to the serf cluster.
+// SerfClient is the minimal interface to the serf cluster.
 // It enables mocking access to serf network in tests.
-type serfClient interface {
+type SerfClient interface {
 	// Members lists members of the serf cluster.
 	Members() ([]serf.Member, error)
 	// Stop cancels the serf event delivery and removes the subscription.
@@ -38,9 +39,13 @@ type serfClient interface {
 	Join(peers []string, replay bool) (int, error)
 	// UpdateTags will modify the tags on a running serf agent
 	UpdateTags(tags map[string]string, delTags []string) error
+	// TODO
+	GetCoordinate(node string) (*coordinate.Coordinate, error)
 }
 
-func newSerfClient(clientConfig serf.Config) (*retryingClient, error) {
+type NewSerfClientFunc func(serf.Config) (SerfClient, error)
+
+func NewSerfClient(clientConfig serf.Config) (SerfClient, error) {
 	client, err := reinit(clientConfig)
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -103,6 +108,15 @@ func (r *retryingClient) Close() error {
 	return r.client.Close()
 }
 
+func (r *retryingClient) GetCoordinate(node string) (*coordinate.Coordinate, error) {
+	if err := r.reinit(); err != nil {
+		return nil, trace.Wrap(err)
+	}
+	r.RLock()
+	defer r.RUnlock()
+	return r.client.GetCoordinate(node)
+}
+
 func (r *retryingClient) reinit() (err error) {
 	r.Lock()
 	defer r.Unlock()
@@ -130,4 +144,40 @@ type retryingClient struct {
 	sync.RWMutex
 	client *serf.RPCClient
 	config serf.Config
+}
+
+type MockSerfClient struct {
+	members []serf.Member
+	coords  map[string]*coordinate.Coordinate
+}
+
+func NewMockSerfClient(members []serf.Member, coords map[string]*coordinate.Coordinate) (client *MockSerfClient, err error) {
+	return &MockSerfClient{
+		members: members,
+		coords:  coords,
+	}, nil
+}
+
+func (c *MockSerfClient) Members() ([]serf.Member, error) {
+	return c.members, nil
+}
+
+func (c *MockSerfClient) Stop(serf.StreamHandle) error {
+	return nil
+}
+
+func (c *MockSerfClient) Close() error {
+	return nil
+}
+
+func (c *MockSerfClient) Join(peers []string, replay bool) (int, error) {
+	return 0, nil
+}
+
+func (c *MockSerfClient) UpdateTags(tags map[string]string, delTags []string) error {
+	return nil
+}
+
+func (c *MockSerfClient) GetCoordinate(node string) (*coordinate.Coordinate, error) {
+	return c.coords[node], nil
 }
