@@ -41,21 +41,32 @@ func (*PingSuite) TestPingChecker(c *check.C) {
 		{
 			Coords: map[string]*coordinate.Coordinate{
 				"member-1": &coordinate.Coordinate{
-					Vec: []float64{1.0}, // in seconds
+					Height: 0.001,
 				},
 				"member-2": &coordinate.Coordinate{
-					Vec: []float64{1.0}, // in seconds
+					Height: 0.001,
 				},
 			},
 			Status:      agentpb.NodeStatus_Running,
-			Description: "blah-blah",
+			Description: "Testing standard working condition with values below threshold",
 		},
 		{
 			Coords:      map[string]*coordinate.Coordinate{},
 			Status:      agentpb.NodeStatus_Degraded,
-			Description: "blah-blah",
+			Description: "Testing missing coordinates for cluster members",
 		},
-		// ...
+		{
+			Coords: map[string]*coordinate.Coordinate{
+				"member-1": &coordinate.Coordinate{
+					Height: 1,
+				},
+				"member-2": &coordinate.Coordinate{
+					Height: 1,
+				},
+			},
+			Status:      agentpb.NodeStatus_Running,
+			Description: "Testing for latency value over the threshold",
+		},
 	}
 
 	for _, testCase := range testCases {

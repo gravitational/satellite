@@ -188,7 +188,7 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client agent.SerfClient
 			continue
 		}
 
-		rttNanoSec, err := calculateRTT(client, c.self, node)
+		rttNanoSec, err := c.calculateRTT(client, c.self, node)
 		if err != nil {
 			return trace.Wrap(err)
 		}
@@ -269,7 +269,7 @@ func (c *pingChecker) saveLatencyStats(pingLatency int64, node serf.Member) (lat
 }
 
 // calculateRTT calculates and returns the latency time (in nanoseconds) between two Serf Cluster members
-func calculateRTT(serfClient agent.SerfClient, self, node serf.Member) (rttNanos int64, err error) {
+func (c *pingChecker) calculateRTT(serfClient agent.SerfClient, self, node serf.Member) (rttNanos int64, err error) {
 	selfCoord, err := serfClient.GetCoordinate(self.Name)
 	if err != nil {
 		return 0, trace.Wrap(err)
@@ -286,5 +286,10 @@ func calculateRTT(serfClient agent.SerfClient, self, node serf.Member) (rttNanos
 		return 0, trace.NotFound("could not find a coordinate for node %s", node.Name)
 	}
 
-	return selfCoord.DistanceTo(otherNodeCoord).Nanoseconds(), nil
+	latency := selfCoord.DistanceTo(otherNodeCoord).Nanoseconds()
+	c.logger.Debugf("self {%v,%v,%v,%v} === %v ===> other {%v,%v,%v,%v}",
+		selfCoord.Vec, selfCoord.Error, selfCoord.Height, selfCoord.Adjustment,
+		latency,
+		otherNodeCoord.Vec, otherNodeCoord.Error, otherNodeCoord.Height, otherNodeCoord.Adjustment)
+	return latency, nil
 }
