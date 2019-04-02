@@ -34,11 +34,24 @@ var _ = check.Suite(&PingSuite{})
 
 func (*PingSuite) TestPingChecker(c *check.C) {
 	testCases := []struct {
+		Nodes       []serf.Member
 		Coords      map[string]*coordinate.Coordinate
 		Status      agentpb.NodeStatus_Type
 		Description string
 	}{
 		{
+			Nodes: []serf.Member{
+				{
+					Name:   "member-1",
+					Status: agentpb.MemberStatus_Alive.String(),
+					Addr:   net.IPv4(127, 0, 0, 1),
+				},
+				{
+					Name:   "member-2",
+					Status: agentpb.MemberStatus_Alive.String(),
+					Addr:   net.IPv4(127, 0, 0, 2),
+				},
+			},
 			Coords: map[string]*coordinate.Coordinate{
 				"member-1": &coordinate.Coordinate{
 					Height: 0.001,
@@ -51,11 +64,35 @@ func (*PingSuite) TestPingChecker(c *check.C) {
 			Description: "Testing standard working condition with values below threshold",
 		},
 		{
+			Nodes: []serf.Member{
+				{
+					Name:   "member-1",
+					Status: agentpb.MemberStatus_Alive.String(),
+					Addr:   net.IPv4(127, 0, 0, 1),
+				},
+				{
+					Name:   "member-2",
+					Status: agentpb.MemberStatus_Alive.String(),
+					Addr:   net.IPv4(127, 0, 0, 2),
+				},
+			},
 			Coords:      map[string]*coordinate.Coordinate{},
 			Status:      agentpb.NodeStatus_Degraded,
 			Description: "Testing missing coordinates for cluster members",
 		},
 		{
+			Nodes: []serf.Member{
+				{
+					Name:   "member-1",
+					Status: agentpb.MemberStatus_Alive.String(),
+					Addr:   net.IPv4(127, 0, 0, 1),
+				},
+				{
+					Name:   "member-2",
+					Status: agentpb.MemberStatus_Failed.String(),
+					Addr:   net.IPv4(127, 0, 0, 2),
+				},
+			},
 			Coords: map[string]*coordinate.Coordinate{
 				"member-1": &coordinate.Coordinate{
 					Height: 1,
@@ -65,7 +102,7 @@ func (*PingSuite) TestPingChecker(c *check.C) {
 				},
 			},
 			Status:      agentpb.NodeStatus_Running,
-			Description: "Testing for latency value over the threshold",
+			Description: "Testing nodes with failing status",
 		},
 	}
 
@@ -75,17 +112,7 @@ func (*PingSuite) TestPingChecker(c *check.C) {
 			SerfMemberName: "member-1",
 			NewSerfClient: func(serf.Config) (agent.SerfClient, error) {
 				client, _ := agent.NewMockSerfClient(
-					[]serf.Member{
-						{
-							Name: "member-1",
-							Addr: net.IPv4(127, 0, 0, 1),
-						},
-						{
-							Name: "member-2",
-							Addr: net.IPv4(127, 0, 0, 2),
-						},
-					},
-					testCase.Coords)
+					testCase.Nodes, testCase.Coords)
 				return client, nil
 			},
 		})

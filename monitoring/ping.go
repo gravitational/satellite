@@ -118,6 +118,10 @@ func NewPingChecker(conf PingCheckerConfig) (c health.Checker, err error) {
 	// finding what is the current node
 	var self serf.Member
 	for _, node := range nodes {
+		logger.Debugf("node %s status %s", node.Name, node.Status)
+		if node.Status != pb.MemberStatus_Alive.String() {
+			continue
+		}
 		if node.Name == conf.SerfMemberName {
 			self = node
 			break // self node found, breaking out of the for loop
