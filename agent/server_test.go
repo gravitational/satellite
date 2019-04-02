@@ -29,7 +29,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/hashicorp/serf/coordinate"
 	"math/big"
 	"net"
 	"net/http"
@@ -44,11 +43,11 @@ import (
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/test"
-
 	"github.com/gravitational/trace"
 
 	"github.com/gravitational/roundtrip"
 	serf "github.com/hashicorp/serf/client"
+	"github.com/hashicorp/serf/coordinate"
 	"github.com/jonboulle/clockwork"
 	log "github.com/sirupsen/logrus"
 	. "gopkg.in/check.v1"
