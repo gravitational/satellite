@@ -39,12 +39,14 @@ type SerfClient interface {
 	Join(peers []string, replay bool) (int, error)
 	// UpdateTags will modify the tags on a running serf agent
 	UpdateTags(tags map[string]string, delTags []string) error
-	// TODO
+	// GetCoordinate get&returns the Serf Coordinate for a specific Node
 	GetCoordinate(node string) (*coordinate.Coordinate, error)
 }
 
 type NewSerfClientFunc func(serf.Config) (SerfClient, error)
 
+// NewSerfClient is an helper function used to provide a custom Serf Client
+// mostly useful during testing or scenarios where a custom Serf Client is needed
 func NewSerfClient(clientConfig serf.Config) (SerfClient, error) {
 	client, err := reinit(clientConfig)
 	if err != nil {
@@ -108,6 +110,7 @@ func (r *retryingClient) Close() error {
 	return r.client.Close()
 }
 
+// GetCoordinate get&returns the Serf Coordinate for a specific node
 func (r *retryingClient) GetCoordinate(node string) (*coordinate.Coordinate, error) {
 	if err := r.reinit(); err != nil {
 		return nil, trace.Wrap(err)
@@ -146,11 +149,14 @@ type retryingClient struct {
 	config serf.Config
 }
 
+// MockSerfClient is a mock/fake Serf Client used in testing
 type MockSerfClient struct {
 	members []serf.Member
 	coords  map[string]*coordinate.Coordinate
 }
 
+// NewMockSerfClient is an helper function used to create a mock/fake Serf Client
+// used in testing
 func NewMockSerfClient(members []serf.Member, coords map[string]*coordinate.Coordinate) (client *MockSerfClient, err error) {
 	return &MockSerfClient{
 		members: members,
@@ -158,26 +164,33 @@ func NewMockSerfClient(members []serf.Member, coords map[string]*coordinate.Coor
 	}, nil
 }
 
+// Members is a function that return the (fake) Serf member nodes
 func (c *MockSerfClient) Members() ([]serf.Member, error) {
 	return c.members, nil
 }
 
+// Stop is a NOOP function used to implement the Mock Serf Client
 func (c *MockSerfClient) Stop(serf.StreamHandle) error {
 	return nil
 }
 
+// Close is a NOOP function used to implement the Mock Serf Client
 func (c *MockSerfClient) Close() error {
 	return nil
 }
 
+// Join is a NOOP function used to implement the Mock Serf Client
 func (c *MockSerfClient) Join(peers []string, replay bool) (int, error) {
 	return 0, nil
 }
 
+// UpdateTags is a NOOP function used to implement the Mock Serf Client
 func (c *MockSerfClient) UpdateTags(tags map[string]string, delTags []string) error {
 	return nil
 }
 
+// GetCoordinate get&returns the (fake) Serf Coordinate for a specific (fake) node
+// and it's mostly used during testing
 func (c *MockSerfClient) GetCoordinate(node string) (*coordinate.Coordinate, error) {
 	return c.coords[node], nil
 }
