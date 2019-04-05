@@ -71,16 +71,17 @@ type pingChecker struct {
 // PingCheckerConfig is used to store all the configuration related to the current check
 type PingCheckerConfig struct {
 	// SerfRPCAddr is the address used by the Serf RPC client to communicate
+	// with the Serf cluster
 	SerfRPCAddr string
-	// SerfMemberName is the name associated to this node in Serf
+	// SerfMemberName is the name assigned to this node in Serf
 	SerfMemberName string
 	// NewSerfClient is an optional Serf Client function that can be used instead
 	// of the default one. If not specified it will fallback to the default one
 	NewSerfClient agent.NewSerfClientFunc
 }
 
-// CheckAndSetDefaults is an helper function which just check that the provided
-// check config is in order and eventually set default values where needed/possible
+// CheckAndSetDefaults validates that this configuration is correct and sets
+// value defaults where necessary
 func (c *PingCheckerConfig) CheckAndSetDefaults() error {
 	if c.SerfRPCAddr == "" {
 		return trace.BadParameter("serf rpc address can't be empty")
