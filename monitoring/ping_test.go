@@ -23,6 +23,7 @@ import (
 	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/agent/health"
 	"github.com/gravitational/satellite/agent/proto/agentpb"
+
 	serf "github.com/hashicorp/serf/client"
 	"github.com/hashicorp/serf/coordinate"
 	"gopkg.in/check.v1"
@@ -95,14 +96,14 @@ func (*PingSuite) TestPingChecker(c *check.C) {
 			},
 			Coords: map[string]*coordinate.Coordinate{
 				"member-1": &coordinate.Coordinate{
-					Height: 1,
+					Height: 3600,
 				},
 				"member-2": &coordinate.Coordinate{
-					Height: 1,
+					Height: 3600,
 				},
 			},
 			Status:      agentpb.NodeStatus_Running,
-			Description: "Testing nodes with failing status",
+			Description: "Testing nodes with latency value over the threshold",
 		},
 	}
 
