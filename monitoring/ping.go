@@ -61,7 +61,6 @@ const (
 type pingChecker struct {
 	self           serf.Member
 	serfClient     agent.SerfClient
-	serfRPCAddr    string
 	serfMemberName string
 	latencyStats   ttlmap.TTLMap
 	mux            sync.Mutex
@@ -83,9 +82,6 @@ type PingCheckerConfig struct {
 // CheckAndSetDefaults validates that this configuration is correct and sets
 // value defaults where necessary
 func (c *PingCheckerConfig) CheckAndSetDefaults() error {
-	if c.SerfRPCAddr == "" {
-		return trace.BadParameter("serf rpc address can't be empty")
-	}
 	if c.SerfMemberName == "" {
 		return trace.BadParameter("serf member name can't be empty")
 	}
@@ -142,7 +138,6 @@ func NewPingChecker(conf PingCheckerConfig) (c health.Checker, err error) {
 	return &pingChecker{
 		self:           self,
 		serfClient:     client,
-		serfRPCAddr:    conf.SerfRPCAddr,
 		serfMemberName: conf.SerfMemberName,
 		latencyStats:   *latencyTTLMap,
 		logger:         *logger,
