@@ -39,14 +39,15 @@ type SerfClient interface {
 	Join(peers []string, replay bool) (int, error)
 	// UpdateTags will modify the tags on a running serf agent
 	UpdateTags(tags map[string]string, delTags []string) error
-	// GetCoordinate get&returns the Serf Coordinate for a specific Node
+	// GetCoordinate returns the Serf Coordinate for a specific Node
 	GetCoordinate(node string) (*coordinate.Coordinate, error)
 }
 
 type NewSerfClientFunc func(serf.Config) (SerfClient, error)
 
-// NewSerfClient is an helper function used to provide a custom Serf Client
-// mostly useful during testing or scenarios where a custom Serf Client is needed
+// NewSerfClient returns a new serf client for the specified configuration.
+// The client will attempt to reconnect if it detects that the connection to the
+// serf agent has been lost
 func NewSerfClient(clientConfig serf.Config) (SerfClient, error) {
 	client, err := reinit(clientConfig)
 	if err != nil {
@@ -110,7 +111,7 @@ func (r *retryingClient) Close() error {
 	return r.client.Close()
 }
 
-// GetCoordinate get&returns the Serf Coordinate for a specific node
+// GetCoordinate returns the Serf Coordinate for a specific node
 func (r *retryingClient) GetCoordinate(node string) (*coordinate.Coordinate, error) {
 	if err := r.reinit(); err != nil {
 		return nil, trace.Wrap(err)
