@@ -122,10 +122,6 @@ func NewPingChecker(conf PingCheckerConfig) (c health.Checker, err error) {
 	// finding what is the current node
 	var self serf.Member
 	for _, node := range nodes {
-		logger.Debugf("node %s status %s", node.Name, node.Status)
-		if node.Status != pb.MemberStatus_Alive.String() {
-			continue
-		}
 		if node.Name == conf.SerfMemberName {
 			self = node
 			break // self node found, breaking out of the for loop
@@ -190,6 +186,11 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client agent.SerfClient
 	// ping each other node and fail in case the results are over a specified
 	// threshold
 	for _, node := range nodes {
+		c.logger.Debugf("node %s status %s", node.Name, node.Status)
+		// skipping nodes that are not alive (failed, removed, etc..)
+		if node.Status != pb.MemberStatus_Alive.String() {
+			continue
+		}
 		// skip pinging self
 		if c.self.Addr.String() == node.Addr.String() {
 			continue
