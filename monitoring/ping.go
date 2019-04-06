@@ -18,6 +18,7 @@ package monitoring
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -187,8 +188,8 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client agent.SerfClient
 	// threshold
 	for _, node := range nodes {
 		// skipping nodes that are not alive (failed, removed, etc..)
-		if node.Status != pb.MemberStatus_Alive.String() {
-			c.logger.Debugf("skipping node %s because status is %s", node.Name, node.Status)
+		if strings.ToLower(node.Status) != strings.ToLower(pb.MemberStatus_Alive.String()) {
+			c.logger.Debugf("skipping node %s because status is '%s'", node.Name, node.Status)
 			continue
 		}
 		// skip pinging self
