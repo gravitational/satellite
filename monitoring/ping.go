@@ -186,15 +186,17 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client agent.SerfClient
 	// ping each other node and fail in case the results are over a specified
 	// threshold
 	for _, node := range nodes {
-		c.logger.Debugf("node %s status %s", node.Name, node.Status)
 		// skipping nodes that are not alive (failed, removed, etc..)
 		if node.Status != pb.MemberStatus_Alive.String() {
+			c.logger.Debugf("skipping node %s because status is %s", node.Name, node.Status)
 			continue
 		}
 		// skip pinging self
 		if c.self.Addr.String() == node.Addr.String() {
+			c.logger.Debugf("skipping analyzing self node (%s)", node.Name)
 			continue
 		}
+		c.logger.Debugf("node %s status %s", node.Name, node.Status)
 
 		rttNanoSec, err := c.calculateRTT(client, c.self, node)
 		if err != nil {
