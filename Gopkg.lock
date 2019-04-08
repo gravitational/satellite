@@ -156,14 +156,6 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:0bfbe13936953a98ae3cfe8ed6670d396ad81edf069a806d2f6515d7bb6950df"
-  name = "github.com/google/btree"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "4030bb1f1f0c35b30ca7009e9ebd06849dd45306"
-
-[[projects]]
-  branch = "master"
   digest = "1:3ee90c0d94da31b442dde97c99635aaafec68d0b8a3c12ee2075c6bdabeec6bb"
   name = "github.com/google/gofuzz"
   packages = ["."]
@@ -216,17 +208,6 @@
   pruneopts = "UT"
   revision = "95d33ece5ce1a00844c874822496682f353f3003"
   version = "0.0.2"
-
-[[projects]]
-  branch = "master"
-  digest = "1:86c1210529e69d69860f2bb3ee9ccce0b595aa3f9165e7dd1388e5c612915888"
-  name = "github.com/gregjones/httpcache"
-  packages = [
-    ".",
-    "diskcache",
-  ]
-  pruneopts = "UT"
-  revision = "9cad4c3443a7200dd6400aef47183728de563a38"
 
 [[projects]]
   branch = "master"
@@ -394,22 +375,6 @@
   pruneopts = "UT"
   revision = "4b7aa43c6742a2c18fdef89dd197aaae7dac7ccd"
   version = "1.0.1"
-
-[[projects]]
-  branch = "master"
-  digest = "1:3bf17a6e6eaa6ad24152148a631d18662f7212e21637c2699bff3369b7f00fa2"
-  name = "github.com/petar/GoLLRB"
-  packages = ["llrb"]
-  pruneopts = "UT"
-  revision = "53be0d36a84c2a886ca057d34b6aa4468df9ccb4"
-
-[[projects]]
-  digest = "1:0e7775ebbcf00d8dd28ac663614af924411c868dca3d5aa762af0fae3808d852"
-  name = "github.com/peterbourgon/diskv"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "5f041e8faa004a95c88a202771f4cc3e991971e6"
-  version = "v2.0.1"
 
 [[projects]]
   digest = "1:40e195917a951a8bf867cd05de2a46aaf1806c50cf92eebf4c16f78cd196f747"
@@ -661,10 +626,9 @@
   version = "v2.2.1"
 
 [[projects]]
-  digest = "1:0d299a04c6472e4458461d7034c76d014cc6f632a3262cbf21d123b19ce13e65"
+  digest = "1:86ad5797d1189de342ed6988fbb76b92dc0429a4d677ad69888d6137efa5712e"
   name = "k8s.io/api"
   packages = [
-    "admissionregistration/v1alpha1",
     "admissionregistration/v1beta1",
     "apps/v1",
     "apps/v1beta1",
@@ -681,15 +645,20 @@
     "batch/v1beta1",
     "batch/v2alpha1",
     "certificates/v1beta1",
+    "coordination/v1",
     "coordination/v1beta1",
     "core/v1",
     "events/v1beta1",
     "extensions/v1beta1",
     "networking/v1",
+    "networking/v1beta1",
+    "node/v1alpha1",
+    "node/v1beta1",
     "policy/v1beta1",
     "rbac/v1",
     "rbac/v1alpha1",
     "rbac/v1beta1",
+    "scheduling/v1",
     "scheduling/v1alpha1",
     "scheduling/v1beta1",
     "settings/v1alpha1",
@@ -698,11 +667,11 @@
     "storage/v1beta1",
   ]
   pruneopts = "UT"
-  revision = "74b699b93c15473932b89e3d1818ba8282f3b5ab"
-  version = "kubernetes-1.13.3"
+  revision = "40a48860b5abbba9aa891b02b32da429b08d96a0"
+  version = "kubernetes-1.14.0"
 
 [[projects]]
-  digest = "1:50b15c1471ade6df4ab29c6effaa17ff016cfceac6a0ed7524a4ea4a35396367"
+  digest = "1:23280b07ed0d639295f87180e6fcc211ca4eef6567cd8e8c723d75b91253fc4c"
   name = "k8s.io/apimachinery"
   packages = [
     "pkg/api/errors",
@@ -744,17 +713,16 @@
     "third_party/forked/golang/reflect",
   ]
   pruneopts = "UT"
-  revision = "572dfc7bdfcb4531361a17d27b92851f59acf0dc"
-  version = "kubernetes-1.13.3"
+  revision = "d7deff9243b165ee192f5551710ea4285dcfd615"
+  version = "kubernetes-1.14.0"
 
 [[projects]]
-  digest = "1:20f641257f6c0c69ddf455a15b63b20bac524b08d90745da796d633724758bac"
+  digest = "1:49350e3456577f754e365ec213a486cff158622a06f6117a825222db8a1ce2c4"
   name = "k8s.io/client-go"
   packages = [
     "discovery",
     "kubernetes",
     "kubernetes/scheme",
-    "kubernetes/typed/admissionregistration/v1alpha1",
     "kubernetes/typed/admissionregistration/v1beta1",
     "kubernetes/typed/apps/v1",
     "kubernetes/typed/apps/v1beta1",
@@ -771,15 +739,20 @@
     "kubernetes/typed/batch/v1beta1",
     "kubernetes/typed/batch/v2alpha1",
     "kubernetes/typed/certificates/v1beta1",
+    "kubernetes/typed/coordination/v1",
     "kubernetes/typed/coordination/v1beta1",
     "kubernetes/typed/core/v1",
     "kubernetes/typed/events/v1beta1",
     "kubernetes/typed/extensions/v1beta1",
     "kubernetes/typed/networking/v1",
+    "kubernetes/typed/networking/v1beta1",
+    "kubernetes/typed/node/v1alpha1",
+    "kubernetes/typed/node/v1beta1",
     "kubernetes/typed/policy/v1beta1",
     "kubernetes/typed/rbac/v1",
     "kubernetes/typed/rbac/v1alpha1",
     "kubernetes/typed/rbac/v1beta1",
+    "kubernetes/typed/scheduling/v1",
     "kubernetes/typed/scheduling/v1alpha1",
     "kubernetes/typed/scheduling/v1beta1",
     "kubernetes/typed/settings/v1alpha1",
@@ -805,11 +778,11 @@
     "util/connrotation",
     "util/flowcontrol",
     "util/homedir",
-    "util/integer",
+    "util/keyutil",
   ]
   pruneopts = "UT"
-  revision = "e64494209f554a6723674bd494d69445fb76a1d4"
-  version = "v10.0.0"
+  revision = "6ee68ca5fd8355d024d02f9db0b3b667e8357a0f"
+  version = "v11.0.0"
 
 [[projects]]
   digest = "1:e2999bf1bb6eddc2a6aa03fe5e6629120a53088926520ca3b4765f77d7ff7eab"
@@ -818,6 +791,14 @@
   pruneopts = "UT"
   revision = "a5bc97fbc634d635061f3146511332c7e313a55a"
   version = "v0.1.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:8b40227d4bf8b431fdab4f9026e6e346f00ac3be5662af367a183f78c57660b3"
+  name = "k8s.io/utils"
+  packages = ["integer"]
+  pruneopts = "UT"
+  revision = "21c4ce38f2a793ec01e925ddc31216500183b773"
 
 [[projects]]
   digest = "1:7719608fe0b52a4ece56c2dde37bedd95b938677d1ab0f84b8a7852e4c59f849"

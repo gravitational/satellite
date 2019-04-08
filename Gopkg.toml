@@ -95,15 +95,15 @@
 
 [[constraint]]
   name = "k8s.io/client-go"
-  version = "=v10.0.0"
+  version = "=v11.0.0"
 
 [[override]]
   name = "k8s.io/api"
-  version = "kubernetes-1.13.3"
+  version = "kubernetes-1.14.0"
 
 [[constraint]]
   name = "k8s.io/apimachinery"
-  version = "kubernetes-1.13.3"
+  version = "kubernetes-1.14.0"
 
 [[constraint]]
   branch = "master"
