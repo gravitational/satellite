@@ -20,12 +20,14 @@ import (
 	"sync"
 
 	"github.com/gravitational/trace"
+
 	serf "github.com/hashicorp/serf/client"
+	"github.com/hashicorp/serf/coordinate"
 )
 
-// serfClient is the minimal interface to the serf cluster.
+// SerfClient is the minimal interface to the serf cluster.
 // It enables mocking access to serf network in tests.
-type serfClient interface {
+type SerfClient interface {
 	// Members lists members of the serf cluster.
 	Members() ([]serf.Member, error)
 	// Stop cancels the serf event delivery and removes the subscription.
@@ -38,9 +40,16 @@ type serfClient interface {
 	Join(peers []string, replay bool) (int, error)
 	// UpdateTags will modify the tags on a running serf agent
 	UpdateTags(tags map[string]string, delTags []string) error
+	// GetCoordinate returns the Serf Coordinate for a specific Node
+	GetCoordinate(node string) (*coordinate.Coordinate, error)
 }
 
-func newSerfClient(clientConfig serf.Config) (*retryingClient, error) {
+type NewSerfClientFunc func(serf.Config) (SerfClient, error)
+
+// NewSerfClient returns a new serf client for the specified configuration.
+// The client will attempt to reconnect if it detects that the connection to the
+// serf agent has been lost
+func NewSerfClient(clientConfig serf.Config) (SerfClient, error) {
 	client, err := reinit(clientConfig)
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -103,6 +112,16 @@ func (r *retryingClient) Close() error {
 	return r.client.Close()
 }
 
+// GetCoordinate returns the Serf Coordinate for a specific node
+func (r *retryingClient) GetCoordinate(node string) (*coordinate.Coordinate, error) {
+	if err := r.reinit(); err != nil {
+		return nil, trace.Wrap(err)
+	}
+	r.RLock()
+	defer r.RUnlock()
+	return r.client.GetCoordinate(node)
+}
+
 func (r *retryingClient) reinit() (err error) {
 	r.Lock()
 	defer r.Unlock()
@@ -130,4 +149,50 @@ type retryingClient struct {
 	sync.RWMutex
 	client *serf.RPCClient
 	config serf.Config
+}
+
+// MockSerfClient is a mock/fake Serf Client used in testing
+type MockSerfClient struct {
+	members []serf.Member
+	coords  map[string]*coordinate.Coordinate
+}
+
+// NewMockSerfClient is a helper function used to create a mock/fake Serf Client
+// used in testing
+func NewMockSerfClient(members []serf.Member, coords map[string]*coordinate.Coordinate) (client *MockSerfClient, err error) {
+	return &MockSerfClient{
+		members: members,
+		coords:  coords,
+	}, nil
+}
+
+// Members is a function that returns the Serf member nodes
+func (c *MockSerfClient) Members() ([]serf.Member, error) {
+	return c.members, nil
+}
+
+// Stop is a NOOP function used to implement the Mock Serf Client
+func (c *MockSerfClient) Stop(serf.StreamHandle) error {
+	return nil
+}
+
+// Close is a NOOP function used to implement the Mock Serf Client
+func (c *MockSerfClient) Close() error {
+	return nil
+}
+
+// Join is a NOOP function used to implement the Mock Serf Client
+func (c *MockSerfClient) Join(peers []string, replay bool) (int, error) {
+	return 0, nil
+}
+
+// UpdateTags is a NOOP function used to implement the Mock Serf Client
+func (c *MockSerfClient) UpdateTags(tags map[string]string, delTags []string) error {
+	return nil
+}
+
+// GetCoordinate get&returns the (fake) Serf Coordinate for a specific (fake) node
+// and it's mostly used during testing
+func (c *MockSerfClient) GetCoordinate(node string) (*coordinate.Coordinate, error) {
+	return c.coords[node], nil
 }

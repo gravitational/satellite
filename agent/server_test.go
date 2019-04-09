@@ -43,7 +43,6 @@ import (
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/test"
-
 	"github.com/gravitational/trace"
 
 	"github.com/gravitational/roundtrip"
@@ -569,7 +568,7 @@ func (r *AgentSuite) newAgent(node string, rpcPort int, members []serf.Member,
 	}
 	return &agent{
 		name:         node,
-		serfClient:   &testSerfClient{members: members},
+		SerfClient:   &MockSerfClient{members: members},
 		dialRPC:      testDialRPC(rpcPort, r.certFile, r.keyFile),
 		cache:        &testCache{c: c, SystemStatus: &pb.SystemStatus{Status: pb.SystemStatus_Unknown}},
 		Checkers:     checkers,
@@ -634,31 +633,6 @@ var failedProbe = &pb.Probe{
 	Checker: "failing service",
 	Status:  pb.Probe_Failed,
 	Error:   "invalid state",
-}
-
-// testSerfClient implements serfClient
-type testSerfClient struct {
-	members []serf.Member
-}
-
-func (r *testSerfClient) Members() ([]serf.Member, error) {
-	return r.members, nil
-}
-
-func (r *testSerfClient) Stop(handle serf.StreamHandle) error {
-	return nil
-}
-
-func (r *testSerfClient) UpdateTags(tags map[string]string, delTags []string) error {
-	return nil
-}
-
-func (r *testSerfClient) Join(peers []string, replay bool) (int, error) {
-	return 0, nil
-}
-
-func (r *testSerfClient) Close() error {
-	return nil
 }
 
 func newTestCache(c *C, clock clockwork.Clock) *testCache {
