@@ -167,7 +167,6 @@ func (c *pingChecker) check(ctx context.Context, r health.Reporter) (err error) 
 
 	client := c.serfClient
 
-	// retrieve other nodes using Serf members
 	nodes, err := client.Members()
 	if err != nil {
 		return trace.Wrap(err)
@@ -184,12 +183,12 @@ func (c *pingChecker) check(ctx context.Context, r health.Reporter) (err error) 
 // checkNodesRTT implements the bulk of the logic by checking the ping time
 // between this node (self) and the other Serf Cluster member nodes
 func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client agent.SerfClient) error {
-	// ping each other node and fail in case the results are over a specified
-	// threshold
+	// ping each other node and raise a warning in case the results are over
+	// a specified threshold
 	for _, node := range nodes {
 		// skipping nodes that are not alive (failed, removed, etc..)
 		if strings.ToLower(node.Status) != strings.ToLower(pb.MemberStatus_Alive.String()) {
-			c.logger.Debugf("skipping node %s because status is '%s'", node.Name, node.Status)
+			c.logger.Debugf("skipping node %s because status is %q", node.Name, node.Status)
 			continue
 		}
 		// skip pinging self
