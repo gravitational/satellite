@@ -172,7 +172,7 @@ func (c *pingChecker) check(ctx context.Context, r health.Reporter) (err error) 
 		return trace.Wrap(err)
 	}
 
-	err = c.checkNodesRTT(nodes, client)
+	_, err = c.checkNodesRTT(nodes, client)
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -182,7 +182,9 @@ func (c *pingChecker) check(ctx context.Context, r health.Reporter) (err error) 
 
 // checkNodesRTT implements the bulk of the logic by checking the ping time
 // between this node (self) and the other Serf Cluster member nodes
-func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client agent.SerfClient) error {
+func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client agent.SerfClient) (probeSeverity pb.Probe_Severity, err error) {
+	probeSeverity = pb.Probe_None
+
 	// ping each other node and raise a warning in case the results are over
 	// a specified threshold
 	for _, node := range nodes {
@@ -200,17 +202,17 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client agent.SerfClient
 
 		rttNanoSec, err := c.calculateRTT(client, c.self, node)
 		if err != nil {
-			return trace.Wrap(err)
+			return probeSeverity, trace.Wrap(err)
 		}
 
 		latencies, err := c.saveLatencyStats(rttNanoSec, node)
 		if err != nil {
-			return trace.Wrap(err)
+			return probeSeverity, trace.Wrap(err)
 		}
 
 		latencyHistogram, err := c.buildLatencyHistogram(node.Name, latencies)
 		if err != nil {
-			return trace.Wrap(err)
+			return probeSeverity, trace.Wrap(err)
 		}
 
 		c.logger.Debugf("%s <-ping-> %s = %dns [latest]", c.self.Name, node.Name, rttNanoSec)
@@ -224,6 +226,7 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client agent.SerfClient
 			c.logger.Warningf("%s <-ping-> %s = slow ping detected. Value %dns over threshold %s (%dns)",
 				c.self.Name, node.Name, latencyPercentile,
 				latencyThreshold.String(), latencyThreshold.Nanoseconds())
+			probeSeverity = pb.Probe_Warning
 		} else {
 			c.logger.Debugf("%s <-ping-> %s = ping okay. Value %dns within threshold %s (%dns)",
 				c.self.Name, node.Name, latencyPercentile,
@@ -231,7 +234,7 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client agent.SerfClient
 		}
 	}
 
-	return nil
+	return probeSeverity, nil
 }
 
 // buildLatencyHistogram maps latencies to a HDRHistrogram
