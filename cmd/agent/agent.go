@@ -32,7 +32,7 @@ func runAgent(config *agent.Config, monitoringConfig *config, peers []string) er
 	if len(peers) > 0 {
 		log.Infof("initial cluster=%v", peers)
 	}
-	log.Infof("starting with config=%v", config)
+
 	monitoringAgent, err := agent.New(config)
 	if err != nil {
 		return trace.Wrap(err)

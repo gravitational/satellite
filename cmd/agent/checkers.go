@@ -22,12 +22,17 @@ import (
 	"github.com/gravitational/satellite/monitoring"
 
 	"github.com/gravitational/trace"
+	log "github.com/sirupsen/logrus"
 )
 
 // config represents configuration for setting up monitoring checkers.
 type config struct {
 	// role is the current agent's role
 	role agent.Role
+	// serfRPCAddr is the Serf RPC endpoint address
+	serfRPCAddr string
+	// serfMemberName is used as the Node name in the Serf cluster
+	serfMemberName string
 	// kubeconfigPath is the path to the kubeconfig file
 	kubeconfigPath string
 	// kubeletAddr is the address of the kubelet
@@ -48,8 +53,9 @@ func addCheckers(node agent.Agent, config *config) (err error) {
 	if err != nil {
 		return trace.Wrap(err)
 	}
-
 	kubeConfig := monitoring.KubeConfig{Client: client}
+
+	log.Debugf("Monitoring Agent started with config %#v", config)
 	switch config.role {
 	case agent.RoleMaster:
 		err = addToMaster(node, config, kubeConfig)
@@ -64,10 +70,17 @@ func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeCon
 	if err != nil {
 		return trace.Wrap(err)
 	}
+
+	pingHealth, err := monitoring.PingHealth(config.serfRPCAddr, config.serfMemberName)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
 	node.AddChecker(monitoring.KubeAPIServerHealth(kubeConfig))
 	node.AddChecker(monitoring.DockerHealth(config.dockerAddr))
 	node.AddChecker(etcdChecker)
 	node.AddChecker(monitoring.SystemdHealth())
+	node.AddChecker(pingHealth)
 
 	if !config.disableInterPodCheck {
 		node.AddChecker(monitoring.InterPodCommunication(kubeConfig, config.nettestContainerImage))
