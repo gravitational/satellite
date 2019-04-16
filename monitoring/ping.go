@@ -151,33 +151,37 @@ func (c *pingChecker) Name() string {
 // desired threshold
 // Implements health.Checker
 func (c *pingChecker) Check(ctx context.Context, r health.Reporter) {
-	err := c.check(ctx, r)
+	probeSeverity, err := c.check(ctx, r)
 
 	if err != nil {
 		c.logger.Error(err.Error())
 		r.Add(NewProbeFromErr(c.Name(), "", err))
 		return
 	}
-	r.Add(&pb.Probe{Checker: c.Name(), Status: pb.Probe_Running})
+	r.Add(&pb.Probe{
+		Checker:  c.Name(),
+		Status:   pb.Probe_Running,
+		Severity: probeSeverity,
+	})
 }
 
 // check runs the actual system status verification code and returns an error
 // in case issues arise in the process
-func (c *pingChecker) check(ctx context.Context, r health.Reporter) (err error) {
+func (c *pingChecker) check(ctx context.Context, r health.Reporter) (probeSeverity pb.Probe_Severity, err error) {
 
 	client := c.serfClient
 
 	nodes, err := client.Members()
 	if err != nil {
-		return trace.Wrap(err)
+		return pb.Probe_None, trace.Wrap(err)
 	}
 
-	_, err = c.checkNodesRTT(nodes, client)
+	probeSeverity, err = c.checkNodesRTT(nodes, client)
 	if err != nil {
-		return trace.Wrap(err)
+		return pb.Probe_None, trace.Wrap(err)
 	}
 
-	return nil
+	return probeSeverity, nil
 }
 
 // checkNodesRTT implements the bulk of the logic by checking the ping time
