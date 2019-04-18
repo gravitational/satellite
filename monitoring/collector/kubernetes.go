@@ -21,7 +21,7 @@ import (
 	"github.com/gravitational/trace"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -54,7 +54,7 @@ func (k *KubernetesCollector) Collect(ch chan<- prometheus.Metric) error {
 		LabelSelector: labels.Everything().String(),
 		FieldSelector: fields.Everything().String(),
 	}
-	nodes, err := k.client.Core().Nodes().List(listOptions)
+	nodes, err := k.client.CoreV1().Nodes().List(listOptions)
 	if err != nil {
 		return trace.Wrap(err, "failed to query nodes: %v", err)
 	}
