@@ -26,16 +26,16 @@ import (
 
 type MonitoringSuite struct{}
 
-func TestFSNRChecker(t *testing.T) {
+func TestFileHandleAllocatableChecker(t *testing.T) {
 	testCases := []struct {
 		sysctl  string
-		checker FSNRChecker
+		checker FileHandleAllocatableChecker
 		probes  health.Probes
 		comment string
 	}{
 		{
 			sysctl: "2976	0	1533180",
-			checker: FSNRChecker{
+			checker: FileHandleAllocatableChecker{
 				Min: 1000,
 			},
 			probes: health.Probes{
@@ -48,7 +48,7 @@ func TestFSNRChecker(t *testing.T) {
 		},
 		{
 			sysctl: "3000	0	3000",
-			checker: FSNRChecker{
+			checker: FileHandleAllocatableChecker{
 				Min: 1000,
 			},
 			probes: health.Probes{
@@ -62,7 +62,7 @@ func TestFSNRChecker(t *testing.T) {
 		},
 		{
 			sysctl: "3001	0	3000",
-			checker: FSNRChecker{
+			checker: FileHandleAllocatableChecker{
 				Min: 1000,
 			},
 			probes: health.Probes{
@@ -76,7 +76,7 @@ func TestFSNRChecker(t *testing.T) {
 		},
 		{
 			sysctl: "3001	0	3000	10",
-			checker: FSNRChecker{
+			checker: FileHandleAllocatableChecker{
 				Min: 1000,
 			},
 			probes: health.Probes{
@@ -91,7 +91,7 @@ func TestFSNRChecker(t *testing.T) {
 		},
 		{
 			sysctl: "invalid	0	3000",
-			checker: FSNRChecker{
+			checker: FileHandleAllocatableChecker{
 				Min: 1000,
 			},
 			probes: health.Probes{
@@ -106,7 +106,7 @@ func TestFSNRChecker(t *testing.T) {
 		},
 		{
 			sysctl: "3001	0	invalid",
-			checker: FSNRChecker{
+			checker: FileHandleAllocatableChecker{
 				Min: 1000,
 			},
 			probes: health.Probes{
