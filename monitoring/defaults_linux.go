@@ -74,6 +74,10 @@ func BasicCheckers(checkers ...health.Checker) health.Checker {
 		name: "local",
 		checkers: []health.Checker{
 			NewIPForwardChecker(),
+			NewCNIForwardingChecker(),
+			NewFlannelForwardingChecker(),
+			NewWormholeBridgeForwardingChecker(),
+			NewWormholeWgForwardingChecker(),
 			NewBridgeNetfilterChecker(),
 			NewMayDetachMountsChecker(),
 			DefaultProcessChecker(),
