@@ -77,6 +77,7 @@ func (r *DNSChecker) checkWithResolver(
 			if err != nil {
 				reporter.Add(NewProbeFromErr(r.Name(), errorDetail(question, dns.TypeToString[questionType], nameserver), err))
 				checkFailed = true
+				continue
 			}
 			if in.Rcode != dns.RcodeSuccess {
 				if rcode, ok := dns.RcodeToString[in.Rcode]; ok {

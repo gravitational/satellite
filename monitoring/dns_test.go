@@ -61,7 +61,7 @@ func TestDnsChecker(t *testing.T) {
 		},
 		{
 			checker: DNSChecker{
-				QuestionA:   []string{"fdbnmfbvcnjfdblkbjcklkfldgkld.com."},
+				QuestionA:   []string{"test.invalid."},
 				Nameservers: []string{"1.1.1.1"},
 			},
 			probes: health.Probes{
@@ -69,7 +69,7 @@ func TestDnsChecker(t *testing.T) {
 					Checker: "dns",
 					Status:  pb.Probe_Failed,
 					Error:   "NXDOMAIN",
-					Detail:  "failed to resolve 'fdbnmfbvcnjfdblkbjcklkfldgkld.com.' (A) nameserver 1.1.1.1",
+					Detail:  "failed to resolve 'test.invalid.' (A) nameserver 1.1.1.1",
 				},
 			},
 			comment: "test non existant name (requires internet access)",
