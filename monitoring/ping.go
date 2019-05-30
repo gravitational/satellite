@@ -65,7 +65,7 @@ type pingChecker struct {
 	serfMemberName string
 	latencyStats   ttlmap.TTLMap
 	mux            sync.Mutex
-	logger         log.Entry
+	logger         log.FieldLogger
 }
 
 // PingCheckerConfig is used to store all the configuration related to the current check
@@ -104,10 +104,6 @@ func NewPingChecker(conf PingCheckerConfig) (c health.Checker, err error) {
 		return nil, trace.Wrap(err)
 	}
 
-	logger := log.WithFields(log.Fields{trace.Component: "ping"})
-	logger.Debugf("using Serf IP: %v", conf.SerfRPCAddr)
-	logger.Debugf("using Serf Name: %v", conf.SerfMemberName)
-
 	client, err := conf.NewSerfClient(serf.Config{
 		Addr: conf.SerfRPCAddr,
 	})
@@ -115,29 +111,17 @@ func NewPingChecker(conf PingCheckerConfig) (c health.Checker, err error) {
 		return nil, trace.Wrap(err)
 	}
 
-	// retrieve other nodes using Serf members
-	nodes, err := client.Members()
+	self, err := client.FindMember(conf.SerfMemberName)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	// finding what is the current node
-	var self serf.Member
-	for _, node := range nodes {
-		if node.Name == conf.SerfMemberName {
-			self = node
-			break // self node found, breaking out of the for loop
-		}
-	}
-	if self.Name == "" {
-		return nil, trace.NotFound("failed to find Serf member with name %s", conf.SerfMemberName)
-	}
 
 	return &pingChecker{
-		self:           self,
+		self:           *self,
 		serfClient:     client,
 		serfMemberName: conf.SerfMemberName,
 		latencyStats:   *latencyTTLMap,
-		logger:         *logger,
+		logger:         log.WithField(trace.Component, pingCheckerID),
 	}, nil
 }
 
