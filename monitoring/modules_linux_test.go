@@ -27,7 +27,7 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-type MonitoringSuite struct{}
+
 
 var _ = Suite(&MonitoringSuite{})
 
