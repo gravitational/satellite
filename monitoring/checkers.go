@@ -73,14 +73,8 @@ func PingHealth(serfRPCAddr, serfMemberName string) (c health.Checker, err error
 }
 
 // TimeDriftHealth creates a checker that monitors time difference between cluster nodes.
-func TimeDriftHealth(caFile, certFile, keyFile, serfRPCAddr, name string) (c health.Checker, err error) {
-	c, err = NewTimeDriftChecker(TimeDriftCheckerConfig{
-		CAFile:      caFile,
-		CertFile:    certFile,
-		KeyFile:     keyFile,
-		SerfRPCAddr: serfRPCAddr,
-		Name:        name,
-	})
+func TimeDriftHealth(config TimeDriftCheckerConfig) (c health.Checker, err error) {
+	c, err = NewTimeDriftChecker(config)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}

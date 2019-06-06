@@ -77,7 +77,7 @@ func (r *server) LocalStatus(ctx context.Context, req *pb.LocalStatusRequest) (r
 // Time sends back the target node server time
 func (r *server) Time(ctx context.Context, req *pb.TimeRequest) (*pb.TimeResponse, error) {
 	return &pb.TimeResponse{
-		Timestamp: pb.NewTimeToProto(time.Now()),
+		Timestamp: pb.NewTimeToProto(time.Now().UTC()),
 	}, nil
 }
 

@@ -22,6 +22,7 @@ import (
 	"github.com/gravitational/satellite/monitoring"
 
 	"github.com/gravitational/trace"
+	serf "github.com/hashicorp/serf/client"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -31,11 +32,11 @@ type config struct {
 	role agent.Role
 	// rpcAddrs is the list of listening addresses on RPC agents
 	rpcAddrs []string
-	// agentCAFile set the file location for the Agent CA cert
+	// agentCAFile sets the file location for the Agent CA cert
 	agentCAFile string
-	// agentCertFile set the file location for the Agent cert
+	// agentCertFile sets the file location for the Agent cert
 	agentCertFile string
-	// agentKeyFile set the file location for the Agent cert key
+	// agentKeyFile sets the file location for the Agent cert key
 	agentKeyFile string
 	// serfRPCAddr is the Serf RPC endpoint address
 	serfRPCAddr string
@@ -84,9 +85,25 @@ func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeCon
 		return trace.Wrap(err)
 	}
 
-	timeDriftHealth, err := monitoring.TimeDriftHealth(
-		config.agentCAFile, config.agentCertFile, config.agentKeyFile,
-		config.serfRPCAddr, config.serfMemberName)
+	serfClient, err := agent.NewSerfClient(serf.Config{
+		Addr: config.serfRPCAddr,
+	})
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	serfMember, err := serfClient.FindMember(config.serfMemberName)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	timeDriftHealth, err := monitoring.TimeDriftHealth(monitoring.TimeDriftCheckerConfig{
+		CAFile:     config.agentCAFile,
+		CertFile:   config.agentCertFile,
+		KeyFile:    config.agentKeyFile,
+		SerfClient: serfClient,
+		SerfMember: serfMember,
+	})
 	if err != nil {
 		return trace.Wrap(err)
 	}

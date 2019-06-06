@@ -14,36 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/* Time drift check algorigthm.
-
-Every coordinator node (one of Kubernetes masters) performs an instance
-of this algorithm.
-
-For each of remaining cluster nodes (including other coordinator nodes):
-
-* Selected coordinator node records it’s local timestamp (in UTC). Let’s call
-  this timestamp T1Start.
-
-* Coordinator initiates a “ping” grpc request to the node. Can be with empty
-  payload.
-
-* The node responds to the ping request replying with node’s local timestamp
-  (in UTC) in the payload. Let’s call this timestamp T2.
-
-* As the coordinator received the response, coordinator gets second local
-  timestamp. Let’s call it T1End.
-
-* Coordinator calculates the latency between itself and the node:
-  (T1End-T1Start)/2. Let’s call this value Latency.
-
-* Coordinator calculates the time drift between itself and the node:
-  T2-T1Start-Latency. Let’s call this value Drift. Can be negative which would
-  mean the node time is falling behind.
-
-* Compare abs(Drift) with the threshold.
-
-*/
-
 package monitoring
 
 import (
@@ -67,22 +37,25 @@ import (
 const (
 	// timeDriftCheckerID is the time drift check name.
 	timeDriftCheckerID = "time-drift"
-	// timeDriftThreshold set the default threshold of the acceptable time
+	// timeDriftThreshold sets the default threshold of the acceptable time
 	// difference between nodes.
 	timeDriftThreshold = 300 * time.Millisecond
+	// clientsCacheCapacity is the capacity of the TTL map that holds
+	// clients to satellite agents on other cluster nodes.
+	clientsCacheCapacity = 1000
 )
 
 // timeDriftChecker is a checker that verifies that the time difference between
-// cluster nodes remains withing the specified threshold.
+// cluster nodes remains within the specified threshold.
 type timeDriftChecker struct {
+	// TimeDriftCheckerConfig contains checker configuration.
 	TimeDriftCheckerConfig
+	// FieldLogger is used for logging.
 	log.FieldLogger
-	self        serf.Member
-	clients     *ttlmap.TTLMap
-	serfClient  agent.SerfClient
-	serfRPCAddr string
-	name        string
-	mux         sync.Mutex
+	// mu protects the clients map.
+	mu sync.Mutex
+	// clients contains RPC clients for other cluster nodes.
+	clients *ttlmap.TTLMap
 }
 
 // TimeDriftCheckerConfig stores configuration for the time drift check.
@@ -93,12 +66,10 @@ type TimeDriftCheckerConfig struct {
 	CertFile string
 	// KeyFile is the path to the Satellite agent private key file.
 	KeyFile string
-	// SerfRPCAddr is the address used by the Serf RPC client to communicate
-	SerfRPCAddr string
-	// Name is the name associated to this node in Serf
-	Name string
-	// NewSerfClient is used to create Serf client.
-	NewSerfClient agent.NewSerfClientFunc
+	// SerfClient is the client to the local serf agent.
+	SerfClient agent.SerfClient
+	// SerfMember is the local serf member.
+	SerfMember *serf.Member
 	// DialRPC is used to create Satellite RPC client.
 	DialRPC agent.DialRPC
 	// Clock is used in tests to mock time.
@@ -116,14 +87,11 @@ func (c *TimeDriftCheckerConfig) CheckAndSetDefaults() error {
 	if c.KeyFile == "" {
 		return trace.BadParameter("agent certificate key file can't be empty")
 	}
-	if c.SerfRPCAddr == "" {
-		return trace.BadParameter("serf RPC address can't be empty")
+	if c.SerfClient == nil {
+		return trace.BadParameter("local serf client can't be empty")
 	}
-	if c.Name == "" {
-		return trace.BadParameter("node name can't be empty")
-	}
-	if c.NewSerfClient == nil {
-		c.NewSerfClient = agent.NewSerfClient
+	if c.SerfMember == nil {
+		return trace.BadParameter("local serf member can't be empty")
 	}
 	if c.DialRPC == nil {
 		c.DialRPC = agent.DefaultDialRPC(c.CAFile, c.CertFile, c.KeyFile)
@@ -136,21 +104,10 @@ func (c *TimeDriftCheckerConfig) CheckAndSetDefaults() error {
 
 // NewTimeDriftChecker returns a new instance of time drift checker.
 func NewTimeDriftChecker(conf TimeDriftCheckerConfig) (c health.Checker, err error) {
-	err = conf.CheckAndSetDefaults()
-	if err != nil {
+	if err := conf.CheckAndSetDefaults(); err != nil {
 		return nil, trace.Wrap(err)
 	}
-	client, err := conf.NewSerfClient(serf.Config{
-		Addr: conf.SerfRPCAddr,
-	})
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
-	self, err := client.FindMember(conf.Name)
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
-	clientsCache, err := ttlmap.New(1000)
+	clientsCache, err := ttlmap.New(clientsCacheCapacity)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -158,10 +115,6 @@ func NewTimeDriftChecker(conf TimeDriftCheckerConfig) (c health.Checker, err err
 		TimeDriftCheckerConfig: conf,
 		FieldLogger:            log.WithField(trace.Component, timeDriftCheckerID),
 		clients:                clientsCache,
-		self:                   *self,
-		serfClient:             client,
-		serfRPCAddr:            conf.SerfRPCAddr,
-		name:                   conf.Name,
 	}, nil
 }
 
@@ -172,58 +125,68 @@ func (c *timeDriftChecker) Name() string {
 
 // Check fills in provided reporter with probes according to time drift check results.
 func (c *timeDriftChecker) Check(ctx context.Context, r health.Reporter) {
-	probes, err := c.check(ctx, r)
+	failedProbes, err := c.check(ctx, r)
 	if err != nil {
 		c.Error(err.Error())
-		r.Add(NewProbeFromErr(c.Name(), "", err))
+		r.Add(NewProbeFromErr(c.Name(), "failed to check time drift", err))
 		return
 	}
-	for i := range probes {
-		r.Add(&probes[i])
+	if len(failedProbes) == 0 {
+		r.Add(c.successProbe())
+		return
+	}
+	for i := range failedProbes {
+		r.Add(failedProbes[i])
 	}
 }
 
 // check does a time drift check between this and other cluster nodes.
 //
-// Returns a list of probe results, one for each node this node has been
-// checked against.
-func (c *timeDriftChecker) check(ctx context.Context, r health.Reporter) (probes []pb.Probe, err error) {
-	nodes, err := c.serfClient.Members()
+// Returns a list of probes that failed.
+func (c *timeDriftChecker) check(ctx context.Context, r health.Reporter) (probes []*pb.Probe, err error) {
+	nodes, err := c.nodesToCheck()
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
 	for _, node := range nodes {
-		if c.shouldSkipNode(node) {
-			continue
-		}
-		probe, err := c.checkNode(ctx, node)
+		drift, err := c.getTimeDrift(ctx, node)
 		if err != nil {
 			return nil, trace.Wrap(err)
 		}
-		probes = append(probes, *probe)
+		if isDriftHigh(drift) {
+			probes = append(probes, c.failureProbe(node, drift))
+		}
 	}
 	return probes, nil
 }
 
-// checkNode checks time drift between this node and the specified node and
-// returns the probe result.
-func (c *timeDriftChecker) checkNode(ctx context.Context, node serf.Member) (*pb.Probe, error) {
-	drift, err := c.getTimeDrift(ctx, node)
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
-	// Drift may be negative which means the node is lagging behind.
-	if drift < 0 && -drift > timeDriftThreshold || drift > timeDriftThreshold {
-		return c.failureProbe(node, drift), nil
-	}
-	return c.successProbe(node, drift), nil
-}
-
 // getTimeDrift calculates the time drift value between this and the specified
-// node.
+// node using the following algorithm.
 //
-// It implements the algorithm described in more detail in the header of this
-// module.
+// Every coordinator node (Kubernetes masters) executes an instance
+// of this algorithm.
+
+// For each of the remaining cluster nodes (including other coordinator nodes):
+
+// * Selected coordinator node records its local timestamp (in UTC). Let’s call
+//   this timestamp T1Start.
+
+// * Coordinator initiates a "ping" grpc request to the node.
+
+// * The node responds to the ping request replying with node's local timestamp
+//   (in UTC) in the payload. Let's call this timestamp T2.
+
+// * After receiving the remote response, coordinator records the second local
+//   timestamp. Let's call it T1End.
+
+// * Coordinator calculates the latency between itself and the node:
+//   (T1End-T1Start)/2. Let's call this value Latency.
+
+// * Coordinator calculates the time drift between itself and the node:
+//   T2-T1Start-Latency. Let's call this value Drift. Can be negative which would
+//   mean the node time is falling behind.
+
+// * Compare abs(Drift) with the threshold.
 func (c *timeDriftChecker) getTimeDrift(ctx context.Context, node serf.Member) (time.Duration, error) {
 	agentClient, err := c.getAgentClient(node)
 	if err != nil {
@@ -231,15 +194,9 @@ func (c *timeDriftChecker) getTimeDrift(ctx context.Context, node serf.Member) (
 	}
 
 	// Obtain this node's local timestamp.
-	//
-	// Let’s call this timestamp T1Start.
-	//
 	t1Start := c.Clock.Now().UTC()
 
 	// Send "time" request to the specified node.
-	//
-	// Let's call the timestamp remote node returns T2.
-	//
 	t2Response, err := agentClient.Time(ctx, &pb.TimeRequest{})
 	if err != nil {
 		return 0, trace.Wrap(err)
@@ -248,14 +205,10 @@ func (c *timeDriftChecker) getTimeDrift(ctx context.Context, node serf.Member) (
 	// Calculate how much time has elapsed since T1Start. This value will
 	// roughly be the request roundtrip time, so the latency b/w the nodes
 	// is half that.
-	//
-	// Let's call this value Latency.
-	//
 	latency := c.Clock.Now().UTC().Sub(t1Start) / 2
 
 	// Finally calculate the time drift between this and the specified node
 	// using formula: T2 - T1Start - Latency.
-	//
 	t2 := t2Response.GetTimestamp().ToTime()
 	drift := t2.Sub(t1Start) - latency
 
@@ -264,13 +217,12 @@ func (c *timeDriftChecker) getTimeDrift(ctx context.Context, node serf.Member) (
 	return drift, nil
 }
 
-// successProbe constructs a probe that represents successful time drift check
-// against the specified node.
-func (c *timeDriftChecker) successProbe(node serf.Member, drift time.Duration) *pb.Probe {
+// successProbe constructs a probe that represents successful time drift check.
+func (c *timeDriftChecker) successProbe() *pb.Probe {
 	return &pb.Probe{
 		Checker: c.Name(),
-		Detail: fmt.Sprintf("time drift between %s and %s is within the allowed threshold of %s: %s",
-			c.self.Addr, node.Addr, timeDriftThreshold, drift),
+		Detail: fmt.Sprintf("time drift between %s and other nodes is within the allowed threshold of %s",
+			c.SerfMember.Addr, timeDriftThreshold),
 		Status:   pb.Probe_Running,
 		Severity: pb.Probe_None,
 	}
@@ -282,23 +234,37 @@ func (c *timeDriftChecker) failureProbe(node serf.Member, drift time.Duration) *
 	return &pb.Probe{
 		Checker: c.Name(),
 		Detail: fmt.Sprintf("time drift between %s and %s is higher than the allowed threshold of %s: %s",
-			c.self.Addr, node.Addr, timeDriftThreshold, drift),
+			c.SerfMember.Addr, node.Addr, timeDriftThreshold, drift),
 		Status:   pb.Probe_Failed,
 		Severity: pb.Probe_Warning,
 	}
 }
 
-// shouldSkipNode returns true if the check should not be run against specified
+// nodesToCheck returns nodes to check time drift against.
+func (c *timeDriftChecker) nodesToCheck() (result []serf.Member, err error) {
+	nodes, err := c.SerfClient.Members()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	for _, node := range nodes {
+		if c.shouldCheckNode(node) {
+			result = append(result, node)
+		}
+	}
+	return result, nil
+}
+
+// shouldCheckNode returns true if the check should be run against specified
 // serf member.
-func (c *timeDriftChecker) shouldSkipNode(node serf.Member) bool {
-	return strings.ToLower(node.Status) != strings.ToLower(pb.MemberStatus_Alive.String()) ||
-		c.self.Addr.String() == node.Addr.String()
+func (c *timeDriftChecker) shouldCheckNode(node serf.Member) bool {
+	return strings.ToLower(node.Status) == strings.ToLower(pb.MemberStatus_Alive.String()) &&
+		c.SerfMember.Addr.String() != node.Addr.String()
 }
 
 // getAgentClient returns Satellite agent client for the provided node.
 func (c *timeDriftChecker) getAgentClient(node serf.Member) (agent.Client, error) {
-	c.mux.Lock()
-	defer c.mux.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	clientI, exists := c.clients.Get(node.Addr.String())
 	if exists {
 		return clientI.(agent.Client), nil
@@ -309,4 +275,9 @@ func (c *timeDriftChecker) getAgentClient(node serf.Member) (agent.Client, error
 	}
 	c.clients.Set(node.Addr.String(), client, time.Hour)
 	return client, nil
+}
+
+// isDriftHigh returns true if the provided drift value is over the threshold.
+func isDriftHigh(drift time.Duration) bool {
+	return drift < 0 && -drift > timeDriftThreshold || drift > timeDriftThreshold
 }

@@ -24,13 +24,12 @@ import (
 	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/agent/health"
 	"github.com/gravitational/satellite/agent/proto/agentpb"
-	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+
 	"github.com/gravitational/trace"
 	"github.com/gravitational/ttlmap"
+	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
 	"github.com/sirupsen/logrus"
-
-	serf "github.com/hashicorp/serf/client"
 	"gopkg.in/check.v1"
 )
 
@@ -42,111 +41,96 @@ type TimeDriftSuite struct {
 var _ = check.Suite(&TimeDriftSuite{})
 
 func (s *TimeDriftSuite) SetUpSuite(c *check.C) {
-	s.c = &timeDriftChecker{self: node1}
+	s.c = &timeDriftChecker{TimeDriftCheckerConfig: TimeDriftCheckerConfig{
+		SerfMember: &node1,
+	}}
 	s.clock = clockwork.NewFakeClock()
 }
 
 func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 	tests := []struct {
-		Comment string
-		Nodes   []serf.Member
-		Times   map[string]time.Time
-		Result  []*pb.Probe
+		// comment is the test case description.
+		comment string
+		// nodes is a list of all serf members.
+		nodes []serf.Member
+		// times maps serf member to its drift value.
+		times map[string]time.Time
+		// result is the time drift check result.
+		result []*agentpb.Probe
 	}{
 		{
-			Comment: "Time drift to both nodes is acceptable",
-			Nodes:   []serf.Member{node1, node2, node3},
-			Times: map[string]time.Time{
+			comment: "Acceptable time drift",
+			nodes:   []serf.Member{node1, node2, node3},
+			times: map[string]time.Time{
 				node2.Name: s.clock.Now().Add(100 * time.Millisecond),
 				node3.Name: s.clock.Now().Add(200 * time.Millisecond),
 			},
-			// Since we're using frozen time, latency will be 0 so
-			// time drift will be exactly the amount we specified.
-			Result: []*pb.Probe{
-				s.c.successProbe(node2, 100*time.Millisecond),
-				s.c.successProbe(node3, 200*time.Millisecond),
+			result: []*agentpb.Probe{
+				s.c.successProbe(),
 			},
 		},
 		{
-			Comment: "Time drift to both nodes is acceptable, one node is lagging behind",
-			Nodes:   []serf.Member{node1, node2, node3},
-			Times: map[string]time.Time{
+			comment: "Acceptable time drift, one node is lagging behind",
+			nodes:   []serf.Member{node1, node2, node3},
+			times: map[string]time.Time{
 				node2.Name: s.clock.Now().Add(100 * time.Millisecond),
 				node3.Name: s.clock.Now().Add(-100 * time.Millisecond),
 			},
-			// Since we're using frozen time, latency will be 0 so
-			// time drift will be exactly the amount we specified.
-			Result: []*pb.Probe{
-				s.c.successProbe(node2, 100*time.Millisecond),
-				s.c.successProbe(node3, -100*time.Millisecond),
+			result: []*agentpb.Probe{
+				s.c.successProbe(),
 			},
 		},
 		{
-			Comment: "Time drift to node-3 is high",
-			Nodes:   []serf.Member{node1, node2, node3},
-			Times: map[string]time.Time{
+			comment: "Time drift to node-3 exceeds threshold",
+			nodes:   []serf.Member{node1, node2, node3},
+			times: map[string]time.Time{
 				node2.Name: s.clock.Now().Add(100 * time.Millisecond),
 				node3.Name: s.clock.Now().Add(500 * time.Millisecond),
 			},
 			// Since we're using frozen time, latency will be 0 so
 			// time drift will be exactly the amount we specified.
-			Result: []*pb.Probe{
-				s.c.successProbe(node2, 100*time.Millisecond),
+			result: []*agentpb.Probe{
 				s.c.failureProbe(node3, 500*time.Millisecond),
 			},
 		},
 		{
-			Comment: "Time drift to node-2 is high",
-			Nodes:   []serf.Member{node1, node2, node3},
-			Times: map[string]time.Time{
+			comment: "Time drift to node-2 exceeds threshold",
+			nodes:   []serf.Member{node1, node2, node3},
+			times: map[string]time.Time{
 				node2.Name: s.clock.Now().Add(-time.Second),
 				node3.Name: s.clock.Now().Add(100 * time.Millisecond),
 			},
-			// Since we're using frozen time, latency will be 0 so
-			// time drift will be exactly the amount we specified.
-			Result: []*pb.Probe{
+			result: []*agentpb.Probe{
 				s.c.failureProbe(node2, -time.Second),
-				s.c.successProbe(node3, 100*time.Millisecond),
 			},
 		},
 		{
-			Comment: "Time drift to both nodes is high",
-			Nodes:   []serf.Member{node1, node2, node3},
-			Times: map[string]time.Time{
+			comment: "Time drift to both nodes exceeds threshold",
+			nodes:   []serf.Member{node1, node2, node3},
+			times: map[string]time.Time{
 				node2.Name: s.clock.Now().Add(-time.Second),
 				node3.Name: s.clock.Now().Add(time.Second),
 			},
-			// Since we're using frozen time, latency will be 0 so
-			// time drift will be exactly the amount we specified.
-			Result: []*pb.Probe{
+			result: []*agentpb.Probe{
 				s.c.failureProbe(node2, -time.Second),
 				s.c.failureProbe(node3, time.Second),
 			},
 		},
 	}
 	for _, test := range tests {
-		clients, err := ttlmap.New(10)
-		c.Assert(err, check.IsNil)
-		for nodeName, nodeTime := range test.Times {
-			clients.Set(
-				nodes[nodeName].Addr.String(),
-				newMockedTimeAgentClient(nodeTime),
-				time.Hour)
-		}
 		checker := &timeDriftChecker{
 			TimeDriftCheckerConfig: TimeDriftCheckerConfig{
-				Clock: s.clock,
+				SerfClient: agent.NewMockSerfClient(test.nodes, nil),
+				SerfMember: &node1,
+				Clock:      s.clock,
 			},
 			FieldLogger: logrus.WithField(trace.Component, "test"),
-			clients:     clients,
-			serfClient:  agent.NewMockSerfClient(test.Nodes, nil),
-			name:        node1.Name,
-			self:        node1,
+			clients:     newClientsCache(c, test.times),
 		}
 		var probes health.Probes
 		checker.Check(context.TODO(), &probes)
-		c.Assert(probes.GetProbes(), check.DeepEquals, test.Result,
-			check.Commentf(test.Comment))
+		c.Assert(probes.GetProbes(), check.DeepEquals, test.result,
+			check.Commentf(test.comment))
 	}
 }
 
@@ -159,10 +143,22 @@ func newMockedTimeAgentClient(time time.Time) *mockedTimeAgentClient {
 	return &mockedTimeAgentClient{time: time}
 }
 
-func (a *mockedTimeAgentClient) Time(ctx context.Context, req *pb.TimeRequest) (*pb.TimeResponse, error) {
-	return &pb.TimeResponse{
-		Timestamp: pb.NewTimeToProto(a.time),
+func (a *mockedTimeAgentClient) Time(ctx context.Context, req *agentpb.TimeRequest) (*agentpb.TimeResponse, error) {
+	return &agentpb.TimeResponse{
+		Timestamp: agentpb.NewTimeToProto(a.time),
 	}, nil
+}
+
+func newClientsCache(c *check.C, times map[string]time.Time) *ttlmap.TTLMap {
+	clients, err := ttlmap.New(10)
+	c.Assert(err, check.IsNil)
+	for nodeName, nodeTime := range times {
+		clients.Set(
+			nodes[nodeName].Addr.String(),
+			newMockedTimeAgentClient(nodeTime),
+			time.Hour)
+	}
+	return clients
 }
 
 var (
