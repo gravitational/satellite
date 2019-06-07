@@ -17,16 +17,17 @@ package monitoring
 
 import (
 	"context"
-	"testing"
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-	"github.com/stretchr/testify/assert"
+	"gopkg.in/check.v1"
 )
 
-type MonitoringSuite struct{}
+type SysctlSuite struct{}
 
-func TestFileHandleAllocatableChecker(t *testing.T) {
+var _ = check.Suite(&SysctlSuite{})
+
+func (s *SysctlSuite) TestFileHandleAllocatableChecker(c *check.C) {
 	testCases := []struct {
 		sysctl  string
 		checker FileHandleAllocatableChecker
@@ -124,6 +125,6 @@ func TestFileHandleAllocatableChecker(t *testing.T) {
 	for _, testCase := range testCases {
 		var reporter health.Probes
 		testCase.checker.check(context.TODO(), &reporter, testCase.sysctl)
-		assert.Equal(t, reporter, testCase.probes, testCase.comment)
+		c.Assert(reporter, check.DeepEquals, testCase.probes, check.Commentf(testCase.comment))
 	}
 }

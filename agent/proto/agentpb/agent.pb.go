@@ -458,9 +458,9 @@ func (m *TimeRequest) String() string            { return proto.CompactTextStrin
 func (*TimeRequest) ProtoMessage()               {}
 func (*TimeRequest) Descriptor() ([]byte, []int) { return fileDescriptorAgent, []int{9} }
 
-// TimeResponse contains the node's local time
+// TimeResponse contains the node's local time in UTC
 type TimeResponse struct {
-	// Timestamp is the node's local timestamp
+	// Timestamp is the node's local timestamp in UTC
 	Timestamp *Timestamp `protobuf:"bytes,1,opt,name=timestamp" json:"timestamp,omitempty"`
 }
 
@@ -510,7 +510,7 @@ type AgentClient interface {
 	Status(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error)
 	// LocalStatus collects the local node status
 	LocalStatus(ctx context.Context, in *LocalStatusRequest, opts ...grpc.CallOption) (*LocalStatusResponse, error)
-	// Time requests the node's local time
+	// Time requests the node's local time in UTC
 	Time(ctx context.Context, in *TimeRequest, opts ...grpc.CallOption) (*TimeResponse, error)
 }
 
@@ -556,7 +556,7 @@ type AgentServer interface {
 	Status(context.Context, *StatusRequest) (*StatusResponse, error)
 	// LocalStatus collects the local node status
 	LocalStatus(context.Context, *LocalStatusRequest) (*LocalStatusResponse, error)
-	// Time requests the node's local time
+	// Time requests the node's local time in UTC
 	Time(context.Context, *TimeRequest) (*TimeResponse, error)
 }
 

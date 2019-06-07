@@ -120,9 +120,9 @@ message Timestamp {
 // TimeRequest is a request to get the node's local time
 message TimeRequest {}
 
-// TimeResponse contains the node's local time
+// TimeResponse contains the node's local time in UTC
 message TimeResponse {
-  // Timestamp is the node's local timestamp
+  // Timestamp is the node's local timestamp in UTC
   Timestamp timestamp = 1;
 }
 
@@ -132,6 +132,6 @@ service Agent {
   rpc Status(StatusRequest) returns (StatusResponse) {}
   // LocalStatus collects the local node status
   rpc LocalStatus(LocalStatusRequest) returns (LocalStatusResponse) {}
-  // Time requests the node's local time
+  // Time requests the node's local time in UTC
   rpc Time(TimeRequest) returns (TimeResponse) {}
 }

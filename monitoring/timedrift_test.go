@@ -62,8 +62,8 @@ func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 			comment: "Acceptable time drift",
 			nodes:   []serf.Member{node1, node2, node3},
 			times: map[string]time.Time{
-				node2.Name: s.clock.Now().Add(100 * time.Millisecond),
-				node3.Name: s.clock.Now().Add(200 * time.Millisecond),
+				node2.Name: s.clock.Now().Add(driftUnderThreshold()),
+				node3.Name: s.clock.Now().Add(driftUnderThreshold()),
 			},
 			result: []*agentpb.Probe{
 				s.c.successProbe(),
@@ -73,8 +73,8 @@ func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 			comment: "Acceptable time drift, one node is lagging behind",
 			nodes:   []serf.Member{node1, node2, node3},
 			times: map[string]time.Time{
-				node2.Name: s.clock.Now().Add(100 * time.Millisecond),
-				node3.Name: s.clock.Now().Add(-100 * time.Millisecond),
+				node2.Name: s.clock.Now().Add(driftUnderThreshold()),
+				node3.Name: s.clock.Now().Add(-driftUnderThreshold()),
 			},
 			result: []*agentpb.Probe{
 				s.c.successProbe(),
@@ -84,36 +84,36 @@ func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 			comment: "Time drift to node-3 exceeds threshold",
 			nodes:   []serf.Member{node1, node2, node3},
 			times: map[string]time.Time{
-				node2.Name: s.clock.Now().Add(100 * time.Millisecond),
-				node3.Name: s.clock.Now().Add(500 * time.Millisecond),
+				node2.Name: s.clock.Now().Add(driftUnderThreshold()),
+				node3.Name: s.clock.Now().Add(driftOverThreshold()),
 			},
 			// Since we're using frozen time, latency will be 0 so
 			// time drift will be exactly the amount we specified.
 			result: []*agentpb.Probe{
-				s.c.failureProbe(node3, 500*time.Millisecond),
+				s.c.failureProbe(node3, driftOverThreshold()),
 			},
 		},
 		{
 			comment: "Time drift to node-2 exceeds threshold",
 			nodes:   []serf.Member{node1, node2, node3},
 			times: map[string]time.Time{
-				node2.Name: s.clock.Now().Add(-time.Second),
-				node3.Name: s.clock.Now().Add(100 * time.Millisecond),
+				node2.Name: s.clock.Now().Add(-driftOverThreshold()),
+				node3.Name: s.clock.Now().Add(driftUnderThreshold()),
 			},
 			result: []*agentpb.Probe{
-				s.c.failureProbe(node2, -time.Second),
+				s.c.failureProbe(node2, -driftOverThreshold()),
 			},
 		},
 		{
 			comment: "Time drift to both nodes exceeds threshold",
 			nodes:   []serf.Member{node1, node2, node3},
 			times: map[string]time.Time{
-				node2.Name: s.clock.Now().Add(-time.Second),
-				node3.Name: s.clock.Now().Add(time.Second),
+				node2.Name: s.clock.Now().Add(-driftOverThreshold()),
+				node3.Name: s.clock.Now().Add(driftOverThreshold()),
 			},
 			result: []*agentpb.Probe{
-				s.c.failureProbe(node2, -time.Second),
-				s.c.failureProbe(node3, time.Second),
+				s.c.failureProbe(node2, -driftOverThreshold()),
+				s.c.failureProbe(node3, driftOverThreshold()),
 			},
 		},
 	}
@@ -134,13 +134,30 @@ func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 	}
 }
 
+// driftOverThreshold returns time drift value that exceeds configured threshold.
+func driftOverThreshold() time.Duration {
+	return timeDriftThreshold * 2
+}
+
+// driftUnderThreshold returns time drift value that is within configured threshold.
+func driftUnderThreshold() time.Duration {
+	return timeDriftThreshold / 2
+}
+
 type mockedTimeAgentClient struct {
-	agent.Client
 	time time.Time
 }
 
 func newMockedTimeAgentClient(time time.Time) *mockedTimeAgentClient {
 	return &mockedTimeAgentClient{time: time}
+}
+
+func (a *mockedTimeAgentClient) Status(ctx context.Context) (*agentpb.SystemStatus, error) {
+	return nil, nil
+}
+
+func (a *mockedTimeAgentClient) LocalStatus(ctx context.Context) (*agentpb.NodeStatus, error) {
+	return nil, nil
 }
 
 func (a *mockedTimeAgentClient) Time(ctx context.Context, req *agentpb.TimeRequest) (*agentpb.TimeResponse, error) {

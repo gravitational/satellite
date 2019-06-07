@@ -18,16 +18,18 @@ package monitoring
 
 import (
 	"context"
-	"testing"
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-	"github.com/stretchr/testify/assert"
+
+	"gopkg.in/check.v1"
 )
 
-type MonitoringSuite struct{}
+type DNSSuite struct{}
 
-func TestDnsChecker(t *testing.T) {
+var _ = check.Suite(&DNSSuite{})
+
+func (s *DNSSuite) TestDnsChecker(c *check.C) {
 	testCases := []struct {
 		checker DNSChecker
 		probes  health.Probes
@@ -79,6 +81,6 @@ func TestDnsChecker(t *testing.T) {
 	for _, testCase := range testCases {
 		var reporter health.Probes
 		testCase.checker.Check(context.TODO(), &reporter)
-		assert.Equal(t, reporter, testCase.probes, testCase.comment)
+		c.Assert(reporter, check.DeepEquals, testCase.probes, check.Commentf(testCase.comment))
 	}
 }
