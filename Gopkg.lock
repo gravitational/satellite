@@ -202,12 +202,12 @@
   version = "v1.0.0"
 
 [[projects]]
-  digest = "1:1c9083fb1c179c90d299a3b9eaa3009175d2ebf327df30d4ff0ee1654e51073c"
+  digest = "1:afb36747f009e72637bdf1b3f5d27f3c1d5e1fc5478fc4aba2a33e40e8829dee"
   name = "github.com/gravitational/trace"
   packages = ["."]
   pruneopts = "UT"
-  revision = "792b9868cdf9d499e09b47f167c553e786a0e235"
-  version = "1.1.4"
+  revision = "a5c40b57db7203332a073f20771214d0eeb2a168"
+  version = "1.1.7"
 
 [[projects]]
   branch = "master"
@@ -856,6 +856,7 @@
     "github.com/influxdata/influxdb/client/v2",
     "github.com/jonboulle/clockwork",
     "github.com/kylelemons/godebug/diff",
+    "github.com/miekg/dns",
     "github.com/mitchellh/go-ps",
     "github.com/prometheus/client_golang/prometheus",
     "github.com/prometheus/procfs",

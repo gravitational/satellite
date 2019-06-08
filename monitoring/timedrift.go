@@ -199,6 +199,13 @@ func (c *timeDriftChecker) getTimeDrift(ctx context.Context, node serf.Member) (
 	// Send "time" request to the specified node.
 	t2Response, err := agentClient.Time(ctx, &pb.TimeRequest{})
 	if err != nil {
+		// If the agent we're making request to is of an older version,
+		// it may not support Time() method yet. This can happen, e.g.,
+		// during a rolling upgrade. In this case fallback to success.
+		if trace.IsNotImplemented(err) {
+			c.WithField("node", node.Name).Warnf(trace.UserMessage(err))
+			return 0, nil
+		}
 		return 0, trace.Wrap(err)
 	}
 
