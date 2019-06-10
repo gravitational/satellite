@@ -19,6 +19,7 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"net"
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
@@ -73,7 +74,7 @@ func (r *DNSChecker) checkWithResolver(
 	for questionType, questions := range map[uint16][]string{dns.TypeA: r.QuestionA, dns.TypeNS: r.QuestionNS} {
 		for _, question := range questions {
 			q.Question[0] = dns.Question{question, questionType, dns.ClassINET}
-			in, err := dns.ExchangeContext(ctx, q, fmt.Sprintf("%s:53", nameserver))
+			in, err := dns.ExchangeContext(ctx, q, ensurePort(nameserver, "53"))
 			if err != nil {
 				reporter.Add(NewProbeFromErr(r.Name(), errorDetail(question, dns.TypeToString[questionType], nameserver), err))
 				checkFailed = true
@@ -102,6 +103,13 @@ func (r *DNSChecker) checkWithResolver(
 		Checker: r.Name(),
 		Status:  pb.Probe_Running,
 	})
+}
+
+func ensurePort(address, defaultPort string) string {
+	if _, _, err := net.SplitHostPort(address); err == nil {
+		return address
+	}
+	return net.JoinHostPort(address, defaultPort)
 }
 
 func errorDetail(question, recordType, nameserver string) string {

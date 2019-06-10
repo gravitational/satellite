@@ -48,6 +48,9 @@ type Agent interface {
 	LocalStatus() *pb.NodeStatus
 	// IsMember returns whether this agent is already a member of serf cluster
 	IsMember() bool
+	// GetConfig returns the agent configuration.
+	GetConfig() Config
+	// CheckerRepository allows to add checks to the agent.
 	health.CheckerRepository
 }
 
@@ -59,6 +62,9 @@ type Config struct {
 	// Name must match the name of the local serf agent so that the agent
 	// can match itself to a serf member.
 	Name string
+
+	// NodeName is the name assigned by Kubernetes to this node
+	NodeName string
 
 	// RPCAddrs is a list of addresses agent binds to for RPC traffic.
 	//
@@ -125,10 +131,11 @@ func New(config *Config) (Agent, error) {
 
 	clock := clockwork.NewRealClock()
 	agent := &agent{
+		Config:          *config,
 		SerfClient:      client,
 		name:            config.Name,
 		cache:           config.Cache,
-		dialRPC:         defaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
+		dialRPC:         DefaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
 		statusClock:     clock,
 		recycleClock:    clock,
 		localStatus:     emptyNodeStatus(config.Name),
@@ -190,7 +197,7 @@ type agent struct {
 
 	// dialRPC is a factory function to create clients to other agents.
 	// If future, agent address discovery will happen through serf.
-	dialRPC dialRPC
+	dialRPC DialRPC
 
 	// done is a channel used for cleanup.
 	done chan struct{}
@@ -208,9 +215,18 @@ type agent struct {
 	// from remote nodes during status collection.
 	// Defaults to statusQueryReplyTimeout if unspecified
 	statusQueryReplyTimeout time.Duration
+
+	// Config is the agent configuration.
+	Config
 }
 
-type dialRPC func(*serf.Member) (*client, error)
+// DialRPC returns RPC client for the provided Serf member.
+type DialRPC func(*serf.Member) (*client, error)
+
+// GetConfig returns the agent configuration.
+func (r *agent) GetConfig() Config {
+	return r.Config
+}
 
 // Start starts the agent's background tasks.
 func (r *agent) Start() error {
@@ -279,6 +295,7 @@ func (r *agent) Close() (err error) {
 
 	r.rpc.Stop()
 	close(r.done)
+
 	err = r.SerfClient.Close()
 	if err != nil {
 		errors = append(errors, trace.Wrap(err))
