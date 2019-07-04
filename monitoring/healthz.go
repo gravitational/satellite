@@ -29,7 +29,7 @@ import (
 	"github.com/gravitational/trace"
 )
 
-const healthzCheckTimeout = 1 * time.Second
+const healthzCheckTimeout = 5 * time.Second
 
 // HTTPResponseChecker is a function that can validate service health
 // from the provided response
