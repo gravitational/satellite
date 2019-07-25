@@ -238,7 +238,7 @@ const (
 )
 
 var (
-	// DefaultNodeConditions is a list of all default Kubernetes node
+	// DefaultNodeConditions is a list of default Kubernetes node
 	// conditions.
 	DefaultNodeConditions = []v1.NodeConditionType{
 		v1.NodeOutOfDisk,
@@ -248,7 +248,12 @@ var (
 		v1.NodeNetworkUnavailable,
 	}
 	// NodeProblemDetectorConditions is a list of node conditions
-	// commonly set by Node Problem Detector.
+	// set by Node Problem Detector.
+	//
+	// TODO(r0mant): Note that the exact list of conditions set by Node
+	// Problem Detector depends on the actual configuration so in the
+	// future it might make sense to teach Satellite to parse its
+	// configuration and extract all custom conditions from there.
 	NodeProblemDetectorConditions = []v1.NodeConditionType{
 		NodeKernelDeadlock,
 		NodeReadonlyFilesystem,
@@ -261,7 +266,7 @@ var (
 	// NodeConditions defines default Kubernetes node conditions to monitor.
 	//
 	// It includes both default Kubernetes conditions, as well as those
-	// commonly used by Kubernetes Node Problem Detector.
+	// used by Kubernetes Node Problem Detector.
 	NodeConditions = append(DefaultNodeConditions,
 		NodeProblemDetectorConditions...)
 )
