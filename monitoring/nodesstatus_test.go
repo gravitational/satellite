@@ -58,7 +58,7 @@ func (_ *MonitoringSuite) TestDetectsNodeStatus(c *C) {
 				&pb.Probe{
 					Checker:  NodeStatusCheckerID,
 					Status:   pb.Probe_Failed,
-					Severity: pb.Probe_Warning,
+					Severity: pb.Probe_Critical,
 					Detail:   "Ready/Stopped",
 					Error:    "Kubelet stopped posting status",
 				},
@@ -88,7 +88,7 @@ func (_ *MonitoringSuite) TestDetectsNodeStatus(c *C) {
 				&pb.Probe{
 					Checker:  NodeStatusCheckerID,
 					Status:   pb.Probe_Failed,
-					Severity: pb.Probe_Info,
+					Severity: pb.Probe_Warning,
 					Detail:   "KernelDeadlock/DockerHung",
 					Error:    "Task blocked",
 				},

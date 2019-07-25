@@ -189,10 +189,10 @@ func (r *nodeStatusChecker) isFailureCondition(condition v1.NodeCondition) bool 
 
 // probeForCondition returns failure probe for the provided condition.
 func (r *nodeStatusChecker) probeForCondition(condition v1.NodeCondition) *pb.Probe {
-	// Treat conditions set by Node Problem Detector as informational for now.
-	severity := pb.Probe_Warning
+	// Treat conditions set by Node Problem Detector as warnings for now.
+	severity := pb.Probe_Critical
 	if isNodeProblemDetectorCondition(condition) {
-		severity = pb.Probe_Info
+		severity = pb.Probe_Warning
 	}
 	return &pb.Probe{
 		Checker:  r.Name(),
