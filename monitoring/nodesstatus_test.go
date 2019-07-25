@@ -122,9 +122,9 @@ func (_ *MonitoringSuite) TestDetectsNodeStatus(c *C) {
 	for _, testCase := range testCases {
 		comment := Commentf(testCase.comment)
 		checker := nodeStatusChecker{
-			nodeLister: testCase.nodes,
-			nodeName:   testCase.nodeName,
-			conditions: []string{string(NodeKernelDeadlock)},
+			nodeLister:     testCase.nodes,
+			nodeName:       testCase.nodeName,
+			checkCondition: CheckNodeCondition,
 		}
 		var probes health.Probes
 		checker.Check(context.TODO(), &probes)
