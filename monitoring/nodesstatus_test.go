@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Gravitational, Inc.
+Copyright 2017-2019 Gravitational, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import (
 	"github.com/gravitational/satellite/lib/test"
 
 	. "gopkg.in/check.v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -43,9 +43,40 @@ func (_ *MonitoringSuite) TestDetectsNodeStatus(c *C) {
 						Status: v1.NodeStatus{
 							Conditions: []v1.NodeCondition{
 								{
-									Type:   v1.NodeReady,
-									Status: v1.ConditionFalse,
-									Reason: "Stopped",
+									Type:    v1.NodeReady,
+									Status:  v1.ConditionFalse,
+									Reason:  "Stopped",
+									Message: "Kubelet stopped posting status",
+								},
+							},
+						},
+					},
+				},
+			},
+			nodeName: "foo",
+			probes: health.Probes{
+				&pb.Probe{
+					Checker:  NodeStatusCheckerID,
+					Status:   pb.Probe_Failed,
+					Severity: pb.Probe_Critical,
+					Detail:   "Ready/Stopped",
+					Error:    "Kubelet stopped posting status",
+				},
+			},
+			comment: "detects a not ready node",
+		},
+		{
+			nodes: nodeList{
+				Items: []v1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "foo"},
+						Status: v1.NodeStatus{
+							Conditions: []v1.NodeCondition{
+								{
+									Type:    NodeKernelDeadlock,
+									Status:  v1.ConditionTrue,
+									Reason:  "DockerHung",
+									Message: "Task blocked",
 								},
 							},
 						},
@@ -58,11 +89,11 @@ func (_ *MonitoringSuite) TestDetectsNodeStatus(c *C) {
 					Checker:  NodeStatusCheckerID,
 					Status:   pb.Probe_Failed,
 					Severity: pb.Probe_Warning,
-					Detail:   "Stopped",
-					Error:    "Node is not ready",
+					Detail:   "KernelDeadlock/DockerHung",
+					Error:    "Task blocked",
 				},
 			},
-			comment: "detects a not ready node",
+			comment: "detects node problem detector condition",
 		},
 		{
 			nodes: nodeList{
@@ -91,8 +122,9 @@ func (_ *MonitoringSuite) TestDetectsNodeStatus(c *C) {
 	for _, testCase := range testCases {
 		comment := Commentf(testCase.comment)
 		checker := nodeStatusChecker{
-			nodeLister: testCase.nodes,
-			nodeName:   testCase.nodeName,
+			nodeLister:     testCase.nodes,
+			nodeName:       testCase.nodeName,
+			checkCondition: CheckNodeCondition,
 		}
 		var probes health.Probes
 		checker.Check(context.TODO(), &probes)

@@ -118,5 +118,5 @@
   name = "github.com/codahale/hdrhistogram"
 
 [[constraint]]
-  branch = "master"
+  version = "0.0.1"
   name = "github.com/gravitational/ttlmap"
