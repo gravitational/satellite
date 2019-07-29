@@ -39,6 +39,8 @@ func ConvertGRPCError(err error) error {
 		return trace.NotFound(err.Error())
 	case grpcerrors.PermissionDenied, grpcerrors.Unauthenticated:
 		return trace.AccessDenied(err.Error())
+	case grpcerrors.Unimplemented:
+		return trace.NotImplemented(err.Error())
 	}
 	return trace.Wrap(err)
 }

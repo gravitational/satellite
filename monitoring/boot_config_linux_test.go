@@ -30,6 +30,8 @@ import (
 	. "gopkg.in/check.v1"
 )
 
+type MonitoringSuite struct{}
+
 func (*MonitoringSuite) TestReadsBootConfig(c *C) {
 	// exercise
 	config, err := parseBootConfig(ioutil.NopCloser(bytes.NewReader(testBootConfig)))

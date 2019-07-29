@@ -17,6 +17,7 @@ limitations under the License.
 package agent
 
 import (
+	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
 	"github.com/hashicorp/serf/coordinate"
 )
@@ -29,16 +30,26 @@ type MockSerfClient struct {
 
 // NewMockSerfClient is a helper function used to create a mock/fake Serf Client
 // used in testing
-func NewMockSerfClient(members []serf.Member, coords map[string]*coordinate.Coordinate) (client *MockSerfClient, err error) {
+func NewMockSerfClient(members []serf.Member, coords map[string]*coordinate.Coordinate) *MockSerfClient {
 	return &MockSerfClient{
 		members: members,
 		coords:  coords,
-	}, nil
+	}
 }
 
 // Members is a function that returns the Serf member nodes
 func (c *MockSerfClient) Members() ([]serf.Member, error) {
 	return c.members, nil
+}
+
+// FindMember returns serf member by name
+func (c *MockSerfClient) FindMember(name string) (*serf.Member, error) {
+	for _, member := range c.members {
+		if member.Name == name {
+			return &member, nil
+		}
+	}
+	return nil, trace.NotFound("member %v not found", name)
 }
 
 // Stop is a NOOP function used to implement the Mock Serf Client

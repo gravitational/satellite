@@ -112,9 +112,7 @@ func (*PingSuite) TestPingChecker(c *check.C) {
 			SerfRPCAddr:    "127.0.0.1",
 			SerfMemberName: "member-1",
 			NewSerfClient: func(serf.Config) (agent.SerfClient, error) {
-				client, _ := agent.NewMockSerfClient(
-					testCase.Nodes, testCase.Coords)
-				return client, nil
+				return agent.NewMockSerfClient(testCase.Nodes, testCase.Coords), nil
 			},
 		})
 		c.Assert(err, check.IsNil)

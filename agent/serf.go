@@ -30,6 +30,8 @@ import (
 type SerfClient interface {
 	// Members lists members of the serf cluster.
 	Members() ([]serf.Member, error)
+	// FindMember finds serf member with the specified name.
+	FindMember(name string) (*serf.Member, error)
 	// Stop cancels the serf event delivery and removes the subscription.
 	Stop(serf.StreamHandle) error
 	// Close closes the client.
@@ -68,6 +70,20 @@ func (r *retryingClient) Members() ([]serf.Member, error) {
 	r.RLock()
 	defer r.RUnlock()
 	return r.client.Members()
+}
+
+// FindMember finds serf member with the specified name.
+func (r *retryingClient) FindMember(name string) (*serf.Member, error) {
+	members, err := r.Members()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	for _, member := range members {
+		if member.Name == name {
+			return &member, nil
+		}
+	}
+	return nil, trace.NotFound("serf member %q not found", name)
 }
 
 // Stop cancels the serf event delivery and removes the subscription.

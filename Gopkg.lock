@@ -210,20 +210,20 @@
   version = "v1.0.0"
 
 [[projects]]
-  digest = "1:1c9083fb1c179c90d299a3b9eaa3009175d2ebf327df30d4ff0ee1654e51073c"
+  digest = "1:afb36747f009e72637bdf1b3f5d27f3c1d5e1fc5478fc4aba2a33e40e8829dee"
   name = "github.com/gravitational/trace"
   packages = ["."]
   pruneopts = "UT"
-  revision = "792b9868cdf9d499e09b47f167c553e786a0e235"
-  version = "1.1.4"
+  revision = "a5c40b57db7203332a073f20771214d0eeb2a168"
+  version = "1.1.7"
 
 [[projects]]
-  branch = "master"
   digest = "1:841d5835e94129658adabece66a4cc54d2cec9a40fa8b51743ea35d0519dd6c2"
   name = "github.com/gravitational/ttlmap"
   packages = ["."]
   pruneopts = "UT"
   revision = "91fd36b9004c1ee5a778739752ea1aba5638c03a"
+  version = "0.0.1"
 
 [[projects]]
   digest = "1:01cb46669ee737a700ca9a0968ffe2aa820f262e5f49e1e54f8bfc441650ea8e"
@@ -360,7 +360,7 @@
   revision = "d65d576e9348f5982d7f6d83682b694e731a45c6"
 
 [[projects]]
-  digest = "1:c5d131ea832a2c1148cecec22b04102d559e907ee0bfb71f4d373c6b6367de33"
+  digest = "1:f4e64bb62274202b95403b8ae001d0601cee01afadf60767fb0e1d239f8f1413"
   name = "github.com/magefile/mage"
   packages = [
     "internal",
@@ -368,7 +368,6 @@
     "mg",
     "parse",
     "sh",
-    "target",
   ]
   pruneopts = "UT"
   revision = "aedfce64c122eef47009b7f80c9771044753215d"
@@ -935,7 +934,6 @@
     "github.com/coreos/go-systemd/dbus",
     "github.com/davecgh/go-spew/spew",
     "github.com/dustin/go-humanize",
-    "github.com/gogo/protobuf/proto",
     "github.com/golang/protobuf/proto",
     "github.com/gravitational/configure",
     "github.com/gravitational/configure/cstrings",
@@ -951,12 +949,10 @@
     "github.com/magefile/mage/mage",
     "github.com/magefile/mage/mg",
     "github.com/magefile/mage/sh",
-    "github.com/magefile/mage/target",
     "github.com/miekg/dns",
     "github.com/mitchellh/go-ps",
     "github.com/prometheus/client_golang/prometheus",
     "github.com/prometheus/client_golang/prometheus/promhttp",
-    "github.com/prometheus/client_model/go",
     "github.com/prometheus/procfs",
     "github.com/sirupsen/logrus",
     "github.com/stretchr/testify/assert",

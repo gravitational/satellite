@@ -30,7 +30,6 @@ func DefaultPortChecker() health.Checker {
 		PortRange{Protocol: protoTCP, From: 4001, To: 4001, Description: "etcd"},
 		PortRange{Protocol: protoTCP, From: 7001, To: 7001, Description: "etcd"},
 		PortRange{Protocol: protoTCP, From: 6443, To: 6443, Description: "kubernetes API server"},
-		PortRange{Protocol: protoTCP, From: 30000, To: 32767, Description: "kubernetes internal services range"},
 		PortRange{Protocol: protoTCP, From: 10248, To: 10255, Description: "kubernetes internal services range"},
 		PortRange{Protocol: protoTCP, From: 5000, To: 5000, Description: "docker registry"},
 		PortRange{Protocol: protoTCP, From: 3022, To: 3025, Description: "teleport internal ssh control panel"},
@@ -55,6 +54,7 @@ func PreInstallPortChecker() health.Checker {
 func DefaultProcessChecker() health.Checker {
 	return &ProcessChecker{[]string{
 		"dockerd",
+		"docker-current", // Docker daemon name when installed from RHEL repos.
 		"lxd",
 		"coredns",
 		"kube-apiserver",
@@ -134,8 +134,9 @@ func DefaultBootConfigParams() health.Checker {
 }
 
 // NewDNSChecker sends some default queries to monitor DNS / service discovery health
-func NewDNSChecker(questionA []string) health.Checker {
+func NewDNSChecker(questionA []string, nameservers ...string) health.Checker {
 	return &DNSChecker{
-		QuestionA: questionA,
+		QuestionA:   questionA,
+		Nameservers: nameservers,
 	}
 }
