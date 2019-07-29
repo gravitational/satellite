@@ -111,7 +111,7 @@ func (Build) Healthz() error {
 
 type Publish mg.Namespace
 
-// Nethealth tags and publishes the built container to the configured registry
+// Nethealth tags and publishes the nethealth docker container to the configured registry
 func (Publish) Nethealth() error {
 	mg.Deps(Docker.Nethealth)
 	fmt.Println("\n=====> Publishing nethealth docker image...\n")
@@ -209,7 +209,7 @@ func (Test) Lint() error {
 	))
 }
 
-// Style validates that licenses exist
+// Style validates that licenses exist on each source file
 func (Test) Style() error {
 	fmt.Println("\n=====> Running scripts/validate-license.sh...\n")
 	return trace.Wrap(sh.RunV("scripts/validate-license.sh"))
