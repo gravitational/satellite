@@ -24,8 +24,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type MonitoringSuite struct{}
-
 func TestFileHandleAllocatableChecker(t *testing.T) {
 	testCases := []struct {
 		sysctl  string
