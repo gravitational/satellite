@@ -13,6 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
+// Package nethealth implements a daemonset that when deployed to a kubernetes cluster, will locate and send ICMP echos
+// (pings) to the nethealth pod on every other node in the cluster. This will give an indication into whether the
+// overlay network is functional for pod -> pod communications, and also record packet loss on the network.
 package nethealth
 
 import (
@@ -37,14 +41,8 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-/*
-Nethealth is a daemonset that when deployed to a kubernetes cluster, will locate and send ICMP echos (pings) to the
-nethealth pod on every other node in the cluster. This will give an indication into whether the overlay network is
-functional for pod -> pod communications, and also record packet loss on the network.
-*/
-
 const (
-	// heartbeatInterval is the time.Duration between sending heartbeats to each peer. Any heartbeat that takes more
+	// heartbeatInterval is the duration between sending heartbeats to each peer. Any heartbeat that takes more
 	// than one interval to respond will also be considered timed out.
 	heartbeatInterval = 1 * time.Second
 
@@ -203,8 +201,8 @@ type messageWrapper struct {
 	peerAddr net.Addr
 }
 
-// ListenAndServe sets up the server and begins normal operation
-func (s *Server) ListenAndServe() error {
+// Start sets up the server and begins normal operation
+func (s *Server) Start() error {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return trace.Wrap(err)
@@ -484,7 +482,7 @@ func (s *Server) processAck(e messageWrapper) error {
 		return nil
 	default:
 		//unexpected / unknown
-		return trace.BadParameter("received unexpected icmp message type")
+		return trace.BadParameter("received unexpected icmp message type").(trace.Error).AddField("type", e.message.Type)
 	}
 
 	switch pkt := e.message.Body.(type) {
@@ -548,6 +546,7 @@ func (s *Server) sendHeartbeat(peer *peer) {
 	_, err = s.conn.WriteTo(buf, peer.addr)
 	if err != nil {
 		log.WithError(err).Warn("Failed to send ping.")
+		return
 	}
 	s.promPeerRequest.WithLabelValues(s.config.NodeName, peer.name).Inc()
 
@@ -572,16 +571,19 @@ func (s *Server) checkTimeouts() {
 }
 
 func (s *Server) updatePeerStatus(peer *peer, status string) {
-	if peer.status != status {
-		s.WithFields(logrus.Fields{
-			"peer_name":  peer.name,
-			"peer_addr":  peer.addr,
-			"duration":   s.clock.Now().Sub(peer.lastStatusChange),
-			"old_status": peer.status,
-			"new_status": status,
-		}).Info("Peer status changed.")
-
-		peer.status = status
-		peer.lastStatusChange = s.clock.Now()
+	if peer.status == status {
+		return
 	}
+
+	s.WithFields(logrus.Fields{
+		"peer_name":  peer.name,
+		"peer_addr":  peer.addr,
+		"duration":   s.clock.Now().Sub(peer.lastStatusChange),
+		"old_status": peer.status,
+		"new_status": status,
+	}).Info("Peer status changed.")
+
+	peer.status = status
+	peer.lastStatusChange = s.clock.Now()
+
 }

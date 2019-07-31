@@ -96,7 +96,7 @@ func run() error {
 			return trace.Wrap(err)
 		}
 
-		err = server.ListenAndServe()
+		err = server.Start()
 		if err != nil {
 			return trace.Wrap(err)
 		}

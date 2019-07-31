@@ -18,7 +18,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -45,9 +44,9 @@ var (
 	// buildVersion allows override of the version string from env variable
 	buildVersion = env("BUILD_VERSION", "")
 
-	grpcProtocVersion = env("GRPC_PROTOC_VER", "3.4.0")    // version of protoc
-	grpcGogoProtoTag  = env("GRPC_GOGO_PROTO_TAG", "v0.4") // gogo version tag
-	grpcGatewayTag    = env("GRPC_GATEWAY_TAG", "v1.1.0")  // grpc gateway version tag
+	grpcProtocVersion = env("GRPC_PROTOC_VER", "3.7.1")      // version of protoc
+	grpcGogoProtoTag  = env("GRPC_GOGO_PROTO_TAG", "v1.2.1") // gogo version tag
+	grpcGatewayTag    = env("GRPC_GATEWAY_TAG", "v1.8.5")    // grpc gateway version tag
 )
 
 type Build mg.Namespace
@@ -154,7 +153,7 @@ func (Docker) Nethealth() error {
 // Healthz builds the healthz container
 func (Docker) Healthz() error {
 	mg.Deps(Build.BuildContainer)
-	fmt.Println("\n=====> Building Gravitational Satellite Docker Image...\n")
+	fmt.Println("\n=====> Building Satellite Docker Image...\n")
 	return trace.Wrap(sh.RunV(
 		"docker", "build",
 		"--tag", fmt.Sprint("satellite:", version()),
@@ -175,7 +174,7 @@ func (Test) All() error {
 // Unit runs unit tests with the race detector enabled
 func (Test) Unit() error {
 	mg.Deps(Build.BuildContainer)
-	fmt.Println("\n=====> Running Gravitational Satellite Unit Tests...\n")
+	fmt.Println("\n=====> Running Satellite Unit Tests...\n")
 	return trace.Wrap(sh.RunV(
 		"docker", "run", "-it", "--rm=true",
 		fmt.Sprintf("--volume=%v:/go/src/github.com/gravitational/satellite", srcDir()),
@@ -189,7 +188,7 @@ func (Test) Unit() error {
 // Lint runs lints against the repo (golangci)
 func (Test) Lint() error {
 	mg.Deps(Build.BuildContainer)
-	fmt.Println("\n=====> Linting Gravitational Satellite...\n")
+	fmt.Println("\n=====> Linting Satellite...\n")
 	return trace.Wrap(sh.RunV(
 		"docker", "run", "-it", "--rm=true",
 		fmt.Sprintf("--volume=%v:/go/src/github.com/gravitational/satellite", srcDir()),
@@ -258,13 +257,13 @@ func (Internal) Grpc() error {
 
 // Clean removes all build artifacts
 func Clean() error {
-	buildDir := path.Join(srcDir(), "build")
+	buildDir := filepath.Join(srcDir(), "build")
 	fmt.Println("\n=====> Cleaning: ", buildDir)
 	return trace.ConvertSystemError(os.RemoveAll(buildDir))
 }
 
 func srcDir() string {
-	return path.Join(os.Getenv("GOPATH"), "src/github.com/gravitational/satellite/")
+	return filepath.Join(os.Getenv("GOPATH"), "src/github.com/gravitational/satellite/")
 }
 
 func flags() string {
@@ -293,7 +292,6 @@ func version() string {
 	if buildVersion != "" {
 		return buildVersion
 	}
-	//shortTag, _ := sh.Output("git", "describe", "--tags", "--abbrev=0")
 	longTag, _ := sh.Output("git", "describe", "--tags", "--dirty")
 
 	return longTag
