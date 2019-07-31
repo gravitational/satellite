@@ -318,6 +318,7 @@ func (s *Server) loopServiceDiscovery() {
 		names, err := net.LookupHost(query)
 		if err != nil {
 			s.WithError(err).WithField("query", query).Error("Error querying service discovery.")
+			continue
 		}
 
 		sort.Strings(names)
