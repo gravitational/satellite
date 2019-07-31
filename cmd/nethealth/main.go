@@ -105,7 +105,6 @@ func run() error {
 		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 		sig := <-sigs
 		log.Info("Exiting on signal: ", sig)
-		return trace.Wrap(server.Stop())
 	}
 
 	return nil

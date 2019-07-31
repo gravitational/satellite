@@ -42,9 +42,6 @@ var (
 	// baseImage is the base OS image to use for containers
 	baseImage = "ubuntu:18.10"
 
-	// rigImage is the imageref to get the rigging tool from
-	rigImage = "quay.io/gravitational/rig:6.0.1"
-
 	// buildVersion allows override of the version string from env variable
 	buildVersion = env("BUILD_VERSION", "")
 
@@ -138,13 +135,9 @@ func (Docker) Nethealth() error {
 	fmt.Println("\n=====> Building nethealth docker image...\n")
 
 	// Force pull upstream images to refresh any local caches
-	for _, image := range []string{baseImage, rigImage} {
-		err := sh.RunV(
-			"docker", "pull", image,
-		)
-		if err != nil {
-			return trace.Wrap(err)
-		}
+	err := sh.RunV("docker", "pull", baseImage)
+	if err != nil {
+		return trace.Wrap(err)
 	}
 
 	return trace.Wrap(sh.RunV(
@@ -153,7 +146,6 @@ func (Docker) Nethealth() error {
 		"--build-arg", fmt.Sprint("BUILD_VERSION=", version()),
 		"--build-arg", fmt.Sprint("BASE_IMAGE=", baseImage),
 		"--build-arg", fmt.Sprint("BUILD_IMAGE=satellite-build:", version()),
-		"--build-arg", fmt.Sprint("RIGGING_IMAGE=", rigImage),
 		"-f", "Dockerfile.nethealth",
 		".",
 	))
