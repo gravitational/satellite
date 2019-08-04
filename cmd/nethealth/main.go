@@ -52,7 +52,7 @@ func run() error {
 		crun               = app.Command("run", "Start nethealth agent")
 		crunPrometheusPort = crun.Flag("prom-port", "The prometheus port to bind to").Default("9801").Uint32()
 		crunNamespace      = crun.Flag("namespace", "The kubernetes namespace to watch for nethealth pods").
-					Default("monitoring").OverrideDefaultFromEnvar("POD_NAMSPACE").String()
+					Default("monitoring").OverrideDefaultFromEnvar("POD_NAMESPACE").String()
 		crunNodeName = crun.Flag("node-name", "The name of the node we're running on").
 				OverrideDefaultFromEnvar("NODE_NAME").String()
 		crunSelector = crun.Flag("pod-selector", "The kubernetes selector to identify nethealth pods").

@@ -62,9 +62,12 @@ const (
 )
 
 const (
-	INIT    = "init"
-	UP      = "up"
-	TIMEOUT = "timeout"
+	// Init is peer state that we've found the node but don't know anything about it yet.
+	Init = "init"
+	// Up is a peer state that the peer is currently reachable
+	Up = "up"
+	// Timeout is a peer state that the peer is currently timing out to pings
+	Timeout = "timeout"
 )
 
 type Config struct {
@@ -84,6 +87,7 @@ type Config struct {
 	ServiceDiscoveryQuery string
 }
 
+// New creates a new server to ping each peer.
 func (c Config) New() (*Server, error) {
 
 	promPeerRTT := prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -109,8 +113,8 @@ func (c Config) New() (*Server, error) {
 			0.005,  // 5ms
 			0.01,   // 10ms
 			0.02,   // 20ms
-			0.040,  // 40ms
-			0.080,  // 80ms
+			0.04,   // 40ms
+			0.08,   // 80ms
 		},
 	}, []string{"node_name", "peer_name"})
 	promPeerTimeout := prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -420,7 +424,7 @@ func (s *Server) resyncNethealthPods() error {
 	return nil
 }
 
-// serve monitors for incomming icmp messages
+// serve monitors for incoming icmp messages
 func (s *Server) serve() {
 	buf := make([]byte, 256)
 
@@ -463,12 +467,12 @@ func (s *Server) serve() {
 func (s *Server) lookupPeer(addr string) (*peer, error) {
 	peerName, ok := s.addrToPeer[addr]
 	if !ok {
-		return nil, trace.BadParameter("address not found in address table")
+		return nil, trace.BadParameter("address not found in address table").AddField("address", addr)
 	}
 
 	p, ok := s.peers[peerName]
 	if !ok {
-		return nil, trace.BadParameter("peer not found in peer table")
+		return nil, trace.BadParameter("peer not found in peer table").AddField("peer_name", peerName)
 	}
 	return p, nil
 }
@@ -498,7 +502,7 @@ func (s *Server) processAck(e messageWrapper) error {
 
 		rtt := e.rxTime.Sub(peer.echoTime)
 		s.promPeerRTT.WithLabelValues(s.config.NodeName, peer.name).Observe(rtt.Seconds())
-		s.updatePeerStatus(peer, UP)
+		s.updatePeerStatus(peer, Up)
 		peer.echoTimeout = false
 
 		s.WithFields(logrus.Fields{
@@ -541,6 +545,7 @@ func (s *Server) sendHeartbeat(peer *peer) {
 	buf, err := msg.Marshal(nil)
 	if err != nil {
 		log.WithError(err).Warn("Failed to marshal ping.")
+		return
 	}
 
 	peer.echoTime = s.clock.Now()
@@ -566,7 +571,7 @@ func (s *Server) checkTimeouts() {
 				"id":        peer.echoCounter,
 			}).Debug("echo timeout")
 			s.promPeerTimeout.WithLabelValues(s.config.NodeName, peer.name).Inc()
-			s.updatePeerStatus(peer, TIMEOUT)
+			s.updatePeerStatus(peer, Timeout)
 		}
 	}
 }
