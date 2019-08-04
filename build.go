@@ -1,7 +1,7 @@
 //+build mage
 
 /*
-Copyright 2018 Gravitational, Inc.
+Copyright 2019 Gravitational, Inc.
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -77,7 +77,7 @@ func (Build) Nethealth() error {
 	return trace.Wrap(sh.RunV(
 		"go", "build",
 		"-ldflags", flags(),
-		"-o", filepath.Join(srcDir(), "build/nethealth"),
+		"-o", outPath("nethealth"),
 		"github.com/gravitational/satellite/cmd/nethealth",
 	))
 }
@@ -87,7 +87,7 @@ func (Build) Satellite() error {
 	fmt.Println("\n=====> Building satellite binary...\n")
 	return trace.Wrap(sh.RunV(
 		"go", "build",
-		"-o", filepath.Join(srcDir(), "build/satellite"),
+		"-o", outPath("satellite"),
 		"-ldflags", flags(),
 		"github.com/gravitational/satellite/cmd/agent",
 	))
@@ -99,7 +99,7 @@ func (Build) Healthz() error {
 
 	return trace.Wrap(sh.RunV(
 		"go", "build",
-		"-o", filepath.Join(srcDir(), "build/healthz"),
+		"-o", outPath("healthz"),
 		"-ldflags", flags(),
 		"github.com/gravitational/satellite/cmd/healthz",
 	))
@@ -303,4 +303,8 @@ func env(env, d string) string {
 		return os.Getenv(env)
 	}
 	return d
+}
+
+func outPath(binaryName string) string {
+	return filepath.Join(srcDir(), "build", binaryName)
 }
