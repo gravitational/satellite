@@ -19,6 +19,9 @@
 # [[override]]
 #  name = "github.com/x/y"
 #  version = "2.4.0"
+required = [
+  "github.com/magefile/mage/mage",
+]
 
 [prune]
   unused-packages = true
@@ -57,7 +60,7 @@
   name = "github.com/gravitational/roundtrip"
 
 [[constraint]]
-  version = "1.1.7"
+  version = "1.1.8"
   name = "github.com/gravitational/trace"
 
 [[constraint]]
@@ -78,7 +81,11 @@
 
 [[constraint]]
   name = "github.com/prometheus/client_golang"
-  version = ">=0.7.0, <=64.0.0-g275368f"
+  version = "v1.0.0"
+
+[[constraint]]
+  name = "github.com/prometheus/procfs"
+  version = "v0.0.3"
 
 [[constraint]]
   name = "github.com/sirupsen/logrus"
