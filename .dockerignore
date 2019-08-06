@@ -1,2 +1,6 @@
-**
-!build
+build
+.dockerignore
+.gitignore
+*.md
+Makefile
+License
