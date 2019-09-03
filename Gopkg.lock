@@ -90,6 +90,14 @@
   revision = "1375283248c3c5fa82163113c0ef15e79390f644"
 
 [[projects]]
+  branch = "master"
+  digest = "1:4c4c33075b704791d6a7f09dfb55c66769e8a1dc6adf87026292d274fe8ad113"
+  name = "github.com/codahale/hdrhistogram"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "3a0bb77429bd3a61596f5e8a3172445844342120"
+
+[[projects]]
   digest = "1:d5286d88d5620c43617ecec0ec188ded033bf7a434b0c708cd16cd9a40545d04"
   name = "github.com/coreos/go-systemd"
   packages = ["dbus"]
@@ -202,12 +210,20 @@
   version = "v1.0.0"
 
 [[projects]]
-  digest = "1:1c9083fb1c179c90d299a3b9eaa3009175d2ebf327df30d4ff0ee1654e51073c"
+  digest = "1:418247f700939c99867b42639d985686ba229fd9f8ee9e119c7cc3ffde6e0fe3"
   name = "github.com/gravitational/trace"
   packages = ["."]
   pruneopts = "UT"
-  revision = "792b9868cdf9d499e09b47f167c553e786a0e235"
-  version = "1.1.4"
+  revision = "a535a178675fb4a11ba74818491754a8c5575dd6"
+  version = "1.1.8"
+
+[[projects]]
+  digest = "1:841d5835e94129658adabece66a4cc54d2cec9a40fa8b51743ea35d0519dd6c2"
+  name = "github.com/gravitational/ttlmap"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "91fd36b9004c1ee5a778739752ea1aba5638c03a"
+  version = "0.0.1"
 
 [[projects]]
   digest = "1:01cb46669ee737a700ca9a0968ffe2aa820f262e5f49e1e54f8bfc441650ea8e"
@@ -354,6 +370,14 @@
   packages = ["diff"]
   pruneopts = "UT"
   revision = "d65d576e9348f5982d7f6d83682b694e731a45c6"
+
+[[projects]]
+  branch = "master"
+  digest = "1:1f97d3c252bf9bda0869c228d0ec84a440f1590d6e33e83221c0dff185caad1f"
+  name = "github.com/mailgun/minheap"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "3dbe6c6bf55f94c5efcf460dc7f86830c21a90b2"
 
 [[projects]]
   digest = "1:5985ef4caf91ece5d54817c11ea25f182697534f8ae6521eadcd628c142ac4b6"
@@ -835,6 +859,7 @@
     "github.com/aws/aws-sdk-go/aws/session",
     "github.com/blang/semver",
     "github.com/cloudfoundry/gosigar",
+    "github.com/codahale/hdrhistogram",
     "github.com/coreos/go-systemd/dbus",
     "github.com/davecgh/go-spew/spew",
     "github.com/dustin/go-humanize",
@@ -843,8 +868,10 @@
     "github.com/gravitational/configure/cstrings",
     "github.com/gravitational/roundtrip",
     "github.com/gravitational/trace",
+    "github.com/gravitational/ttlmap",
     "github.com/gravitational/version",
     "github.com/hashicorp/serf/client",
+    "github.com/hashicorp/serf/coordinate",
     "github.com/influxdata/influxdb/client/v2",
     "github.com/jonboulle/clockwork",
     "github.com/kylelemons/godebug/diff",

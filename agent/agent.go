@@ -48,6 +48,9 @@ type Agent interface {
 	LocalStatus() *pb.NodeStatus
 	// IsMember returns whether this agent is already a member of serf cluster
 	IsMember() bool
+	// GetConfig returns the agent configuration.
+	GetConfig() Config
+	// CheckerRepository allows to add checks to the agent.
 	health.CheckerRepository
 }
 
@@ -59,6 +62,9 @@ type Config struct {
 	// Name must match the name of the local serf agent so that the agent
 	// can match itself to a serf member.
 	Name string
+
+	// NodeName is the name assigned by Kubernetes to this node
+	NodeName string
 
 	// RPCAddrs is a list of addresses agent binds to for RPC traffic.
 	//
@@ -104,7 +110,7 @@ func New(config *Config) (Agent, error) {
 	clientConfig := serf.Config{
 		Addr: config.SerfRPCAddr,
 	}
-	client, err := newSerfClient(clientConfig)
+	client, err := NewSerfClient(clientConfig)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to connect to serf")
 	}
@@ -125,10 +131,11 @@ func New(config *Config) (Agent, error) {
 
 	clock := clockwork.NewRealClock()
 	agent := &agent{
-		serfClient:      client,
+		Config:          *config,
+		SerfClient:      client,
 		name:            config.Name,
 		cache:           config.Cache,
-		dialRPC:         defaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
+		dialRPC:         DefaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
 		statusClock:     clock,
 		recycleClock:    clock,
 		localStatus:     emptyNodeStatus(config.Name),
@@ -174,8 +181,8 @@ type agent struct {
 
 	metricsListener net.Listener
 
-	// serfClient provides access to the serf agent.
-	serfClient serfClient
+	// SerfClient provides access to the serf agent.
+	SerfClient SerfClient
 
 	// Name of this agent.  Must be the same as the serf agent's name
 	// running on the same node.
@@ -190,7 +197,7 @@ type agent struct {
 
 	// dialRPC is a factory function to create clients to other agents.
 	// If future, agent address discovery will happen through serf.
-	dialRPC dialRPC
+	dialRPC DialRPC
 
 	// done is a channel used for cleanup.
 	done chan struct{}
@@ -208,9 +215,18 @@ type agent struct {
 	// from remote nodes during status collection.
 	// Defaults to statusQueryReplyTimeout if unspecified
 	statusQueryReplyTimeout time.Duration
+
+	// Config is the agent configuration.
+	Config
 }
 
-type dialRPC func(*serf.Member) (*client, error)
+// DialRPC returns RPC client for the provided Serf member.
+type DialRPC func(*serf.Member) (*client, error)
+
+// GetConfig returns the agent configuration.
+func (r *agent) GetConfig() Config {
+	return r.Config
+}
 
 // Start starts the agent's background tasks.
 func (r *agent) Start() error {
@@ -238,7 +254,7 @@ func (r *agent) Start() error {
 
 // IsMember returns true if this agent is a member of the serf cluster
 func (r *agent) IsMember() bool {
-	members, err := r.serfClient.Members()
+	members, err := r.SerfClient.Members()
 	if err != nil {
 		log.Errorf("failed to retrieve members: %v", trace.DebugReport(err))
 		return false
@@ -259,7 +275,7 @@ func (r *agent) IsMember() bool {
 // Join attempts to join a serf cluster identified by peers.
 func (r *agent) Join(peers []string) error {
 	noReplay := false
-	numJoined, err := r.serfClient.Join(peers, noReplay)
+	numJoined, err := r.SerfClient.Join(peers, noReplay)
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -279,7 +295,8 @@ func (r *agent) Close() (err error) {
 
 	r.rpc.Stop()
 	close(r.done)
-	err = r.serfClient.Close()
+
+	err = r.SerfClient.Close()
 	if err != nil {
 		errors = append(errors, trace.Wrap(err))
 	}
@@ -431,7 +448,7 @@ func (r *agent) collectStatus(ctx context.Context) (systemStatus *pb.SystemStatu
 		Timestamp: pb.NewTimeToProto(r.statusClock.Now()),
 	}
 
-	members, err := r.serfClient.Members()
+	members, err := r.SerfClient.Members()
 	if err != nil {
 		log.WithError(err).Warn("Failed to query serf members.")
 		return nil, trace.Wrap(err, "failed to query serf members")

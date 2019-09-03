@@ -22,12 +22,26 @@ import (
 	"github.com/gravitational/satellite/monitoring"
 
 	"github.com/gravitational/trace"
+	serf "github.com/hashicorp/serf/client"
+	log "github.com/sirupsen/logrus"
 )
 
 // config represents configuration for setting up monitoring checkers.
 type config struct {
 	// role is the current agent's role
 	role agent.Role
+	// rpcAddrs is the list of listening addresses on RPC agents
+	rpcAddrs []string
+	// agentCAFile sets the file location for the Agent CA cert
+	agentCAFile string
+	// agentCertFile sets the file location for the Agent cert
+	agentCertFile string
+	// agentKeyFile sets the file location for the Agent cert key
+	agentKeyFile string
+	// serfRPCAddr is the Serf RPC endpoint address
+	serfRPCAddr string
+	// serfMemberName is used as the Node name in the Serf cluster
+	serfMemberName string
 	// kubeconfigPath is the path to the kubeconfig file
 	kubeconfigPath string
 	// kubeletAddr is the address of the kubelet
@@ -48,8 +62,9 @@ func addCheckers(node agent.Agent, config *config) (err error) {
 	if err != nil {
 		return trace.Wrap(err)
 	}
-
 	kubeConfig := monitoring.KubeConfig{Client: client}
+
+	log.Debugf("Monitoring Agent started with config %#v", config)
 	switch config.role {
 	case agent.RoleMaster:
 		err = addToMaster(node, config, kubeConfig)
@@ -64,10 +79,41 @@ func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeCon
 	if err != nil {
 		return trace.Wrap(err)
 	}
+
+	pingHealth, err := monitoring.PingHealth(config.serfRPCAddr, config.serfMemberName)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	serfClient, err := agent.NewSerfClient(serf.Config{
+		Addr: config.serfRPCAddr,
+	})
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	serfMember, err := serfClient.FindMember(config.serfMemberName)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	timeDriftHealth, err := monitoring.TimeDriftHealth(monitoring.TimeDriftCheckerConfig{
+		CAFile:     config.agentCAFile,
+		CertFile:   config.agentCertFile,
+		KeyFile:    config.agentKeyFile,
+		SerfClient: serfClient,
+		SerfMember: serfMember,
+	})
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
 	node.AddChecker(monitoring.KubeAPIServerHealth(kubeConfig))
 	node.AddChecker(monitoring.DockerHealth(config.dockerAddr))
 	node.AddChecker(etcdChecker)
 	node.AddChecker(monitoring.SystemdHealth())
+	node.AddChecker(pingHealth)
+	node.AddChecker(timeDriftHealth)
 
 	if !config.disableInterPodCheck {
 		node.AddChecker(monitoring.InterPodCommunication(kubeConfig, config.nettestContainerImage))
