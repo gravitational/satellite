@@ -29,11 +29,11 @@ import (
 
 var (
 	// buildContainer is a docker container used to build go binaries
-	buildContainer = "golang:1.12.0"
+	buildContainer = "golang:1.12.9"
 
 	// golangciVersion is the version of golangci-lint to use for linting
 	// https://github.com/golangci/golangci-lint/releases
-	golangciVersion = "v1.15.0"
+	golangciVersion = "v1.19.1"
 
 	// nethealthRegistryImage is the docker tag to use to push the nethealth container to the requested registry
 	nethealthRegistryImage = env("NETHEALTH_REGISTRY_IMAGE", "quay.io/gravitational/nethealth-dev")

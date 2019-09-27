@@ -22,14 +22,11 @@ import (
 	"net"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/trace"
 )
-
-const healthzCheckTimeout = 1 * time.Second
 
 // HTTPResponseChecker is a function that can validate service health
 // from the provided response
@@ -105,6 +102,12 @@ func NewHTTPHealthzCheckerWithTransport(name, URL string, transport http.RoundTr
 		Transport: transport,
 		Timeout:   healthzCheckTimeout,
 	}
+	return NewHTTPHealthzCheckerWithClient(name, URL, client, checker)
+}
+
+// NewHTTPHealthzCheckerWithClient creates a health.Checker for an HTTP health endpoint
+// using the specified HTTP client, URL and a custom response checker
+func NewHTTPHealthzCheckerWithClient(name, URL string, client *http.Client, checker HTTPResponseChecker) health.Checker {
 	return &HTTPHealthzChecker{
 		name:    name,
 		URL:     URL,
