@@ -101,7 +101,7 @@ func etcdStatus(payload []byte) (healthy bool, err error) {
 	return (result.Health == "true" || nresult.Health == true), nil
 }
 
-// NewClient returns creates a new HTTP client with default configuration
+// NewClient returns a new HTTP client with default configuration
 func (r *ETCDConfig) NewClient() (*http.Client, error) {
 	transport, err := r.NewHTTPTransport()
 	if err != nil {
