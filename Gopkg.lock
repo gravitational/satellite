@@ -210,12 +210,12 @@
   version = "1.1.7"
 
 [[projects]]
-  branch = "master"
   digest = "1:841d5835e94129658adabece66a4cc54d2cec9a40fa8b51743ea35d0519dd6c2"
   name = "github.com/gravitational/ttlmap"
   packages = ["."]
   pruneopts = "UT"
   revision = "91fd36b9004c1ee5a778739752ea1aba5638c03a"
+  version = "0.0.1"
 
 [[projects]]
   digest = "1:01cb46669ee737a700ca9a0968ffe2aa820f262e5f49e1e54f8bfc441650ea8e"
