@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM quay.io/gravitational/debian-tall:jessie
+FROM quay.io/gravitational/debian-tall:buster
 MAINTAINER Grvitational Inc <admin@gravitational.com>
 
 ADD build/satellite /usr/local/bin/
