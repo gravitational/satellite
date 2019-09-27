@@ -100,7 +100,7 @@ func NewUnixSocketHealthzChecker(name, URL, socketPath string, checker HTTPRespo
 func NewHTTPHealthzCheckerWithTransport(name, URL string, transport http.RoundTripper, checker HTTPResponseChecker) health.Checker {
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   healthzCheckTimeout,
+		Timeout:   defaultHTTPTimeout,
 	}
 	return NewHTTPHealthzCheckerWithClient(name, URL, client, checker)
 }

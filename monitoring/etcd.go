@@ -51,8 +51,8 @@ type ETCDConfig struct {
 	Client *http.Client
 }
 
-// healthzCheckTimeout defines the default HTTP client timeout for healthz checks
-const healthzCheckTimeout = 20 * time.Second
+// defaultHTTPTimeout defines the default HTTP client timeout for HTTP-based checks
+const defaultHTTPTimeout = 10 * time.Second
 
 // defaultTLSHandshakeTimeout specifies the default maximum amount of time
 // spent waiting to for a TLS handshake
@@ -109,7 +109,7 @@ func (r *ETCDConfig) NewClient() (*http.Client, error) {
 	}
 	return &http.Client{
 		Transport: transport,
-		Timeout:   healthzCheckTimeout,
+		Timeout:   defaultHTTPTimeout,
 	}, nil
 }
 
