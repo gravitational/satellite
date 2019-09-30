@@ -77,10 +77,14 @@ func (_ *HealthzSuite) TestObtainsSuccessProbe(c *C) {
 func (_ *HealthzSuite) TestUsesClientTimeout(c *C) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Response time is too long
-		time.Sleep(healthzCheckTimeout * 2)
+		time.Sleep(2 * time.Second)
 	}))
 	defer srv.Close()
-	checker := NewHTTPHealthzChecker("foo", srv.URL, func(resp io.Reader) error {
+	client := &http.Client{
+		Transport: http.RoundTripper(nil),
+		Timeout:   1 * time.Second,
+	}
+	checker := NewHTTPHealthzCheckerWithClient("foo", srv.URL, client, func(resp io.Reader) error {
 		return nil
 	})
 	var reporter health.Probes
