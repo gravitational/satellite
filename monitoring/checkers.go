@@ -63,13 +63,17 @@ func NodesStatusHealth(config KubeConfig, nodesReadyThreshold int) health.Checke
 func EtcdHealth(config *ETCDConfig) (health.Checker, error) {
 	const name = "etcd-healthz"
 
-	transport, err := config.NewHTTPTransport()
-	if err != nil {
-		return nil, trace.Wrap(err)
+	client := config.Client
+	if client == nil {
+		var err error
+		client, err = config.NewClient()
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
 	}
 	createChecker := func(addr string) (health.Checker, error) {
 		endpoint := fmt.Sprintf("%v/health", addr)
-		return NewHTTPHealthzCheckerWithTransport(name, endpoint, transport, etcdChecker), nil
+		return NewHTTPHealthzCheckerWithClient(name, endpoint, client, etcdChecker), nil
 	}
 	var checkers []health.Checker
 	for _, endpoint := range config.Endpoints {
