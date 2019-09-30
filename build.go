@@ -29,11 +29,11 @@ import (
 
 var (
 	// buildContainer is a docker container used to build go binaries
-	buildContainer = "golang:1.12.0"
+	buildContainer = "golang:1.12.9"
 
 	// golangciVersion is the version of golangci-lint to use for linting
 	// https://github.com/golangci/golangci-lint/releases
-	golangciVersion = "v1.15.0"
+	golangciVersion = "v1.19.1"
 
 	// nethealthRegistryImage is the docker tag to use to push the nethealth container to the requested registry
 	nethealthRegistryImage = env("NETHEALTH_REGISTRY_IMAGE", "quay.io/gravitational/nethealth-dev")
@@ -176,7 +176,7 @@ func (Test) Unit() error {
 	mg.Deps(Build.BuildContainer)
 	fmt.Println("\n=====> Running Satellite Unit Tests...\n")
 	return trace.Wrap(sh.RunV(
-		"docker", "run", "-it", "--rm=true",
+		"docker", "run", "-t", "--rm=true",
 		fmt.Sprintf("--volume=%v:/go/src/github.com/gravitational/satellite", srcDir()),
 		`--env="GOCACHE=/go/src/github.com/gravitational/satellite/build/cache/go"`,
 		`-w=/go/src/github.com/gravitational/satellite/`,
@@ -190,13 +190,12 @@ func (Test) Lint() error {
 	mg.Deps(Build.BuildContainer)
 	fmt.Println("\n=====> Linting Satellite...\n")
 	return trace.Wrap(sh.RunV(
-		"docker", "run", "-it", "--rm=true",
+		"docker", "run", "-t", "--rm=true",
 		fmt.Sprintf("--volume=%v:/go/src/github.com/gravitational/satellite", srcDir()),
 		`--env="GOCACHE=/go/src/github.com/gravitational/satellite/build/cache/go"`,
 		fmt.Sprint("satellite-build:", version()),
-		"bash", "-c",
-		"cd /go/src/github.com/gravitational/satellite; golangci-lint run -n --deadline=30m --enable-all"+
-			" -D gochecknoglobals -D gochecknoinits",
+		"golangci-lint", "run", "--new", "--deadline=30m", "--enable-all",
+		"--disable=gochecknoglobals", "--disable=gochecknoinits",
 	))
 }
 
