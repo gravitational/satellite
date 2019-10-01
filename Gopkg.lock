@@ -210,12 +210,12 @@
   version = "1.1.7"
 
 [[projects]]
-  branch = "master"
   digest = "1:841d5835e94129658adabece66a4cc54d2cec9a40fa8b51743ea35d0519dd6c2"
   name = "github.com/gravitational/ttlmap"
   packages = ["."]
   pruneopts = "UT"
   revision = "91fd36b9004c1ee5a778739752ea1aba5638c03a"
+  version = "0.0.1"
 
 [[projects]]
   digest = "1:01cb46669ee737a700ca9a0968ffe2aa820f262e5f49e1e54f8bfc441650ea8e"
@@ -650,7 +650,7 @@
   version = "v2.2.1"
 
 [[projects]]
-  digest = "1:b2e959d92a38ffc25142da8e8bf4fefe0e5e687ecb871fabaac58db0497304df"
+  digest = "1:d89afbf3588e87d2c9e6efdd5528d249b32d23a12fbd7ec324f3cb373c6fb76c"
   name = "k8s.io/api"
   packages = [
     "admissionregistration/v1beta1",
@@ -691,11 +691,11 @@
     "storage/v1beta1",
   ]
   pruneopts = "UT"
-  revision = "b59d8169aab578b59c8d331a0e8cf6c56fae5fa0"
-  version = "kubernetes-1.15.1"
+  revision = "bd6ac527cfd24ad928f66798231e5bcf7f37321b"
+  version = "kubernetes-1.15.4"
 
 [[projects]]
-  digest = "1:0851b2d4c2da18124262ac7716212a91314e884108858413f45f2b72b9cfa390"
+  digest = "1:a1d3cfbbd41baa14c1314793d1e607c3b0b2086fe72f894f993426f40116351e"
   name = "k8s.io/apimachinery"
   packages = [
     "pkg/api/errors",
@@ -736,11 +736,11 @@
     "third_party/forked/golang/reflect",
   ]
   pruneopts = "UT"
-  revision = "1799e75a07195de9460b8ef7300883499f12127b"
-  version = "kubernetes-1.15.1"
+  revision = "f2f3a405f61d6c2cdc0d00687c1b5d90de91e9f0"
+  version = "kubernetes-1.15.4"
 
 [[projects]]
-  digest = "1:3620c1d82183765e30dd6d7190ed56fcb410a7e382c3e8410d7cf0cafa7dd9fd"
+  digest = "1:3d090f853403f5f24fc5ddd14149409476f4759fb59a5a505b328c9040dc6ad2"
   name = "k8s.io/client-go"
   packages = [
     "discovery",
@@ -804,8 +804,8 @@
     "util/keyutil",
   ]
   pruneopts = "UT"
-  revision = "78d2af792babf2dd937ba2e2a8d99c753a5eda89"
-  version = "v12.0.0"
+  revision = "06eb1244587a17d4994ff9de4ce93756a2f16f0b"
+  version = "kubernetes-1.15.4"
 
 [[projects]]
   digest = "1:e2999bf1bb6eddc2a6aa03fe5e6629120a53088926520ca3b4765f77d7ff7eab"

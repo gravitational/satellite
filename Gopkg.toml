@@ -95,15 +95,15 @@
 
 [[constraint]]
   name = "k8s.io/client-go"
-  version = "=v12.0.0"
+  version = "kubernetes-1.15.4"
 
 [[override]]
   name = "k8s.io/api"
-  version = "kubernetes-1.15.1"
+  version = "kubernetes-1.15.4"
 
 [[constraint]]
   name = "k8s.io/apimachinery"
-  version = "kubernetes-1.15.1"
+  version = "kubernetes-1.15.4"
 
 [[constraint]]
   branch = "master"
@@ -118,5 +118,5 @@
   name = "github.com/codahale/hdrhistogram"
 
 [[constraint]]
-  branch = "master"
+  version = "0.0.1"
   name = "github.com/gravitational/ttlmap"
