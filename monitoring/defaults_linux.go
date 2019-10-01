@@ -116,7 +116,7 @@ func DefaultBootConfigParams() health.Checker {
 		BootConfigParam{
 			// https://cateee.net/lkddb/web-lkddb/NF_NAT_IPV4.html
 			// CONFIG_NF_NAT_IPV4 has been removed as of kernel 5.1
-			Name: "CONFIG_NF_NAT_IPV4",
+			Name:             "CONFIG_NF_NAT_IPV4",
 			KernelConstraint: KernelVersionLessThan(KernelVersion{Release: 5, Major: 1}),
 		},
 		BootConfigParam{Name: "CONFIG_IP_NF_FILTER"},
@@ -129,7 +129,7 @@ func DefaultBootConfigParams() health.Checker {
 		BootConfigParam{
 			// https://cateee.net/lkddb/web-lkddb/NF_NAT_NEEDED.html
 			// CONFIG_NF_NAT_NEEDED has been removed as of kernel 5.2
-			Name: "CONFIG_NF_NAT_NEEDED",
+			Name:             "CONFIG_NF_NAT_NEEDED",
 			KernelConstraint: KernelVersionLessThan(KernelVersion{Release: 5, Major: 2}),
 		},
 		BootConfigParam{Name: "CONFIG_POSIX_MQUEUE"},
