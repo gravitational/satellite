@@ -21,6 +21,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -35,7 +36,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// Default RPC port.
+// RPCPort default RPC port.
 const RPCPort = 7575 // FIXME: use serf to discover agents
 
 // RPCServer is the interface that defines the interaction with an agent via RPC.
@@ -139,7 +140,10 @@ func serve(addr, certFile, keyFile string, tlsConfig *tls.Config, handler http.H
 		Handler:   handler,
 	}
 
-	return server.ListenAndServeTLS(certFile, keyFile)
+	if err := server.ListenAndServeTLS(certFile, keyFile); err != nil {
+		log.Fatalf("failed start server, %v", err)
+	}
+	return nil
 }
 
 // newHealthHandler creates a http.Handler that returns cluster status

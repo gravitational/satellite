@@ -1,0 +1,41 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Vagrantfile API/syntax version. Don't touch unless you know what you're doing!
+VAGRANTFILE_API_VERSION = "2"
+
+# CPU cores
+$vm_cpus = (ENV['VAGRANT_NODE_CPU'] || 2).to_i
+
+# RAM to use for nodes in MB
+$vm_node_mem = (ENV['VAGRANT_NODE_RAM'] || 1024).to_i
+
+# Box to boot
+$vm_box = ENV['VAGRANT_BOX'] || 'hashicorp/bionic64'
+
+# Number of instances to start
+$instances = (ENV['VAGRANT_INSTANCES'] || 2).to_i
+
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+  config.ssh.insert_key = false
+
+  config.vm.provider "virtualbox" do |v|
+    v.memory = $vm_node_mem
+    v.cpus = $vm_cpus
+  end
+
+  config.vm.define "k8s-master" do |master|
+    master.vm.box = $vm_box
+    master.vm.network "private_network", ip: "192.168.50.10", libvirt__forward_mode: "nat"
+    master.vm.hostname = "k8s-master"
+  end
+
+  (1..$instances).each do |i|
+    config.vm.define "node-#{i}" do |node|
+      node.vm.box = $vm_box
+      node.vm.network "private_network", ip: "172.20.20.#{i+10}", libvirt__forward_mode: "nat"
+      node.vm.hostname = "node-#{i}"
+    end
+  end
+end

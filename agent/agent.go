@@ -455,6 +455,7 @@ func (r *agent) collectStatus(ctx context.Context) (systemStatus *pb.SystemStatu
 		return nil, trace.Wrap(err, "failed to query serf members")
 	}
 	members = filterLeft(members)
+
 	log.Debugf("Started collecting statuses from members %v.", members)
 
 	statusCh := make(chan *statusResponse, len(members))

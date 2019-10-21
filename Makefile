@@ -9,3 +9,22 @@ help:
 	@echo "To get a list of targets:  go run mage.go -l"
 	@echo
 	@echo "The code for running the builds is located in ./build.go"
+
+.PHONY: agent
+agent:
+	build/satellite agent \
+	--debug \
+	--ca-file=creds/ca.cert \
+	--cert-file=creds/server.cert \
+	--key-file=creds/server.key \
+	--tags=role:master 
+
+.PHONY: status
+status:
+	build/satellite status \
+	--pretty \
+	--local \
+	--ca-file=creds/ca.cert \
+	--client-cert-file=creds/client.cert \
+	--client-key-file=creds/client.key
+

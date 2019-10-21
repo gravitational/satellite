@@ -99,6 +99,7 @@ func newClient(addr, serverName, caFile, certFile, keyFile string) (*client, err
 // using specified credentials creds
 func NewClientWithCreds(addr string, creds credentials.TransportCredentials) (*client, error) {
 	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(creds))
+
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to dial")
 	}

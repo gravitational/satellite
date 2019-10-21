@@ -44,7 +44,7 @@ func status(RPCPort int, local, prettyPrint bool, caFile, certFile, keyFile stri
 	if err != nil {
 		return false, trace.Wrap(err)
 	}
-	var statusJson []byte
+	var statusJSON []byte
 	var statusBlob interface{}
 	ctx, cancel := context.WithTimeout(context.Background(), statusTimeout)
 	defer cancel()
@@ -64,14 +64,14 @@ func status(RPCPort int, local, prettyPrint bool, caFile, certFile, keyFile stri
 		statusBlob = status
 	}
 	if prettyPrint {
-		statusJson, err = json.MarshalIndent(statusBlob, "", "   ")
+		statusJSON, err = json.MarshalIndent(statusBlob, "", "   ")
 	} else {
-		statusJson, err = json.Marshal(statusBlob)
+		statusJSON, err = json.Marshal(statusBlob)
 	}
 	if err != nil {
 		return ok, trace.Wrap(err, "failed to marshal status data")
 	}
-	if _, err = os.Stderr.Write(statusJson); err != nil {
+	if _, err = os.Stderr.Write(statusJSON); err != nil {
 		return ok, trace.Wrap(err, "failed to output status")
 	}
 	return ok, nil
