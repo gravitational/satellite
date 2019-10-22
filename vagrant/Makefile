@@ -5,6 +5,9 @@ CWD := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
 ANSIBLE_FLAGS ?= -vv
 
+.PHONY: all
+all: up ansible-k8s ansible-serf ansible-credentials ansible-satellite
+
 # initialize VMs
 .PHONY: up
 up:

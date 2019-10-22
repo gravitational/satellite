@@ -21,7 +21,6 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -31,6 +30,7 @@ import (
 	"github.com/gravitational/roundtrip"
 	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -127,7 +127,12 @@ func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []str
 	handler := grpcHandlerFunc(server, healthzHandler)
 
 	for _, addr := range rpcAddrs {
-		go serve(addr, certFile, keyFile, tlsConfig, handler)
+		go func(address string) {
+			err := serve(address, certFile, keyFile, tlsConfig, handler)
+			if err != nil {
+				log.Error(trace.DebugReport(err))
+			}
+		}(addr)
 	}
 
 	return server, nil
@@ -139,11 +144,7 @@ func serve(addr, certFile, keyFile string, tlsConfig *tls.Config, handler http.H
 		TLSConfig: tlsConfig,
 		Handler:   handler,
 	}
-
-	if err := server.ListenAndServeTLS(certFile, keyFile); err != nil {
-		log.Fatalf("failed start server, %v", err)
-	}
-	return nil
+	return server.ListenAndServeTLS(certFile, keyFile)
 }
 
 // newHealthHandler creates a http.Handler that returns cluster status

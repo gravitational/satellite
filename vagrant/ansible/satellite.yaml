@@ -21,6 +21,7 @@
         MONITOR_AGENT_NAME={{inventory_hostname}}
         MONITOR_TAGS=role:master
         MONITOR_INITIAL_CLUSTER={{inventory_hostname}}:{{node_ip}}
+        RPC_ADDR=127.0.0.1:7575,{{node_ip}}:7575
         CA_PATH=/var/lib/satellite/creds/ca.cert
         CERT_PATH=/var/lib/satellite/creds/server.cert
         KEY_PATH=/var/lib/satellite/creds/server.key
@@ -34,9 +35,10 @@
         MONITOR_AGENT_NAME={{inventory_hostname}}
         MONITOR_TAGS=role:node
         MONITOR_INITIAL_CLUSTER={{inventory_hostname}}:{{node_ip}}
+        RPC_ADDR=127.0.0.1:7575,{{node_ip}}:7575
         CA_PATH=/var/lib/satellite/creds/ca.cert
-        CERT_PATH=/var/lib/satellite/creds/client.cert
-        KEY_PATH=/var/lib/satellite/creds/client.key
+        CERT_PATH=/var/lib/satellite/creds/server.cert
+        KEY_PATH=/var/lib/satellite/creds/server.key
 
   - name: Create Satellite Service
     copy:
@@ -53,7 +55,7 @@
         RestartSec=1
         User=vagrant
         EnvironmentFile=/var/lib/satellite/env
-        ExecStart=/usr/local/bin/satellite agent --ca-file=${CA_PATH} --cert-file=${CERT_PATH} --key-file=${KEY_PATH}
+        ExecStart=/usr/local/bin/satellite agent --ca-file=${CA_PATH} --cert-file=${CERT_PATH} --key-file=${KEY_PATH} --rpc-addr=${RPC_ADDR}
 
         [Install]
         WantedBy=multi-user.target
