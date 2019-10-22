@@ -30,6 +30,7 @@ import (
 	"github.com/gravitational/roundtrip"
 	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -126,7 +127,12 @@ func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []str
 	handler := grpcHandlerFunc(server, healthzHandler)
 
 	for _, addr := range rpcAddrs {
-		go serve(addr, certFile, keyFile, tlsConfig, handler)
+		go func(address string) {
+			err := serve(address, certFile, keyFile, tlsConfig, handler)
+			if err != nil {
+				log.Error(trace.DebugReport(err))
+			}
+		}(addr)
 	}
 
 	return server, nil
