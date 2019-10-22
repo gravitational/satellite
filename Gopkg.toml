@@ -102,15 +102,15 @@ required = [
 
 [[constraint]]
   name = "k8s.io/client-go"
-  version = "=v12.0.0"
+  version = "kubernetes-1.16.2"
 
 [[override]]
   name = "k8s.io/api"
-  version = "kubernetes-1.15.1"
+  version = "kubernetes-1.16.2"
 
 [[constraint]]
   name = "k8s.io/apimachinery"
-  version = "kubernetes-1.15.1"
+  version = "kubernetes-1.16.2"
 
 [[constraint]]
   branch = "master"
@@ -127,3 +127,7 @@ required = [
 [[constraint]]
   version = "0.0.1"
   name = "github.com/gravitational/ttlmap"
+
+[[override]]
+name = "github.com/gogo/protobuf"
+revision = "65acae22fc9d1fe290b33faa2bd64cdc20a463a0"
