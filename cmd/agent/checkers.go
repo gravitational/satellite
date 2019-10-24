@@ -58,6 +58,7 @@ type config struct {
 
 // addCheckers adds checkers to the agent.
 func addCheckers(node agent.Agent, config *config) (err error) {
+	log.WithField("config", *config).Debug("[BERD] addCheckers")
 	client, err := cmd.GetKubeClientFromPath(config.kubeconfigPath)
 	if err != nil {
 		return trace.Wrap(err)
@@ -98,9 +99,9 @@ func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeCon
 	}
 
 	timeDriftHealth, err := monitoring.TimeDriftHealth(monitoring.TimeDriftCheckerConfig{
-		CAFile:     config.agentCAFile,
-		CertFile:   config.agentCertFile,
-		KeyFile:    config.agentKeyFile,
+		CAFile:     node.GetConfig().CAFile,
+		CertFile:   node.GetConfig().CertFile,
+		KeyFile:    node.GetConfig().KeyFile,
 		SerfClient: serfClient,
 		SerfMember: serfMember,
 	})

@@ -24,6 +24,8 @@ import (
 	"github.com/gravitational/trace"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kube "k8s.io/client-go/kubernetes"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // healthzChecker is secure healthz checker
@@ -85,6 +87,8 @@ func TimeDriftHealth(config TimeDriftCheckerConfig) (c health.Checker, err error
 func EtcdHealth(config *ETCDConfig) (health.Checker, error) {
 	const name = "etcd-healthz"
 
+	log.WithField("config", *config).Debug("[BERD] EtcdHealth")
+
 	client := config.Client
 	if client == nil {
 		var err error
@@ -105,6 +109,8 @@ func EtcdHealth(config *ETCDConfig) (health.Checker, error) {
 		}
 		checkers = append(checkers, checker)
 	}
+
+	log.WithField("checkers", checkers).Debug("[BERD] EtcdHealth")
 	return &compositeChecker{name, checkers}, nil
 }
 

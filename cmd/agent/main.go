@@ -105,6 +105,7 @@ func run() error {
 	} else {
 		log.SetLevel(log.WarnLevel)
 	}
+	log.SetLevel(log.DebugLevel)
 
 	switch cmd {
 	case cagent.FullCommand():

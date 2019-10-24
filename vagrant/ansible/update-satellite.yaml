@@ -23,6 +23,7 @@
       dest: "/usr/local/bin/satellite"
 
   - name: Restart Satellite Service
-    service:
+    systemd:
       name: satellite
+      daemon_reload: yes
       state: restarted

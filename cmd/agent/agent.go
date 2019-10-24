@@ -39,7 +39,9 @@ func runAgent(config *agent.Config, monitoringConfig *config, peers []string) er
 	}
 	defer monitoringAgent.Close()
 
-	addCheckers(monitoringAgent, monitoringConfig)
+	if err := addCheckers(monitoringAgent, monitoringConfig); err != nil {
+		return trace.Wrap(err)
+	}
 	if err = monitoringAgent.Start(); err != nil {
 		return trace.Wrap(err)
 	}

@@ -17,7 +17,7 @@
     copy:
       dest: /var/lib/satellite/env
       content: |
-        KUBECONFIG=~/.kube/config
+        KUBECONFIG=/home/vagrant/.kube/config
         MONITOR_AGENT_NAME={{inventory_hostname}}
         MONITOR_TAGS=role:master
         MONITOR_INITIAL_CLUSTER={{inventory_hostname}}:{{node_ip}}
@@ -31,7 +31,7 @@
     copy:
       dest: /var/lib/satellite/env
       content: |
-        KUBECONFIG=~/.kube/config
+        KUBECONFIG=/home/vagrant/.kube/config
         MONITOR_AGENT_NAME={{inventory_hostname}}
         MONITOR_TAGS=role:node
         MONITOR_INITIAL_CLUSTER={{inventory_hostname}}:{{node_ip}}
@@ -55,7 +55,15 @@
         RestartSec=1
         User=vagrant
         EnvironmentFile=/var/lib/satellite/env
-        ExecStart=/usr/local/bin/satellite agent --ca-file=${CA_PATH} --cert-file=${CERT_PATH} --key-file=${KEY_PATH} --rpc-addr=${RPC_ADDR}
+        ExecStart=/usr/local/bin/satellite agent \
+          --debug \
+          --ca-file=${CA_PATH} \
+          --cert-file=${CERT_PATH} \
+          --key-file=${KEY_PATH} \
+          --rpc-addr=${RPC_ADDR} \
+          --etcd-cafile=${CA_PATH} \
+          --etcd-certfile=${CERT_PATH} \
+          --etcd-keyfile=${KEY_PATH}
 
         [Install]
         WantedBy=multi-user.target
@@ -77,6 +85,6 @@
       dest: "/usr/local/bin/satellite"
 
   - name: Start Satellite Service
-    service:
+    systemd:
       name: satellite
       state: started
