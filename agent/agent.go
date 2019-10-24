@@ -332,17 +332,8 @@ func (r *agent) runChecks(ctx context.Context) *pb.NodeStatus {
 
 	var probes health.Probes
 	for i := 0; i < len(r.Checkers); i++ {
-		select {
-		case probe := <-probeCh:
-			probes = append(probes, probe...)
-		case <-ctx.Done():
-			log.Warnf("Timed out collecting test results: %v.", ctx.Err())
-			return &pb.NodeStatus{
-				Name:   r.name,
-				Status: pb.NodeStatus_Degraded,
-				Probes: probes.GetProbes(),
-			}
-		}
+		probe := <-probeCh
+		probes = append(probes, probe...)
 	}
 
 	return &pb.NodeStatus{
@@ -373,9 +364,26 @@ func runChecker(ctx context.Context, checker health.Checker, probeCh chan<- heal
 
 	log.Debugf("Running checker %q.", checker.Name())
 
-	var probes health.Probes
-	checker.Check(ctx, &probes)
-	probeCh <- probes
+	checkResult := make(chan health.Probes)
+	go func() {
+		var probes health.Probes
+		checker.Check(ctx, &probes)
+		checkResult <- probes
+	}()
+
+	select {
+	case probes := <-checkResult:
+		probeCh <- probes
+	case <-ctx.Done():
+		var probes health.Probes
+		probes.Add(&pb.Probe{
+			Checker:  checker.Name(),
+			Status:   pb.Probe_Failed,
+			Severity: pb.Probe_Critical,
+			Error:    "checker timed out",
+		})
+		probeCh <- probes
+	}
 }
 
 // statusUpdateTimeout is the amount of time to wait between status update collections.
@@ -466,24 +474,16 @@ func (r *agent) collectStatus(ctx context.Context) (systemStatus *pb.SystemStatu
 		}
 	}
 
-L:
 	for i := 0; i < len(members); i++ {
-		select {
-		case status := <-statusCh:
-			log.Debugf("Retrieved status from %v: %v.", status.member, status.NodeStatus)
-			nodeStatus := status.NodeStatus
-			if status.err != nil {
-				log.Warnf("Failed to query node %s(%v) status: %v.",
-					status.member.Name, status.member.Addr, status.err)
-				nodeStatus = unknownNodeStatus(&status.member)
-			}
-			systemStatus.Nodes = append(systemStatus.Nodes, nodeStatus)
-		case <-ctx.Done():
-			log.Warnf("Timed out collecting node statuses: %v.", ctx.Err())
-			// With insufficient status responses received, system status
-			// will be automatically degraded
-			break L
+		status := <-statusCh
+		log.Debugf("Retrieved status from %v: %v.", status.member, status.NodeStatus)
+		nodeStatus := status.NodeStatus
+		if status.err != nil {
+			log.Warnf("Failed to query node %s(%v) status: %v.",
+				status.member.Name, status.member.Addr, status.err)
+			nodeStatus = unknownNodeStatus(&status.member)
 		}
+		systemStatus.Nodes = append(systemStatus.Nodes, nodeStatus)
 	}
 	setSystemStatus(systemStatus, members)
 
