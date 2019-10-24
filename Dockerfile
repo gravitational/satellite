@@ -21,11 +21,10 @@ RUN go build -ldflags "${BUILD_FLAGS}" -o /go/src/github.com/gravitational/satel
 RUN go build -ldflags "${BUILD_FLAGS}" -o /go/src/github.com/gravitational/satellite/build/healthz \
     github.com/gravitational/satellite/cmd/healthz
 
-FROM quay.io/gravitational/debian-tall:jessie
+FROM quay.io/gravitational/debian-tall:buster
 MAINTAINER Grvitational Inc <admin@gravitational.com>
 
 COPY --from=build /go/src/github.com/gravitational/satellite/build/satellite /usr/local/bin/
 COPY --from=build /go/src/github.com/gravitational/satellite/build/healthz /usr/local/bin/
 
 EXPOSE 7575 8080
-
