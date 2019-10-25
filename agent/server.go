@@ -129,7 +129,7 @@ func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []str
 	for _, addr := range rpcAddrs {
 		go func(address string) {
 			if err := serve(address, certFile, keyFile, tlsConfig, handler); err != nil {
-				log.Error(trace.DebugReport(err))
+				log.WithError(err).Errorf("Failed to serve on %v.", address)
 			}
 		}(addr)
 	}
