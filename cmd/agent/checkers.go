@@ -98,9 +98,9 @@ func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeCon
 	}
 
 	timeDriftHealth, err := monitoring.TimeDriftHealth(monitoring.TimeDriftCheckerConfig{
-		CAFile:     config.agentCAFile,
-		CertFile:   config.agentCertFile,
-		KeyFile:    config.agentKeyFile,
+		CAFile:     node.GetConfig().CAFile,
+		CertFile:   node.GetConfig().CertFile,
+		KeyFile:    node.GetConfig().KeyFile,
 		SerfClient: serfClient,
 		SerfMember: serfMember,
 	})
