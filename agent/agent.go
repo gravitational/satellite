@@ -320,11 +320,15 @@ func (r *agent) runChecks(ctx context.Context) *pb.NodeStatus {
 	// channel for collecting resulting health probes
 	probeCh := make(chan health.Probes, len(r.Checkers))
 
+	ctxProbe, cancelProbe := context.WithTimeout(ctx, probeTimeout)
+	defer cancelProbe()
+
 	for _, c := range r.Checkers {
 		select {
 		case semaphoreCh <- struct{}{}:
-			go runChecker(ctx, c, probeCh, semaphoreCh)
+			go runChecker(ctxProbe, c, probeCh, semaphoreCh)
 		case <-ctx.Done():
+			cancelProbe()
 			log.Warnf("Timed out running tests: %v.", ctx.Err())
 			return emptyNodeStatus(r.name)
 		}
@@ -332,8 +336,18 @@ func (r *agent) runChecks(ctx context.Context) *pb.NodeStatus {
 
 	var probes health.Probes
 	for i := 0; i < len(r.Checkers); i++ {
-		probe := <-probeCh
-		probes = append(probes, probe...)
+		select {
+		case probe := <-probeCh:
+			probes = append(probes, probe...)
+		case <-ctx.Done():
+			cancelProbe()
+			log.Warnf("Timed out collecting test results: %v.", ctx.Err())
+			return &pb.NodeStatus{
+				Name:   r.name,
+				Status: pb.NodeStatus_Degraded,
+				Probes: probes.GetProbes(),
+			}
+		}
 	}
 
 	return &pb.NodeStatus{
@@ -364,26 +378,9 @@ func runChecker(ctx context.Context, checker health.Checker, probeCh chan<- heal
 
 	log.Debugf("Running checker %q.", checker.Name())
 
-	checkResult := make(chan health.Probes, 1)
-	go func() {
-		var probes health.Probes
-		checker.Check(ctx, &probes)
-		checkResult <- probes
-	}()
-
-	select {
-	case probes := <-checkResult:
-		probeCh <- probes
-	case <-ctx.Done():
-		var probes health.Probes
-		probes.Add(&pb.Probe{
-			Checker:  checker.Name(),
-			Status:   pb.Probe_Failed,
-			Severity: pb.Probe_Critical,
-			Error:    "checker timed out",
-		})
-		probeCh <- probes
-	}
+	var probes health.Probes
+	checker.Check(ctx, &probes)
+	probeCh <- probes
 }
 
 // statusUpdateTimeout is the amount of time to wait between status update collections.
@@ -396,6 +393,12 @@ const recycleTimeout = 10 * time.Minute
 
 // statusQueryReplyTimeout is the amount of time to wait for status query reply.
 const statusQueryReplyTimeout = 30 * time.Second
+
+// nodeTimeout specifies the amout of time to wait for a node status query reply.
+const nodeTimeout = 25 * time.Second
+
+// probeTimeout specifies the amount of time to wait for a probe to complete.
+const probeTimeout = 20 * time.Second
 
 // statusUpdateLoop is a long running background process that periodically
 // updates the health status of the cluster by querying status of other active
@@ -465,25 +468,37 @@ func (r *agent) collectStatus(ctx context.Context) (systemStatus *pb.SystemStatu
 	members = filterLeft(members)
 	log.Debugf("Started collecting statuses from members %v.", members)
 
+	ctxNode, cancelNode := context.WithTimeout(ctx, nodeTimeout)
+	defer cancelNode()
+
 	statusCh := make(chan *statusResponse, len(members))
 	for _, member := range members {
 		if r.name == member.Name {
-			go r.getLocalStatus(ctx, member, statusCh)
+			go r.getLocalStatus(ctxNode, member, statusCh)
 		} else {
-			go r.getStatusFrom(ctx, member, statusCh)
+			go r.getStatusFrom(ctxNode, member, statusCh)
 		}
 	}
 
+L:
 	for i := 0; i < len(members); i++ {
-		status := <-statusCh
-		log.Debugf("Retrieved status from %v: %v.", status.member, status.NodeStatus)
-		nodeStatus := status.NodeStatus
-		if status.err != nil {
-			log.Warnf("Failed to query node %s(%v) status: %v.",
-				status.member.Name, status.member.Addr, status.err)
-			nodeStatus = unknownNodeStatus(&status.member)
+		select {
+		case status := <-statusCh:
+			log.Debugf("Retrieved status from %v: %v.", status.member, status.NodeStatus)
+			nodeStatus := status.NodeStatus
+			if status.err != nil {
+				log.Warnf("Failed to query node %s(%v) status: %v.",
+					status.member.Name, status.member.Addr, status.err)
+				nodeStatus = unknownNodeStatus(&status.member)
+			}
+			systemStatus.Nodes = append(systemStatus.Nodes, nodeStatus)
+		case <-ctx.Done():
+			cancelNode()
+			log.Warnf("Timed out collecting node statuses: %v.", ctx.Err())
+			// With insufficient status responses received, system status
+			// will be automatically degraded
+			break L
 		}
-		systemStatus.Nodes = append(systemStatus.Nodes, nodeStatus)
 	}
 	setSystemStatus(systemStatus, members)
 
