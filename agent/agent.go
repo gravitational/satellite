@@ -364,7 +364,7 @@ func runChecker(ctx context.Context, checker health.Checker, probeCh chan<- heal
 
 	log.Debugf("Running checker %q.", checker.Name())
 
-	checkResult := make(chan health.Probes)
+	checkResult := make(chan health.Probes, 1)
 	go func() {
 		var probes health.Probes
 		checker.Check(ctx, &probes)
