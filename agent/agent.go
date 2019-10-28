@@ -465,15 +465,18 @@ func (r *agent) collectStatus(ctx context.Context) (systemStatus *pb.SystemStatu
 	members = filterLeft(members)
 	log.Debugf("Started collecting statuses from members %v.", members)
 
+	var wg sync.WaitGroup
+	wg.Add(len(members))
 	statusCh := make(chan *statusResponse, len(members))
 	for _, member := range members {
 		if r.name == member.Name {
-			go r.getLocalStatus(ctx, member, statusCh)
+			go r.getLocalStatus(ctx, member, statusCh, &wg)
 		} else {
-			go r.getStatusFrom(ctx, member, statusCh)
+			go r.getStatusFrom(ctx, member, statusCh, &wg)
 		}
 	}
 
+	wg.Wait()
 	for i := 0; i < len(members); i++ {
 		status := <-statusCh
 		log.Debugf("Retrieved status from %v: %v.", status.member, status.NodeStatus)
@@ -502,7 +505,8 @@ func (r *agent) collectLocalStatus(ctx context.Context, local *serf.Member) (sta
 }
 
 // getLocalStatus obtains local node status.
-func (r *agent) getLocalStatus(ctx context.Context, local serf.Member, respc chan<- *statusResponse) {
+func (r *agent) getLocalStatus(ctx context.Context, local serf.Member, respc chan<- *statusResponse, wg *sync.WaitGroup) {
+	defer wg.Done()
 	status := r.collectLocalStatus(ctx, &local)
 	resp := &statusResponse{
 		NodeStatus: status,
@@ -515,7 +519,8 @@ func (r *agent) getLocalStatus(ctx context.Context, local serf.Member, respc cha
 }
 
 // getStatusFrom obtains node status from the node identified by member.
-func (r *agent) getStatusFrom(ctx context.Context, member serf.Member, respc chan<- *statusResponse) {
+func (r *agent) getStatusFrom(ctx context.Context, member serf.Member, respc chan<- *statusResponse, wg *sync.WaitGroup) {
+	defer wg.Done()
 	client, err := r.dialRPC(&member)
 	resp := &statusResponse{member: member}
 	if err != nil {
