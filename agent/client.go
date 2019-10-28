@@ -49,13 +49,13 @@ type NewClientFunc func(addr, caFile, certFile, keyFile string) (*client, error)
 
 // NewClient creates a agent RPC client to the given address
 // using the specified client certificate certFile
-func NewClient(addr, caFile, certFile, keyFile string) (*client, error) {
-	return newClient(addr, "", caFile, certFile, keyFile)
+func NewClient(ctx context.Context, addr, caFile, certFile, keyFile string) (*client, error) {
+	return newClient(ctx, addr, "", caFile, certFile, keyFile)
 }
 
 // newClient additional allows a serverName override, but is only available
 // from unit tests
-func newClient(addr, serverName, caFile, certFile, keyFile string) (*client, error) {
+func newClient(ctx context.Context, addr, serverName, caFile, certFile, keyFile string) (*client, error) {
 	// Load client cert/key
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
@@ -92,13 +92,18 @@ func newClient(addr, serverName, caFile, certFile, keyFile string) (*client, err
 		},
 	})
 
-	return NewClientWithCreds(addr, creds)
+	return NewClientWithCreds(ctx, addr, creds)
 }
 
 // NewClientWithCreds creates a new agent RPC client to the given address
 // using specified credentials creds
-func NewClientWithCreds(addr string, creds credentials.TransportCredentials) (*client, error) {
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(creds))
+func NewClientWithCreds(ctx context.Context, addr string, creds credentials.TransportCredentials) (*client, error) {
+	conn, err := grpc.DialContext(
+		ctx,
+		addr,
+		grpc.WithTransportCredentials(creds),
+		grpc.WithBlock(),
+	)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to dial")
 	}

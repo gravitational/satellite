@@ -222,7 +222,7 @@ type agent struct {
 }
 
 // DialRPC returns RPC client for the provided Serf member.
-type DialRPC func(*serf.Member) (*client, error)
+type DialRPC func(context.Context, *serf.Member) (*client, error)
 
 // GetConfig returns the agent configuration.
 func (r *agent) GetConfig() Config {
@@ -516,7 +516,7 @@ func (r *agent) getLocalStatus(ctx context.Context, local serf.Member, respc cha
 
 // getStatusFrom obtains node status from the node identified by member.
 func (r *agent) getStatusFrom(ctx context.Context, member serf.Member, respc chan<- *statusResponse) {
-	client, err := r.dialRPC(&member)
+	client, err := r.dialRPC(ctx, &member)
 	resp := &statusResponse{member: member}
 	if err != nil {
 		resp.err = trace.Wrap(err)
