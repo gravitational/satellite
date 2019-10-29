@@ -321,13 +321,13 @@ func (r *agent) runChecks(ctx context.Context) *pb.NodeStatus {
 	// channel for collecting resulting health probes
 	probeCh := make(chan health.Probes, len(r.Checkers))
 
-	ctxProbe, cancelProbe := context.WithTimeout(ctx, probeTimeout)
-	defer cancelProbe()
+	ctxChecks, cancelChecks := context.WithTimeout(ctx, checksTimeout)
+	defer cancelChecks()
 
 	for _, c := range r.Checkers {
 		select {
 		case semaphoreCh <- struct{}{}:
-			go runChecker(ctxProbe, c, probeCh, semaphoreCh)
+			go runChecker(ctxChecks, c, probeCh, semaphoreCh)
 		case <-ctx.Done():
 			log.Warnf("Timed out running tests: %v.", ctx.Err())
 			return emptyNodeStatus(r.name)
@@ -377,9 +377,28 @@ func runChecker(ctx context.Context, checker health.Checker, probeCh chan<- heal
 
 	log.Debugf("Running checker %q.", checker.Name())
 
-	var probes health.Probes
-	checker.Check(ctx, &probes)
-	probeCh <- probes
+	ctxProbe, cancelProbe := context.WithTimeout(ctx, probeTimeout)
+	defer cancelProbe()
+
+	checkCh := make(chan health.Probes, 1)
+	go func() {
+		var probes health.Probes
+		checker.Check(ctxProbe, &probes)
+		checkCh <- probes
+	}()
+
+	select {
+	case probes := <-checkCh:
+		probeCh <- probes
+	case <-ctx.Done():
+		var probes health.Probes
+		probes.Add(&pb.Probe{
+			Checker:  checker.Name(),
+			Status:   pb.Probe_Failed,
+			Severity: pb.Probe_Critical,
+			Error:    "checker does not comply with specified context, potential goroutine leak",
+		})
+	}
 }
 
 // statusUpdateTimeout is the amount of time to wait between status update collections.
@@ -398,10 +417,15 @@ const statusQueryReplyTimeout = 30 * time.Second
 // status collection step can return results before the deadline.
 const nodeTimeout = 25 * time.Second
 
+// checksTimeout specifies the amount of time to wait for a check to complete.
+// The checksTimeout is smaller than the nodeTimeout so that the checker has
+// can return results before the deadline.
+const checksTimeout = 20 * time.Second
+
 // probeTimeout specifies the amount of time to wait for a probe to complete.
-// The probeTimeout is smaller than the nodeTimeout so that the probe collection
-// step can return results before the deadline.
-const probeTimeout = 20 * time.Second
+// The probeTimeout is smaller than the checksTimeout so that the probe
+// collection step can return results before the deadline.
+const probeTimeout = 15 * time.Second
 
 // statusUpdateLoop is a long running background process that periodically
 // updates the health status of the cluster by querying status of other active
