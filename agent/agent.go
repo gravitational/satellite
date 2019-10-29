@@ -55,6 +55,7 @@ type Agent interface {
 	health.CheckerRepository
 }
 
+// Config defines satellite configuration.
 type Config struct {
 	// Name of the agent unique within the cluster.
 	// Names are used as a unique id within a serf cluster, so
