@@ -45,7 +45,7 @@ type client struct {
 }
 
 // NewClientFunc defines a function that returns RPC agent client.
-type NewClientFunc func(addr, caFile, certFile, keyFile string) (*client, error)
+type NewClientFunc func(ctx context.Context, addr, caFile, certFile, keyFile string) (*client, error)
 
 // NewClient creates a agent RPC client to the given address
 // using the specified client certificate certFile
