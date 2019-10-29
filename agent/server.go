@@ -35,7 +35,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// Default RPC port.
+// RPCPort specifies the default RPC port.
 const RPCPort = 7575 // FIXME: use serf to discover agents
 
 // RPCServer is the interface that defines the interaction with an agent via RPC.

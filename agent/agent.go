@@ -329,7 +329,6 @@ func (r *agent) runChecks(ctx context.Context) *pb.NodeStatus {
 		case semaphoreCh <- struct{}{}:
 			go runChecker(ctxProbe, c, probeCh, semaphoreCh)
 		case <-ctx.Done():
-			cancelProbe()
 			log.Warnf("Timed out running tests: %v.", ctx.Err())
 			return emptyNodeStatus(r.name)
 		}
@@ -341,7 +340,6 @@ func (r *agent) runChecks(ctx context.Context) *pb.NodeStatus {
 		case probe := <-probeCh:
 			probes = append(probes, probe...)
 		case <-ctx.Done():
-			cancelProbe()
 			log.Warnf("Timed out collecting test results: %v.", ctx.Err())
 			return &pb.NodeStatus{
 				Name:   r.name,
@@ -396,9 +394,13 @@ const recycleTimeout = 10 * time.Minute
 const statusQueryReplyTimeout = 30 * time.Second
 
 // nodeTimeout specifies the amout of time to wait for a node status query reply.
+// The nodeTimeout is smaller than the statusQueryReplyTimeout so that node
+// status collection step can return results before the deadline.
 const nodeTimeout = 25 * time.Second
 
 // probeTimeout specifies the amount of time to wait for a probe to complete.
+// The probeTimeout is smaller than the nodeTimeout so that the probe collection
+// step can return results before the deadline.
 const probeTimeout = 20 * time.Second
 
 // statusUpdateLoop is a long running background process that periodically
@@ -494,7 +496,6 @@ L:
 			}
 			systemStatus.Nodes = append(systemStatus.Nodes, nodeStatus)
 		case <-ctx.Done():
-			cancelNode()
 			log.Warnf("Timed out collecting node statuses: %v.", ctx.Err())
 			// With insufficient status responses received, system status
 			// will be automatically degraded

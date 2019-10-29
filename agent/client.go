@@ -102,7 +102,6 @@ func NewClientWithCreds(ctx context.Context, addr string, creds credentials.Tran
 		ctx,
 		addr,
 		grpc.WithTransportCredentials(creds),
-		grpc.WithBlock(),
 	)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to dial")
