@@ -581,8 +581,8 @@ func (r *AgentSuite) newAgent(node string, rpcPort int, members []serf.Member,
 // testDialRPC is a test implementation of the dialRPC interface,
 // that creates an RPC client bound to localhost.
 func testDialRPC(port int, certFile, keyFile string) DialRPC {
-	return func(member *serf.Member) (*client, error) {
-		return newClient(fmt.Sprintf(":%d", port), "agent", certFile, certFile, keyFile)
+	return func(ctx context.Context, member *serf.Member) (*client, error) {
+		return newClient(ctx, fmt.Sprintf(":%d", port), "agent", certFile, certFile, keyFile)
 	}
 }
 

@@ -36,7 +36,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// Default RPC port.
+// RPCPort specifies the default RPC port.
 const RPCPort = 7575 // FIXME: use serf to discover agents
 
 // RPCServer is the interface that defines the interaction with an agent via RPC.
@@ -208,7 +208,7 @@ func grpcHandlerFunc(rpcServer *server, other http.Handler) http.Handler {
 // DefaultDialRPC is a default RPC client factory function.
 // It creates a new client based on address details from the specific serf member.
 func DefaultDialRPC(caFile, certFile, keyFile string) DialRPC {
-	return func(member *serf.Member) (*client, error) {
-		return NewClient(fmt.Sprintf("%s:%d", member.Addr.String(), RPCPort), caFile, certFile, keyFile)
+	return func(ctx context.Context, member *serf.Member) (*client, error) {
+		return NewClient(ctx, fmt.Sprintf("%s:%d", member.Addr.String(), RPCPort), caFile, certFile, keyFile)
 	}
 }
