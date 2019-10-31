@@ -55,6 +55,7 @@ type Agent interface {
 	health.CheckerRepository
 }
 
+// Config defines satellite configuration.
 type Config struct {
 	// Name of the agent unique within the cluster.
 	// Names are used as a unique id within a serf cluster, so
@@ -222,7 +223,7 @@ type agent struct {
 }
 
 // DialRPC returns RPC client for the provided Serf member.
-type DialRPC func(*serf.Member) (*client, error)
+type DialRPC func(context.Context, *serf.Member) (*client, error)
 
 // GetConfig returns the agent configuration.
 func (r *agent) GetConfig() Config {
@@ -320,13 +321,13 @@ func (r *agent) runChecks(ctx context.Context) *pb.NodeStatus {
 	// channel for collecting resulting health probes
 	probeCh := make(chan health.Probes, len(r.Checkers))
 
-	ctxProbe, cancelProbe := context.WithTimeout(ctx, probeTimeout)
-	defer cancelProbe()
+	ctxChecks, cancelChecks := context.WithTimeout(ctx, checksTimeout)
+	defer cancelChecks()
 
 	for _, c := range r.Checkers {
 		select {
 		case semaphoreCh <- struct{}{}:
-			go runChecker(ctxProbe, c, probeCh, semaphoreCh)
+			go runChecker(ctxChecks, c, probeCh, semaphoreCh)
 		case <-ctx.Done():
 			cancelProbe()
 			log.Warnf("Timed out running tests: %v.", ctx.Err())
@@ -378,9 +379,28 @@ func runChecker(ctx context.Context, checker health.Checker, probeCh chan<- heal
 
 	log.Debugf("Running checker %q.", checker.Name())
 
-	var probes health.Probes
-	checker.Check(ctx, &probes)
-	probeCh <- probes
+	ctxProbe, cancelProbe := context.WithTimeout(ctx, probeTimeout)
+	defer cancelProbe()
+
+	checkCh := make(chan health.Probes, 1)
+	go func() {
+		var probes health.Probes
+		checker.Check(ctxProbe, &probes)
+		checkCh <- probes
+	}()
+
+	select {
+	case probes := <-checkCh:
+		probeCh <- probes
+	case <-ctx.Done():
+		var probes health.Probes
+		probes.Add(&pb.Probe{
+			Checker:  checker.Name(),
+			Status:   pb.Probe_Failed,
+			Severity: pb.Probe_Critical,
+			Error:    "checker does not comply with specified context, potential goroutine leak",
+		})
+	}
 }
 
 // statusUpdateTimeout is the amount of time to wait between status update collections.
@@ -395,10 +415,19 @@ const recycleTimeout = 10 * time.Minute
 const statusQueryReplyTimeout = 30 * time.Second
 
 // nodeTimeout specifies the amout of time to wait for a node status query reply.
+// The nodeTimeout is smaller than the statusQueryReplyTimeout so that node
+// status collection step can return results before the deadline.
 const nodeTimeout = 25 * time.Second
 
+// checksTimeout specifies the amount of time to wait for a check to complete.
+// The checksTimeout is smaller than the nodeTimeout so that the checker has
+// can return results before the deadline.
+const checksTimeout = 20 * time.Second
+
 // probeTimeout specifies the amount of time to wait for a probe to complete.
-const probeTimeout = 20 * time.Second
+// The probeTimeout is smaller than the checksTimeout so that the probe
+// collection step can return results before the deadline.
+const probeTimeout = 15 * time.Second
 
 // statusUpdateLoop is a long running background process that periodically
 // updates the health status of the cluster by querying status of other active
@@ -532,7 +561,7 @@ func (r *agent) getLocalStatus(ctx context.Context, local serf.Member, respc cha
 
 // getStatusFrom obtains node status from the node identified by member.
 func (r *agent) getStatusFrom(ctx context.Context, member serf.Member, respc chan<- *statusResponse) {
-	client, err := r.dialRPC(&member)
+	client, err := r.dialRPC(ctx, &member)
 	resp := &statusResponse{member: member}
 	if err != nil {
 		resp.err = trace.Wrap(err)
