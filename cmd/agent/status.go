@@ -40,14 +40,16 @@ const statusTimeout = 5 * time.Second
 // The output is prettified if prettyPrint is true.
 func status(RPCPort int, local, prettyPrint bool, caFile, certFile, keyFile string) (ok bool, err error) {
 	RPCAddr := fmt.Sprintf("127.0.0.1:%d", RPCPort)
-	client, err := agent.NewClient(RPCAddr, caFile, certFile, keyFile)
+
+	ctx, cancel := context.WithTimeout(context.Background(), statusTimeout)
+	defer cancel()
+
+	client, err := agent.NewClient(ctx, RPCAddr, caFile, certFile, keyFile)
 	if err != nil {
 		return false, trace.Wrap(err)
 	}
 	var statusJson []byte
 	var statusBlob interface{}
-	ctx, cancel := context.WithTimeout(context.Background(), statusTimeout)
-	defer cancel()
 	if local {
 		status, err := client.LocalStatus(ctx)
 		if err != nil {
