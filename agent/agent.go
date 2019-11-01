@@ -418,7 +418,7 @@ const statusQueryReplyTimeout = 30 * time.Second
 const nodeTimeout = 25 * time.Second
 
 // checksTimeout specifies the amount of time to wait for a check to complete.
-// The checksTimeout is smaller than the nodeTimeout so that the checker has
+// The checksTimeout is smaller than the nodeTimeout so that the checks
 // can return results before the deadline.
 const checksTimeout = 20 * time.Second
 
