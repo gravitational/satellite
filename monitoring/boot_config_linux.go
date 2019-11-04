@@ -66,18 +66,29 @@ func (c *bootConfigParamChecker) Name() string {
 
 // Check parses boot config files and validates whether parameters provided are set
 func (c *bootConfigParamChecker) Check(ctx context.Context, reporter health.Reporter) {
-	var probes health.Probes
-	if err := c.check(ctx, &probes); err != nil {
+	probesCh := make(chan health.Reporter, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		probes, err := c.check()
+		if err != nil {
+			errCh <- err
+		} else {
+			probesCh <- probes
+		}
+	}()
+
+	select {
+	case probes := <-probesCh:
+		health.AddFrom(reporter, probes)
+		if reporter.NumProbes() != 0 {
+			return
+		}
+		reporter.Add(NewSuccessProbe(bootConfigParamID))
+	case err := <-errCh:
 		reporter.Add(NewProbeFromErr(c.Name(), "failed to validate boot configuration", err))
-		return
+	case <-ctx.Done():
+		reporter.Add(NewProbeFromErr(c.Name(), "failed to validate boot configuration", ctx.Err()))
 	}
-
-	health.AddFrom(reporter, &probes)
-	if probes.NumProbes() != 0 {
-		return
-	}
-
-	reporter.Add(NewSuccessProbe(bootConfigParamID))
 }
 
 // GetStorageDriverBootConfigParams returns config params required for a given filesystem
@@ -133,30 +144,32 @@ type KernelVersion struct {
 	Minor int
 }
 
-// check verifies boot configuration on host.
-func (c *bootConfigParamChecker) check(ctx context.Context, reporter health.Reporter) error {
+// check verifies boot configuration on host. Returns collected health probes.
+// Returns an empty list of probes if boot configuration is not available.
+func (c *bootConfigParamChecker) check() (health.Reporter, error) {
+	probes := &health.Probes{}
 	release, err := c.kernelVersionReader()
 	if err != nil {
-		return trace.Wrap(err, "failed to read kernel version")
+		return nil, trace.Wrap(err, "failed to read kernel version")
 	}
 
 	kernelVersion, err := parseKernelVersion(release)
 	if err != nil {
-		return trace.Wrap(err, "failed to determine kernel version")
+		return nil, trace.Wrap(err, "failed to determine kernel version")
 	}
 
 	r, err := c.bootConfigReader(release)
 	if trace.IsNotFound(err) {
 		// Skip checks if boot configuration is not available
-		return nil
+		return probes, nil
 	}
 	if err != nil {
-		return trace.Wrap(err, "failed to read boot configuration")
+		return nil, trace.Wrap(err, "failed to read boot configuration")
 	}
 
 	cfg, err := parseBootConfig(r)
 	if err != nil {
-		return trace.Wrap(err, "failed to parse boot configuration")
+		return nil, trace.Wrap(err, "failed to parse boot configuration")
 	}
 
 	for _, param := range c.Params {
@@ -169,14 +182,14 @@ func (c *bootConfigParamChecker) check(ctx context.Context, reporter health.Repo
 			continue
 		}
 
-		reporter.Add(&pb.Probe{
+		probes.Add(&pb.Probe{
 			Checker: bootConfigParamID,
 			Detail: fmt.Sprintf("required kernel boot config parameter %s missing",
 				param.Name),
 			Status: pb.Probe_Failed,
 		})
 	}
-	return nil
+	return probes, nil
 }
 
 func realBootConfigReader(release string) (io.ReadCloser, error) {
