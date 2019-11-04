@@ -19,9 +19,11 @@ package monitoring
 import (
 	"context"
 
+	"github.com/gravitational/satellite/agent/health"
+	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/gravitational/satellite/agent/health"
 	"github.com/gravitational/trace"
 )
 
@@ -44,20 +46,29 @@ func (*awsHasProfileChecker) Name() string {
 
 // Check will check the metadata API to see if an IAM profile is assigned to the node
 // Implements health.Checker
-func (*awsHasProfileChecker) Check(ctx context.Context, reporter health.Reporter) {
+func (c *awsHasProfileChecker) Check(ctx context.Context, reporter health.Reporter) {
+	probeCh := make(chan *pb.Probe, 1)
+	go func() { probeCh <- c.check() }()
+	select {
+	case probe := <-probeCh:
+		reporter.Add(probe)
+	case <-ctx.Done():
+		reporter.Add(NewProbeFromErr(awsHasProfileCheckerID, "check timed out", ctx.Err()))
+	}
+}
+
+// check will check the metadata API to see if an IAM profile is assigned to the node.
+func (c *awsHasProfileChecker) check() *pb.Probe {
 	session, err := session.NewSession()
 	if err != nil {
-		reporter.Add(NewProbeFromErr(awsHasProfileCheckerID, "failed to create session", trace.Wrap(err)))
-		return
+		return NewProbeFromErr(awsHasProfileCheckerID, "failed to create session", trace.Wrap(err))
 	}
 	metadata := ec2metadata.New(session)
-
 	_, err = metadata.IAMInfo()
 	if err != nil {
-		reporter.Add(NewProbeFromErr(awsHasProfileCheckerID, "failed to determine node IAM profile", trace.Wrap(err)))
-		return
+		return NewProbeFromErr(awsHasProfileCheckerID, "failed to determine node IAM profile", trace.Wrap(err))
 	}
-	reporter.Add(NewSuccessProbe(awsHasProfileCheckerID))
+	return NewSuccessProbe(awsHasProfileCheckerID)
 }
 
 // IsRunningOnAWS attempts to use the AWS metadata API to determine if the
