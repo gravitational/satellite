@@ -80,10 +80,10 @@ func (c *bootConfigParamChecker) Check(ctx context.Context, reporter health.Repo
 	select {
 	case probes := <-probesCh:
 		health.AddFrom(reporter, probes)
-		if reporter.NumProbes() != 0 {
-			return
+		if reporter.NumProbes() == 0 {
+			// add a successful probe if boot config checks are skipped
+			reporter.Add(NewSuccessProbe(bootConfigParamID))
 		}
-		reporter.Add(NewSuccessProbe(bootConfigParamID))
 	case err := <-errCh:
 		reporter.Add(NewProbeFromErr(c.Name(), "failed to validate boot configuration", err))
 	case <-ctx.Done():
