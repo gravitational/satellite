@@ -63,7 +63,8 @@ func (*MonitoringSuite) TestValidatesCGroupMounts(c *C) {
 			probes: health.Probes{
 				&pb.Probe{
 					Checker: cgroupCheckerID,
-					Error:   `Following CGroups have not been mounted: ["blkio"]`,
+					Detail:  "failed to validate cgroup mounts",
+					Error:   `following CGroups have not been mounted: ["blkio"]`,
 					Status:  pb.Probe_Failed,
 				},
 			},
@@ -97,6 +98,41 @@ func (*MonitoringSuite) TestValidatesCGroupMounts(c *C) {
 		checker.Check(context.TODO(), &reporter)
 		c.Assert(reporter, test.DeepCompare, testCase.probes, Commentf(testCase.comment))
 	}
+}
+
+// TestComplyWithContext verifies that the checker complies with the provided
+// context.
+func (*MonitoringSuite) TestComplyWithContext(c *C) {
+	// setup
+	var testCase = struct {
+		cgroups []string
+		probes  health.Probes
+		reader  mountGetterFunc
+		comment string
+	}{
+		cgroups: []string{"cpu", "memory", "blkio"},
+		probes: health.Probes{
+			&pb.Probe{
+				Checker: cgroupCheckerID,
+				Detail:  "failed to validate cgroup mounts",
+				Error:   "context canceled",
+				Status:  pb.Probe_Failed,
+			},
+		},
+		reader:  testMountsReader(testCgroups),
+		comment: "contexted canceled before all checks completed",
+	}
+
+	// exercise / verify
+	ctx, cancel := context.WithCancel(context.TODO())
+	cancel()
+	checker := cgroupChecker{
+		cgroups:   []string{"cpu", "memory", "blkio"},
+		getMounts: testMountsReader(testCgroups),
+	}
+	var reporter health.Probes
+	checker.Check(ctx, &reporter)
+	c.Assert(reporter, test.DeepCompare, testCase.probes, Commentf(testCase.comment))
 }
 
 func testMountsReader(data []byte) func() ([]mountPoint, error) {

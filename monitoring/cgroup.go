@@ -73,11 +73,19 @@ func (c *cgroupChecker) Check(ctx context.Context, reporter health.Reporter) {
 	}
 }
 
-// check verifies that all expected cgroups have been mounted
+// check verifies that all expected cgroups have been mounted. Skips check if
+// mounts file is not available.
 func (c *cgroupChecker) check() (probes health.Reporter, err error) {
 	probes = &health.Probes{}
 
 	mounts, err := c.getMounts()
+
+	// Skip check if mounts file is not available
+	if trace.IsNotFound(err) {
+		probes.Add(NewSuccessProbe(c.Name()))
+		return probes, nil
+	}
+
 	if err != nil {
 		return probes, trace.Wrap(err, "failed to read mounts file")
 	}
@@ -92,7 +100,6 @@ func (c *cgroupChecker) check() (probes health.Reporter, err error) {
 			}
 		}
 	}
-
 	unmountedCgroups := expectedCgroups.Slice()
 	if len(unmountedCgroups) > 0 {
 		return probes, trace.NotFound("following CGroups have not been mounted: %q", unmountedCgroups)
