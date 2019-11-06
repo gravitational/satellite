@@ -20,7 +20,6 @@ import (
 	"context"
 
 	"github.com/gravitational/satellite/agent/health"
-	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -40,35 +39,46 @@ type awsHasProfileChecker struct{}
 
 // Name returns this checker name
 // Implements health.Checker
-func (*awsHasProfileChecker) Name() string {
+func (c *awsHasProfileChecker) Name() string {
 	return awsHasProfileCheckerID
 }
 
 // Check will check the metadata API to see if an IAM profile is assigned to the node
 // Implements health.Checker
 func (c *awsHasProfileChecker) Check(ctx context.Context, reporter health.Reporter) {
-	probeCh := make(chan *pb.Probe, 1)
-	go func() { probeCh <- c.check() }()
+	probesCh := make(chan health.Reporter, 1)
+	go func() {
+		probes, err := c.check()
+		if err != nil {
+			probes.Add(NewProbeFromErr(c.Name(), "failed to validate IAM profile", err))
+		}
+		probesCh <- probes
+	}()
 	select {
-	case probe := <-probeCh:
-		reporter.Add(probe)
+	case probes := <-probesCh:
+		health.AddFrom(reporter, probes)
 	case <-ctx.Done():
-		reporter.Add(NewProbeFromErr(awsHasProfileCheckerID, "check timed out", ctx.Err()))
+		reporter.Add(NewProbeFromErr(c.Name(), "failed to validate IAM profile", ctx.Err()))
 	}
 }
 
 // check will check the metadata API to see if an IAM profile is assigned to the node.
-func (c *awsHasProfileChecker) check() *pb.Probe {
+func (c *awsHasProfileChecker) check() (probes health.Reporter, err error) {
+	probes = &health.Probes{}
+
 	session, err := session.NewSession()
 	if err != nil {
-		return NewProbeFromErr(awsHasProfileCheckerID, "failed to create session", trace.Wrap(err))
+		return probes, trace.Wrap(err, "failed to create session")
 	}
+
 	metadata := ec2metadata.New(session)
 	_, err = metadata.IAMInfo()
 	if err != nil {
-		return NewProbeFromErr(awsHasProfileCheckerID, "failed to determine node IAM profile", trace.Wrap(err))
+		return probes, trace.Wrap(err, "failed to determine node IAM profile")
 	}
-	return NewSuccessProbe(awsHasProfileCheckerID)
+
+	probes.Add(NewSuccessProbe(c.Name()))
+	return probes, nil
 }
 
 // IsRunningOnAWS attempts to use the AWS metadata API to determine if the
@@ -79,6 +89,4 @@ func IsRunningOnAWS() bool {
 	return metadata.Available()
 }
 
-const (
-	awsHasProfileCheckerID = "aws"
-)
+const awsHasProfileCheckerID = "aws"
