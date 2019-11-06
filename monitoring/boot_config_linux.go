@@ -76,14 +76,9 @@ func (c *bootConfigParamChecker) Check(ctx context.Context, reporter health.Repo
 			probesCh <- probes
 		}
 	}()
-
 	select {
 	case probes := <-probesCh:
 		health.AddFrom(reporter, probes)
-		if reporter.NumProbes() == 0 {
-			// add a successful probe if boot config checks are skipped
-			reporter.Add(NewSuccessProbe(bootConfigParamID))
-		}
 	case err := <-errCh:
 		reporter.Add(NewProbeFromErr(c.Name(), "failed to validate boot configuration", err))
 	case <-ctx.Done():
@@ -146,30 +141,33 @@ type KernelVersion struct {
 
 // check verifies boot configuration on host. Returns collected health probes.
 // Returns an empty list of probes if boot configuration is not available.
-func (c *bootConfigParamChecker) check() (health.Reporter, error) {
-	probes := &health.Probes{}
+func (c *bootConfigParamChecker) check() (probes health.Reporter, err error) {
+	probes = &health.Probes{}
 	release, err := c.kernelVersionReader()
 	if err != nil {
-		return nil, trace.Wrap(err, "failed to read kernel version")
+		return probes, trace.Wrap(err, "failed to read kernel version")
 	}
 
 	kernelVersion, err := parseKernelVersion(release)
 	if err != nil {
-		return nil, trace.Wrap(err, "failed to determine kernel version")
+		return probes, trace.Wrap(err, "failed to determine kernel version")
 	}
 
 	r, err := c.bootConfigReader(release)
+
+	// Skip checks if boot configuration is not available
 	if trace.IsNotFound(err) {
-		// Skip checks if boot configuration is not available
+		probes.Add(NewSuccessProbe(c.Name()))
 		return probes, nil
 	}
+
 	if err != nil {
-		return nil, trace.Wrap(err, "failed to read boot configuration")
+		return probes, trace.Wrap(err, "failed to read boot configuration")
 	}
 
 	cfg, err := parseBootConfig(r)
 	if err != nil {
-		return nil, trace.Wrap(err, "failed to parse boot configuration")
+		return probes, trace.Wrap(err, "failed to parse boot configuration")
 	}
 
 	for _, param := range c.Params {
@@ -188,6 +186,10 @@ func (c *bootConfigParamChecker) check() (health.Reporter, error) {
 				param.Name),
 			Status: pb.Probe_Failed,
 		})
+	}
+
+	if probes.NumProbes() == 0 {
+		probes.Add(NewSuccessProbe(c.Name()))
 	}
 	return probes, nil
 }
