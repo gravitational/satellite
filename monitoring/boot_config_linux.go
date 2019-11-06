@@ -67,20 +67,16 @@ func (c *bootConfigParamChecker) Name() string {
 // Check parses boot config files and validates whether parameters provided are set
 func (c *bootConfigParamChecker) Check(ctx context.Context, reporter health.Reporter) {
 	probesCh := make(chan health.Reporter, 1)
-	errCh := make(chan error, 1)
 	go func() {
 		probes, err := c.check()
 		if err != nil {
-			errCh <- err
-		} else {
-			probesCh <- probes
+			probes.Add(NewProbeFromErr(c.Name(), "failed to validate boot configuration", err))
 		}
+		probesCh <- probes
 	}()
 	select {
 	case probes := <-probesCh:
 		health.AddFrom(reporter, probes)
-	case err := <-errCh:
-		reporter.Add(NewProbeFromErr(c.Name(), "failed to validate boot configuration", err))
 	case <-ctx.Done():
 		reporter.Add(NewProbeFromErr(c.Name(), "failed to validate boot configuration", ctx.Err()))
 	}
@@ -140,7 +136,7 @@ type KernelVersion struct {
 }
 
 // check verifies boot configuration on host. Returns collected health probes.
-// Returns an empty list of probes if boot configuration is not available.
+// Skips checks if boot configuration is not available.
 func (c *bootConfigParamChecker) check() (probes health.Reporter, err error) {
 	probes = &health.Probes{}
 	release, err := c.kernelVersionReader()
