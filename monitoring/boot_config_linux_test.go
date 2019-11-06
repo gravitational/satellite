@@ -167,6 +167,41 @@ func (*MonitoringSuite) TestValidatesBootConfig(c *C) {
 	}
 }
 
+func (*MonitoringSuite) TestComplyWithContext(c *C) {
+	// setup
+	prober := newErrorProber(bootConfigParamID)
+	var testCase = struct {
+		params []BootConfigParam
+		kernelVersionReader
+		bootConfigReader
+		probes  health.Probes
+		comment string
+	}{
+		params:              staticParams("CONFIG_PARAM2", "CONFIG_PARAM3"),
+		kernelVersionReader: staticKernelVersion("4.4.0"),
+		bootConfigReader:    testBootConfigReader(testBootConfig),
+		probes: health.Probes{
+			prober.newRaisedProbe(probe{
+				detail: "failed to validate boot configuration",
+				error:  "context canceled",
+			}),
+		},
+		comment: "context canceled before all checks completed",
+	}
+
+	// exercise / verify
+	checker := &bootConfigParamChecker{
+		Params:              testCase.params,
+		kernelVersionReader: testCase.kernelVersionReader,
+		bootConfigReader:    testCase.bootConfigReader,
+	}
+	var reporter health.Probes
+	ctx, cancel := context.WithCancel(context.TODO())
+	cancel()
+	checker.Check(ctx, &reporter)
+	c.Assert(reporter, test.DeepCompare, testCase.probes, Commentf(testCase.comment))
+}
+
 func testBootConfigReader(config []byte) bootConfigReader {
 	return func(string) (io.ReadCloser, error) {
 		return ioutil.NopCloser(bytes.NewReader(config)), nil
