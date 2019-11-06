@@ -31,7 +31,7 @@ import (
 // of cgroup mounts given with cgroups.
 // The checker should be executed in the host mount namespace.
 func NewCGroupChecker(cgroups ...string) health.Checker {
-	return cgroupChecker{
+	return &cgroupChecker{
 		cgroups:   cgroups,
 		getMounts: listProcMounts,
 	}
@@ -46,35 +46,43 @@ type cgroupChecker struct {
 
 // Name returns name of the checker
 // Implements health.Checker
-func (r cgroupChecker) Name() string {
+func (c *cgroupChecker) Name() string {
 	return cgroupCheckerID
 }
 
-// Check verifies existence of cgroup mounts given in r.cgroups.
+// Check verifies existence of cgroup mounts given in c.cgroups.
 // Implements health.Checker
-func (r cgroupChecker) Check(ctx context.Context, reporter health.Reporter) {
-	var probes health.Probes
-	err := r.check(ctx, &probes)
-	if err != nil && !trace.IsNotFound(err) {
-		reporter.Add(NewProbeFromErr(r.Name(), "failed to validate cgroup mounts", err))
-		return
+func (c *cgroupChecker) Check(ctx context.Context, reporter health.Reporter) {
+	probesCh := make(chan health.Reporter, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		probes, err := c.check()
+		if err != nil {
+			errCh <- err
+		} else {
+			probesCh <- probes
+		}
+	}()
+	select {
+	case probes := <-probesCh:
+		health.AddFrom(reporter, probes)
+	case err := <-errCh:
+		reporter.Add(NewProbeFromErr(c.Name(), "failed to validate cgroup mounts", err))
+	case <-ctx.Done():
+		reporter.Add(NewProbeFromErr(c.Name(), "failed to validate cgroup mounts", ctx.Err()))
 	}
-
-	health.AddFrom(reporter, &probes)
-	if probes.NumProbes() != 0 {
-		return
-	}
-
-	reporter.Add(NewSuccessProbe(r.Name()))
 }
 
-func (r cgroupChecker) check(ctx context.Context, reporter health.Reporter) error {
-	mounts, err := r.getMounts()
+// check verifies that all expected cgroups have been mounted
+func (c *cgroupChecker) check() (probes health.Reporter, err error) {
+	probes = &health.Probes{}
+
+	mounts, err := c.getMounts()
 	if err != nil {
-		return trace.Wrap(err, "failed to read mounts file")
+		return probes, trace.Wrap(err, "failed to read mounts file")
 	}
 
-	expectedCgroups := utils.NewStringSetFromSlice(r.cgroups)
+	expectedCgroups := utils.NewStringSetFromSlice(c.cgroups)
 	for _, mount := range mounts {
 		if mount.FsType == cgroupMountType {
 			for _, opt := range mount.Options {
@@ -87,10 +95,11 @@ func (r cgroupChecker) check(ctx context.Context, reporter health.Reporter) erro
 
 	unmountedCgroups := expectedCgroups.Slice()
 	if len(unmountedCgroups) > 0 {
-		reporter.Add(NewProbeFromErr(r.Name(), "",
-			trace.NotFound("Following CGroups have not been mounted: %q", unmountedCgroups)))
+		return probes, trace.NotFound("following CGroups have not been mounted: %q", unmountedCgroups)
 	}
-	return nil
+
+	probes.Add(NewSuccessProbe(c.Name()))
+	return probes, nil
 }
 
 // listProcMounts returns the set of active mounts by interpreting
