@@ -54,20 +54,16 @@ func (c *cgroupChecker) Name() string {
 // Implements health.Checker
 func (c *cgroupChecker) Check(ctx context.Context, reporter health.Reporter) {
 	probesCh := make(chan health.Reporter, 1)
-	errCh := make(chan error, 1)
 	go func() {
 		probes, err := c.check()
 		if err != nil {
-			errCh <- err
-		} else {
-			probesCh <- probes
+			probes.Add(NewProbeFromErr(c.Name(), "failed to validate cgroup mounts", err))
 		}
+		probesCh <- probes
 	}()
 	select {
 	case probes := <-probesCh:
 		health.AddFrom(reporter, probes)
-	case err := <-errCh:
-		reporter.Add(NewProbeFromErr(c.Name(), "failed to validate cgroup mounts", err))
 	case <-ctx.Done():
 		reporter.Add(NewProbeFromErr(c.Name(), "failed to validate cgroup mounts", ctx.Err()))
 	}
