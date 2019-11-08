@@ -62,7 +62,6 @@ func (c *awsHasProfileChecker) check(ctx context.Context) (probes health.Reporte
 	probes = &health.Probes{}
 
 	sess, err := session.NewSession()
-
 	if err != nil {
 		return probes, trace.Wrap(err, "failed to create session")
 	}
