@@ -116,7 +116,7 @@ func listProcMounts(ctx context.Context) ([]mountPoint, error) {
 func consistentRead(ctx context.Context, filename string, attempts int) ([]byte, error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		return nil, trace.Wrap(err, "unable to open %s", filename)
+		return nil, trace.ConvertSystemError(err)
 	}
 	defer file.Close()
 
