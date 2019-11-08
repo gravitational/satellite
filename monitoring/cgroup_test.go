@@ -100,49 +100,14 @@ func (*MonitoringSuite) TestValidatesCGroupMounts(c *C) {
 	}
 }
 
-// TestComplyWithContext verifies that the checker complies with the provided
-// context.
-func (*MonitoringSuite) TestComplyWithContext(c *C) {
-	// setup
-	var testCase = struct {
-		cgroups []string
-		probes  health.Probes
-		reader  mountGetterFunc
-		comment string
-	}{
-		cgroups: []string{"cpu", "memory", "blkio"},
-		probes: health.Probes{
-			&pb.Probe{
-				Checker: cgroupCheckerID,
-				Detail:  "failed to validate cgroup mounts",
-				Error:   "context canceled",
-				Status:  pb.Probe_Failed,
-			},
-		},
-		reader:  testMountsReader(testCgroups),
-		comment: "contexted canceled before all checks completed",
-	}
-
-	// exercise / verify
-	ctx, cancel := context.WithCancel(context.TODO())
-	cancel()
-	checker := cgroupChecker{
-		cgroups:   []string{"cpu", "memory", "blkio"},
-		getMounts: testMountsReader(testCgroups),
-	}
-	var reporter health.Probes
-	checker.Check(ctx, &reporter)
-	c.Assert(reporter, test.DeepCompare, testCase.probes, Commentf(testCase.comment))
-}
-
-func testMountsReader(data []byte) func() ([]mountPoint, error) {
-	return func() ([]mountPoint, error) {
+func testMountsReader(data []byte) mountGetterFunc {
+	return func(ctx context.Context) ([]mountPoint, error) {
 		return parseProcMounts(data)
 	}
 }
 
 func testFailingMountsReader(err error) mountGetterFunc {
-	return func() ([]mountPoint, error) {
+	return func(ctx context.Context) ([]mountPoint, error) {
 		return nil, err
 	}
 }

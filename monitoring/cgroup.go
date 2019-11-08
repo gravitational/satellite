@@ -16,9 +16,12 @@ limitations under the License.
 package monitoring
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"io"
 	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/gravitational/satellite/agent/health"
@@ -53,28 +56,19 @@ func (c *cgroupChecker) Name() string {
 // Check verifies existence of cgroup mounts given in c.cgroups.
 // Implements health.Checker
 func (c *cgroupChecker) Check(ctx context.Context, reporter health.Reporter) {
-	probesCh := make(chan health.Reporter, 1)
-	go func() {
-		probes, err := c.check()
-		if err != nil {
-			probes.Add(NewProbeFromErr(c.Name(), "failed to validate cgroup mounts", err))
-		}
-		probesCh <- probes
-	}()
-	select {
-	case probes := <-probesCh:
-		health.AddFrom(reporter, probes)
-	case <-ctx.Done():
-		reporter.Add(NewProbeFromErr(c.Name(), "failed to validate cgroup mounts", ctx.Err()))
+	probes, err := c.check(ctx)
+	if err != nil {
+		probes.Add(NewProbeFromErr(c.Name(), "failed to validate cgroup mounts", err))
 	}
+	health.AddFrom(reporter, probes)
 }
 
 // check verifies that all expected cgroups have been mounted. Skips check if
 // mounts file is not available.
-func (c *cgroupChecker) check() (probes health.Reporter, err error) {
+func (c *cgroupChecker) check(ctx context.Context) (probes health.Reporter, err error) {
 	probes = &health.Probes{}
 
-	mounts, err := c.getMounts()
+	mounts, err := c.getMounts(ctx)
 
 	// Skip check if mounts file is not available
 	if trace.IsNotFound(err) {
@@ -108,8 +102,8 @@ func (c *cgroupChecker) check() (probes health.Reporter, err error) {
 // listProcMounts returns the set of active mounts by interpreting
 // the /proc/mounts file.
 // The code is adopted from the kubernetes project.
-func listProcMounts() ([]mountPoint, error) {
-	content, err := consistentRead(mountFilePath, maxListTries)
+func listProcMounts(ctx context.Context) ([]mountPoint, error) {
+	content, err := consistentRead(ctx, mountFilePath, maxListTries)
 	if err != nil {
 		return nil, err
 	}
@@ -119,13 +113,22 @@ func listProcMounts() ([]mountPoint, error) {
 // consistentRead repeatedly reads a file until it gets the same content twice.
 // This is useful when reading files in /proc that are larger than page size
 // and kernel may modify them between individual read() syscalls.
-func consistentRead(filename string, attempts int) ([]byte, error) {
-	oldContent, err := ioutil.ReadFile(filename)
+func consistentRead(ctx context.Context, filename string, attempts int) ([]byte, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, trace.Wrap(err, "unable to open %s", filename)
+	}
+	defer file.Close()
+
+	// Wrap file reader with a context. ReadAll will be interrupted when context is done
+	reader := &ReaderWithContext{ctx, bufio.NewReader(file)}
+
+	oldContent, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return nil, trace.ConvertSystemError(err)
 	}
 	for i := 0; i < attempts; i++ {
-		newContent, err := ioutil.ReadFile(filename)
+		newContent, err := ioutil.ReadAll(reader)
 		if err != nil {
 			return nil, trace.ConvertSystemError(err)
 		}
@@ -164,6 +167,25 @@ func parseProcMounts(content []byte) (mounts []mountPoint, err error) {
 	return mounts, nil
 }
 
+// ReaderWithContext wraps a reader with a context.
+type ReaderWithContext struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+// Read reads from the underlying reader. Return without reading if context is
+// done.
+//
+// Implements io.Reader
+func (r *ReaderWithContext) Read(p []byte) (n int, err error) {
+	select {
+	case <-r.ctx.Done():
+		return 0, r.ctx.Err()
+	default:
+		return r.reader.Read(p)
+	}
+}
+
 // mountPoint desribes a mounting point as defined in /etc/mtab or /proc/mounts
 // See https://linux.die.net/man/5/fstab
 type mountPoint struct {
@@ -177,7 +199,7 @@ type mountPoint struct {
 	Options []string
 }
 
-type mountGetterFunc func() ([]mountPoint, error)
+type mountGetterFunc func(ctx context.Context) ([]mountPoint, error)
 
 // mountFilePath specifies the location of the mount information file
 const mountFilePath = "/proc/mounts"
