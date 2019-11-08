@@ -38,7 +38,7 @@ func (*MonitoringSuite) TestComplyWithContext(c *C) {
 			&pb.Probe{
 				Checker: awsHasProfileCheckerID,
 				Detail:  "failed to validate IAM profile",
-				Error:   "context canceled",
+				Error:   "context canceled, failed to get EC2 IAM info, failed to determine node IAM profile",
 				Status:  pb.Probe_Failed,
 			},
 		},
