@@ -112,11 +112,7 @@ func (c *awsHasProfileChecker) getIAMInfo(ctx context.Context, metadata *ec2meta
 	output := &metadataOutput{}
 	req := metadata.NewRequest(op, nil, output)
 	req.SetContext(ctx)
-	err := req.Send()
-	if ctx.Err() != nil {
-		return output.Content, trace.Wrap(err, ctx.Err())
-	}
-	return output.Content, trace.Wrap(err)
+	return output.Content, trace.Wrap(req.Send())
 }
 
 // metadataOutput contains the returned content when requesting ec2metadata.
