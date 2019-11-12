@@ -63,8 +63,11 @@ func (r portCollector) sockets(fetchSockets ...socketGetterFunc) (ret []process,
 
 	for _, socket := range sockets {
 		proc, err := r.findProcessByInode(socket.inode())
-		if err != nil {
-			log.Warn(err.Error())
+		if err != nil && socket.inode() != "0" {
+			log.WithFields(log.Fields{
+				log.ErrorKey: err,
+				"inode":      socket.inode(),
+			}).Warn("Failed to find process for inode.")
 		}
 		ret = append(ret, process{
 			name:   proc.name,
