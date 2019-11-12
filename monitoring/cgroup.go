@@ -19,7 +19,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"io"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -121,7 +120,7 @@ func consistentRead(ctx context.Context, filename string, attempts int) ([]byte,
 	defer file.Close()
 
 	// Wrap file reader with a context. ReadAll will be interrupted when context is done
-	reader := &ReaderWithContext{ctx, bufio.NewReader(file)}
+	reader := utils.NewReaderWithContext(ctx, bufio.NewReader(file))
 
 	oldContent, err := ioutil.ReadAll(reader)
 	if err != nil {
@@ -165,25 +164,6 @@ func parseProcMounts(content []byte) (mounts []mountPoint, err error) {
 		mounts = append(mounts, mount)
 	}
 	return mounts, nil
-}
-
-// ReaderWithContext wraps a reader with a context.
-type ReaderWithContext struct {
-	ctx    context.Context
-	reader io.Reader
-}
-
-// Read reads from the underlying reader. Return without reading if context is
-// done.
-//
-// Implements io.Reader
-func (r *ReaderWithContext) Read(p []byte) (n int, err error) {
-	select {
-	case <-r.ctx.Done():
-		return 0, r.ctx.Err()
-	default:
-		return r.reader.Read(p)
-	}
 }
 
 // mountPoint desribes a mounting point as defined in /etc/mtab or /proc/mounts
