@@ -58,6 +58,7 @@ func (c *cgroupChecker) Check(ctx context.Context, reporter health.Reporter) {
 	probes, err := c.check(ctx)
 	if err != nil {
 		probes.Add(NewProbeFromErr(c.Name(), "failed to validate cgroup mounts", err))
+		return
 	}
 	health.AddFrom(reporter, probes)
 }
