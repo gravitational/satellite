@@ -20,9 +20,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gravitational/satellite/agent"
-	"github.com/gravitational/satellite/monitoring"
-	"github.com/gravitational/trace"
+	// "github.com/gravitational/satellite/agent"
+
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 )
@@ -56,34 +55,45 @@ type MetricsCollector struct {
 }
 
 // NewMetricsCollector creates a new MetricsCollector
-func NewMetricsCollector(configEtcd *monitoring.ETCDConfig, kubeConfig monitoring.KubeConfig, role agent.Role) (*MetricsCollector, error) {
-	collectorEtcd, err := NewEtcdCollector(configEtcd)
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
-	collectorDocker, err := NewDockerCollector()
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
+// func NewMetricsCollector(configEtcd *monitoring.ETCDConfig, kubeConfig monitoring.KubeConfig, role agent.Role) (*MetricsCollector, error) {
+// 	collectorEtcd, err := NewEtcdCollector(configEtcd)
+// 	if err != nil {
+// 		return nil, trace.Wrap(err)
+// 	}
+// 	collectorDocker, err := NewDockerCollector()
+// 	if err != nil {
+// 		return nil, trace.Wrap(err)
+// 	}
 
-	collectorSystemd, err := NewSystemdCollector()
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
+// 	collectorSystemd, err := NewSystemdCollector()
+// 	if err != nil {
+// 		return nil, trace.Wrap(err)
+// 	}
 
+// 	collectors := make(map[string]Collector)
+// 	if role == agent.RoleMaster {
+// 		collectorKubernetes, err := NewKubernetesCollector(kubeConfig)
+// 		if err != nil {
+// 			return nil, trace.Wrap(err)
+// 		}
+// 		collectors["k8s"] = collectorKubernetes
+// 	}
+// 	collectors["etcd"] = collectorEtcd
+// 	collectors["sysctl"] = NewSysctlCollector()
+// 	collectors["docker"] = collectorDocker
+// 	collectors["systemd"] = collectorSystemd
+// 	return &MetricsCollector{collectors: collectors}, nil
+// }
+
+// NewCollector initializes and returns a new MetricsCollector
+func NewCollector() (*MetricsCollector, error) {
 	collectors := make(map[string]Collector)
-	if role == agent.RoleMaster {
-		collectorKubernetes, err := NewKubernetesCollector(kubeConfig)
-		if err != nil {
-			return nil, trace.Wrap(err)
-		}
-		collectors["k8s"] = collectorKubernetes
-	}
-	collectors["etcd"] = collectorEtcd
-	collectors["sysctl"] = NewSysctlCollector()
-	collectors["docker"] = collectorDocker
-	collectors["systemd"] = collectorSystemd
 	return &MetricsCollector{collectors: collectors}, nil
+}
+
+// AddMetricsCollector maps name to collector
+func (mc *MetricsCollector) AddMetricsCollector(name string, collector Collector) {
+	mc.collectors[name] = collector
 }
 
 // Describe implements the prometheus.Collector interface.

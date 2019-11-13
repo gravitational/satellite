@@ -24,8 +24,6 @@ import (
 	"github.com/gravitational/trace"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kube "k8s.io/client-go/kubernetes"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // healthzChecker is secure healthz checker
@@ -63,31 +61,29 @@ func NodesStatusHealth(config KubeConfig, nodesReadyThreshold int) health.Checke
 
 // PingHealth creates a checker that monitors ping values between Master nodes
 // and other nodes
-func PingHealth(serfRPCAddr, serfMemberName string) (c health.Checker, err error) {
-	c, err = NewPingChecker(PingCheckerConfig{
-		SerfRPCAddr:    serfRPCAddr,
-		SerfMemberName: serfMemberName,
-	})
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
-	return c, nil
-}
+// func PingHealth(serfRPCAddr, serfMemberName string) (c health.Checker, err error) {
+// 	c, err = NewPingChecker(PingCheckerConfig{
+// 		SerfRPCAddr:    serfRPCAddr,
+// 		SerfMemberName: serfMemberName,
+// 	})
+// 	if err != nil {
+// 		return nil, trace.Wrap(err)
+// 	}
+// 	return c, nil
+// }
 
 // TimeDriftHealth creates a checker that monitors time difference between cluster nodes.
-func TimeDriftHealth(config TimeDriftCheckerConfig) (c health.Checker, err error) {
-	c, err = NewTimeDriftChecker(config)
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
-	return c, nil
-}
+// func TimeDriftHealth(config TimeDriftCheckerConfig) (c health.Checker, err error) {
+// 	c, err = NewTimeDriftChecker(config)
+// 	if err != nil {
+// 		return nil, trace.Wrap(err)
+// 	}
+// 	return c, nil
+// }
 
 // EtcdHealth creates a checker that checks health of etcd
 func EtcdHealth(config *ETCDConfig) (health.Checker, error) {
 	const name = "etcd-healthz"
-
-	log.WithField("config", *config).Debug("[BERD] EtcdHealth")
 
 	client := config.Client
 	if client == nil {
@@ -110,7 +106,6 @@ func EtcdHealth(config *ETCDConfig) (health.Checker, error) {
 		checkers = append(checkers, checker)
 	}
 
-	log.WithField("checkers", checkers).Debug("[BERD] EtcdHealth")
 	return &compositeChecker{name, checkers}, nil
 }
 

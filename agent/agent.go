@@ -24,15 +24,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/gravitational/satellite/agent/cache"
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-	"github.com/gravitational/trace"
+	"github.com/gravitational/satellite/monitoring/collector"
 
+	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
@@ -236,6 +238,12 @@ func (r *agent) Start() error {
 	r.done = make(chan struct{})
 
 	go r.statusUpdateLoop()
+	mc, err := collector.NewCollector()
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	addMetricsCollectors(mc)
+	prometheus.MustRegister(mc)
 
 	if r.metricsListener != nil {
 		go func() {
@@ -252,6 +260,10 @@ func (r *agent) Start() error {
 	case <-time.After(1 * time.Second):
 		return nil
 	}
+}
+
+func addMetricsCollectors(mc *collector.MetricsCollector) {
+	mc.AddMetricsCollector("test", collector.NewTestCollector())
 }
 
 // IsMember returns true if this agent is a member of the serf cluster
@@ -360,15 +372,21 @@ func (r *agent) runChecks(ctx context.Context) *pb.NodeStatus {
 // If the checker panics, the resulting probe will describe the checker failure.
 // Semaphore channel is guaranteed to receive a value upon completion.
 func runChecker(ctx context.Context, checker health.Checker, probeCh chan<- health.Probes, semaphoreCh <-chan struct{}) {
+	if checker == nil {
+		log.Debugf("checker is nil")
+		return
+	}
 	defer func() {
 		if err := recover(); err != nil {
 			var probes health.Probes
-			probes.Add(&pb.Probe{
-				Checker:  checker.Name(),
-				Status:   pb.Probe_Failed,
-				Severity: pb.Probe_Critical,
-				Error:    trace.Errorf("checker panicked: %v\n%s", err, debug.Stack()).Error(),
-			})
+			if checker != nil {
+				probes.Add(&pb.Probe{
+					Checker:  checker.Name(),
+					Status:   pb.Probe_Failed,
+					Severity: pb.Probe_Critical,
+					Error:    trace.Errorf("checker panicked: %v\n%s", err, debug.Stack()).Error(),
+				})
+			}
 			probeCh <- probes
 		}
 		// release checker slot
