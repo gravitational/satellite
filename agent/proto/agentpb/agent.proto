@@ -126,6 +126,12 @@ message TimeResponse {
   Timestamp timestamp = 1;
 }
 
+message TimelineRequest {}
+
+message TimelineResponse {
+  repeated string timeline = 1;
+}
+
 // Agent describes the API provided by GRPC agents
 service Agent {
   // Status collects the global cluster status
@@ -134,4 +140,6 @@ service Agent {
   rpc LocalStatus(LocalStatusRequest) returns (LocalStatusResponse) {}
   // Time requests the node's local time in UTC
   rpc Time(TimeRequest) returns (TimeResponse) {}
+  // Timeline collects the status Timeline
+  rpc Timeline(TimelineRequest) returns (TimelineResponse) {}
 }

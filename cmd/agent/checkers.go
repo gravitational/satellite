@@ -22,6 +22,7 @@ import (
 	"github.com/gravitational/satellite/monitoring"
 
 	"github.com/gravitational/trace"
+	serf "github.com/hashicorp/serf/client"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -79,40 +80,40 @@ func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeCon
 		return trace.Wrap(err)
 	}
 
-	// pingHealth, err := monitoring.PingHealth(config.serfRPCAddr, config.serfMemberName)
-	// if err != nil {
-	// 	return trace.Wrap(err)
-	// }
+	pingHealth, err := monitoring.PingHealth(config.serfRPCAddr, config.serfMemberName)
+	if err != nil {
+		return trace.Wrap(err)
+	}
 
-	// serfClient, err := agent.NewSerfClient(serf.Config{
-	// 	Addr: config.serfRPCAddr,
-	// })
-	// if err != nil {
-	// 	return trace.Wrap(err)
-	// }
+	serfClient, err := agent.NewSerfClient(serf.Config{
+		Addr: config.serfRPCAddr,
+	})
+	if err != nil {
+		return trace.Wrap(err)
+	}
 
-	// serfMember, err := serfClient.FindMember(config.serfMemberName)
-	// if err != nil {
-	// 	return trace.Wrap(err)
-	// }
+	serfMember, err := serfClient.FindMember(config.serfMemberName)
+	if err != nil {
+		return trace.Wrap(err)
+	}
 
-	// timeDriftHealth, err := monitoring.TimeDriftHealth(monitoring.TimeDriftCheckerConfig{
-	// 	CAFile:     node.GetConfig().CAFile,
-	// 	CertFile:   node.GetConfig().CertFile,
-	// 	KeyFile:    node.GetConfig().KeyFile,
-	// 	SerfClient: serfClient,
-	// 	SerfMember: serfMember,
-	// })
-	// if err != nil {
-	// 	return trace.Wrap(err)
-	// }
+	timeDriftHealth, err := monitoring.TimeDriftHealth(monitoring.TimeDriftCheckerConfig{
+		CAFile:     node.GetConfig().CAFile,
+		CertFile:   node.GetConfig().CertFile,
+		KeyFile:    node.GetConfig().KeyFile,
+		SerfClient: serfClient,
+		SerfMember: serfMember,
+	})
+	if err != nil {
+		return trace.Wrap(err)
+	}
 
 	node.AddChecker(monitoring.KubeAPIServerHealth(kubeConfig))
 	node.AddChecker(monitoring.DockerHealth(config.dockerAddr))
 	node.AddChecker(etcdChecker)
 	node.AddChecker(monitoring.SystemdHealth())
-	// node.AddChecker(pingHealth)
-	// node.AddChecker(timeDriftHealth)
+	node.AddChecker(pingHealth)
+	node.AddChecker(timeDriftHealth)
 
 	if !config.disableInterPodCheck {
 		node.AddChecker(monitoring.InterPodCommunication(kubeConfig, config.nettestContainerImage))

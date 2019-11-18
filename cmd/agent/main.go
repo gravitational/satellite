@@ -89,6 +89,13 @@ func run() error {
 
 		// `version` command
 		cversion = app.Command("version", "Display version")
+
+		// history command
+		chistory         = app.Command("history", "Timeline")
+		chistoryRPCPort  = chistory.Flag("rpc-port", "Local agent RPC port").Default("7575").Int()
+		chistoryCAFile   = chistory.Flag("ca-file", "CA certificate for verifying server certificates").ExistingFile()
+		chistoryCertFile = chistory.Flag("client-cert-file", "mTLS client certificate file").ExistingFile()
+		chistoryKeyFile  = chistory.Flag("client-key-file", "mTLS client key file").ExistingFile()
 	)
 
 	var cmd string
@@ -171,6 +178,8 @@ func run() error {
 	case cversion.FullCommand():
 		version.Print()
 		err = nil
+	case chistory.FullCommand():
+		_, err = statusHistory(*chistoryRPCPort, *chistoryCAFile, *chistoryCertFile, *chistoryKeyFile)
 	}
 
 	return trace.Wrap(err)

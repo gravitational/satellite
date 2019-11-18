@@ -24,12 +24,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
-
 	"github.com/gravitational/satellite/agent/cache"
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-	"github.com/gravitational/satellite/monitoring/collector"
+	"github.com/gravitational/satellite/lib/timeline"
 
 	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
@@ -144,6 +142,7 @@ func New(config *Config) (Agent, error) {
 		recycleClock:    clock,
 		localStatus:     emptyNodeStatus(config.Name),
 		metricsListener: metricsListener,
+		Timeline:        timeline.NewTimeline(256),
 	}
 
 	agent.rpc, err = newRPCServer(agent, config.CAFile, config.CertFile, config.KeyFile, config.RPCAddrs)
@@ -222,6 +221,9 @@ type agent struct {
 
 	// Config is the agent configuration.
 	Config
+
+	// DEMO
+	Timeline *timeline.Timeline
 }
 
 // DialRPC returns RPC client for the provided Serf member.
@@ -238,12 +240,6 @@ func (r *agent) Start() error {
 	r.done = make(chan struct{})
 
 	go r.statusUpdateLoop()
-	mc, err := collector.NewCollector()
-	if err != nil {
-		return trace.Wrap(err)
-	}
-	addMetricsCollectors(mc)
-	prometheus.MustRegister(mc)
 
 	if r.metricsListener != nil {
 		go func() {
@@ -260,10 +256,6 @@ func (r *agent) Start() error {
 	case <-time.After(1 * time.Second):
 		return nil
 	}
-}
-
-func addMetricsCollectors(mc *collector.MetricsCollector) {
-	mc.AddMetricsCollector("test", collector.NewTestCollector())
 }
 
 // IsMember returns true if this agent is a member of the serf cluster
@@ -473,6 +465,10 @@ func (r *agent) statusUpdateLoop() {
 					if err = r.cache.UpdateStatus(status); err != nil {
 						log.Warnf("Error updating system status in cache: %v", err)
 					}
+					r.Timeline.RecordStatus(status)
+					log.WithField("status", status).Debug("BERD RecordStatus")
+					timeline := r.Timeline.GetTimeline()
+					log.WithField("timeline", timeline).Debug("BERD GetTimeline")
 				}
 				select {
 				case <-r.done:

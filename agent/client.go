@@ -143,6 +143,18 @@ func (r *client) Time(ctx context.Context, req *pb.TimeRequest) (time *pb.TimeRe
 	return resp, nil
 }
 
+// Timeline returns the current status timeline.
+func (r *client) Timeline(ctx context.Context) (timeline *pb.TimelineResponse, err error) {
+	opts := []grpc.CallOption{
+		grpc.FailFast(false),
+	}
+	resp, err := r.AgentClient.Timeline(ctx, &pb.TimelineRequest{}, opts...)
+	if err != nil {
+		return nil, ConvertGRPCError(err)
+	}
+	return resp, nil
+}
+
 // Close closes the RPC client connection.
 func (r *client) Close() error {
 	return r.conn.Close()

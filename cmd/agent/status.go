@@ -48,6 +48,7 @@ func status(RPCPort int, local, prettyPrint bool, caFile, certFile, keyFile stri
 	if err != nil {
 		return false, trace.Wrap(err)
 	}
+
 	var statusJSON []byte
 	var statusBlob interface{}
 	if local {
@@ -77,4 +78,27 @@ func status(RPCPort int, local, prettyPrint bool, caFile, certFile, keyFile stri
 		return ok, trace.Wrap(err, "failed to output status")
 	}
 	return ok, nil
+}
+
+func statusHistory(RPCPort int, caFile, certFile, keyFile string) (ok bool, err error) {
+	RPCAddr := fmt.Sprintf("127.0.0.1:%d", RPCPort)
+
+	ctx, cancel := context.WithTimeout(context.Background(), statusTimeout)
+	defer cancel()
+
+	client, err := agent.NewClient(ctx, RPCAddr, caFile, certFile, keyFile)
+	if err != nil {
+		return false, trace.Wrap(err)
+	}
+
+	timeline, err := client.Timeline(ctx)
+	if err != nil {
+		return false, trace.Wrap(err)
+	}
+
+	for _, entry := range timeline.GetTimeline() {
+		fmt.Println(entry)
+	}
+
+	return true, nil
 }
