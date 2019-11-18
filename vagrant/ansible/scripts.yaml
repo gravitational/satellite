@@ -1,0 +1,50 @@
+---
+
+- hosts: nodes
+  become: yes
+  vars:
+    root_dir: "{{playbook_dir}}/../.."
+  tasks:
+
+  - name: Register node IP
+    shell: hostname -I | cut -d' ' -f2
+    register: command_output
+  - set_fact:
+      node_ip: "{{command_output.stdout}}"
+
+  - name: Status script
+    copy:
+      mode: '755'
+      dest: /home/vagrant/status.sh
+      content: |
+        {{'#'}}!/bin/bash
+        satellite status \
+          --debug \
+          --pretty \
+          --ca-file=/var/lib/satellite/creds/ca.cert \
+          --client-cert-file=/var/lib/satellite/creds/client.cert \
+          --client-key-file=/var/lib/satellite/creds/client.key
+
+  - name: Drop input script
+    copy:
+      mode: '755'
+      dest: /home/vagrant/drop-input.sh
+      content: "#!/bin/bash"
+
+  - name: Add drop IPs
+    lineinfile:
+      path: /home/vagrant/drop-input.sh
+      line: sudo iptables -I INPUT -s {{hostvars[item]['node_ip']}} -j DROP
+    with_items: "{{ groups['nodes'] | difference([inventory_hostname])}}"
+  
+  - name: Accept input script
+    copy:
+      mode: '755'
+      dest: /home/vagrant/accept-input.sh
+      content: "#!/bin/bash"
+
+  - name: Add accept IPs
+    lineinfile:
+      path: /home/vagrant/accept-input.sh
+      line: sudo iptables -D INPUT -s {{hostvars[item]['node_ip']}} -j DROP
+    with_items: "{{ groups['nodes'] | difference([inventory_hostname])}}"
