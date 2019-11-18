@@ -1,0 +1,148 @@
+---
+- hosts: nodes
+  become: yes
+  vars:
+    ansible_python_interpreter: "/usr/bin/env python3"
+
+  tasks:
+  - name: Register node IP
+    shell: hostname -I | cut -d' ' -f2
+    register: command_output
+  - set_fact:
+      node_ip: "{{command_output.stdout}}"
+  
+  # Install Docker and its dependencies
+  - name: Install packages that allow apt to be used over HTTPS
+    apt:
+      name: "{{packages}}"
+      state: present
+      update_cache: yes
+    vars:
+      packages:
+      - aptitude
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg-agent
+      - software-properties-common
+
+  - name: Add an apt signing key for Docker
+    apt_key:
+      url: https://download.docker.com/linux/ubuntu/gpg
+      state: present
+
+  - name: Add apt repository for stable version
+    apt_repository:
+      repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic stable
+      state: present
+      filename: docker
+
+  - name: Install docker and its dependencies
+    apt:
+      name: "{{packages}}"
+      state: present
+      update_cache: yes
+    vars:
+      packages:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+    notify:
+      - docker status
+
+  - name: Add vagrant user to docker group
+    user:
+      name: vagrant
+      group: docker
+
+  # Kubelet will not start if the system has swap enabled.
+  - name: Remove swapfile from /etc/fstab
+    mount:
+      name: "{{item}}"
+      fstype: swap
+      state: absent
+    with_items:
+    - swap
+    - none
+
+  - name: Disable swap
+    command: swapoff -a
+    when: ansible_swaptotal_mb > 0
+
+  # Install kubernetes components
+  - name: Add an apt signing key for Kubernetes
+    apt_key:
+      url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+      state: present
+
+  - name: Adding apt repository for Kubernetes
+    apt_repository:
+      repo: deb https://apt.kubernetes.io/ kubernetes-xenial main
+      state: present
+      filename: kubernetes.list
+
+  - name: Install Kubernetes Binaries
+    apt:
+      name: "{{packages}}"
+      state: present
+      update_cache: yes
+    vars:
+      packages:
+      - kubelet
+      - kubeadm
+      - kubectl
+
+  - name: Configure Node IP
+    lineinfile:
+      path: /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+      line: KUBELET_EXTRA_ARGS=--node-ip={{node_ip}}
+
+  - name: Restart kubelet
+    service:
+      name: kubelet
+      daemon_reload: yes
+      state: restarted
+  
+  # Initialize Kubernetes cluster
+  - name: Initialize the Kubernetes cluster using kubeadm
+    when: inventory_hostname in groups['first']
+    command: kubeadm init --apiserver-advertise-address={{node_ip}} --apiserver-cert-extra-sans={{node_ip}} --node-name k8s-master --pod-network-cidr=192.168.0.0/16
+
+  # Setup the kube config file
+  - name: Setup kubeconfig for vagrant user
+    when: inventory_hostname in groups['first']
+    command: "{{item}}"
+    with_items:
+      - mkdir -p /home/vagrant/.kube
+      - cp -i /etc/kubernetes/admin.conf /home/vagrant/.kube/config
+      - chown vagrant:vagrant /home/vagrant/.kube/config
+
+  # Setup the container networking provider and the network policy engine
+  - name: Install calico pod network
+    when: inventory_hostname in groups['first']
+    become: false
+    command: kubectl create -f https://docs.projectcalico.org/v3.9/manifests/calico.yaml
+
+  # Genereate kube join command
+  - name: Generate join command
+    when: inventory_hostname in groups['first']
+    command: kubeadm token create --print-join-command
+    register: join_command
+
+  # Join the nodes to the Kubernetes cluster
+  - name: Copy the join command to server location
+    when: inventory_hostname not in groups['first']
+    copy: content="{{hostvars[groups['first'][0]]['join_command']['stdout']}}" dest=/tmp/join-command.sh mode=0777
+
+
+  - name: Join the node cluster
+    when: inventory_hostname not in groups['first']
+    command: sh /tmp/join-command.sh
+
+  # Setup a handler for checking Docker daemon
+  handlers:
+  - name: docker status
+    service: name=docker state=started
+
+
+  
