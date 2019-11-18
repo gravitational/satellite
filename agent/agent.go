@@ -223,7 +223,7 @@ type agent struct {
 	Config
 
 	// DEMO
-	Timeline *timeline.Timeline
+	Timeline timeline.Timeline
 }
 
 // DialRPC returns RPC client for the provided Serf member.

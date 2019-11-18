@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package timeline provides interfaces for keeping track of cluster status events.
 package timeline
 
 import (
@@ -24,80 +25,63 @@ import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 )
 
-// Stamp defines timestamp format
+// Stamp defines default timestamp format for events.
 const Stamp = "Jan _2 15:04:05"
 
-// Entry represents a Timeline entry.
-type Entry struct {
+// Event represents a Timeline event. An event occurrs  whenever there is a
+// change in the cluster status. An event could be triggered by a failed
+// heartbeat or a failed health check.
+type Event struct {
+	// TimeStamp specifies when the event occurred.
 	TimeStamp time.Time
-	Instance  string
-	Task      string
-	Check     string
-	Old       string
-	New       string
-	Msg       string
+
+	// TODO: can we rely on user CLI sessions to provide colored text?
+	// If not, maybe we should indicate the different event types a different
+	// way.
+
+	// Color specifies the color of the event.
+	// Red -> Indicates change has caused state to degraded.
+	// Yellow -> Indicates change has not caused any state changes.
+	// Green -> Indicates changes has caused state to recover.
+	Color string
+
+	// Description specifies a description of the event.
+	Description string
 }
 
-// Labels represents an Entry's labels
-// type Labels map[string]string
-
-// NewEntry initializes and returns a new Entry with a timestamp.
-func NewEntry() *Entry {
-	return &Entry{TimeStamp: time.Now()}
+// NewEvent initializes and returns a new Event with the current timestamp.
+func NewEvent() Event {
+	return Event{
+		TimeStamp: time.Now(),
+	}
 }
 
-// String returns string representation of Entry.
-func (e *Entry) String() string {
+// String returns a string representation of Event.
+func (e *Event) String() string {
 	var sb strings.Builder
-	sb.WriteString("{")
-	sb.WriteString(fmt.Sprintf("timestamp=%s", e.TimeStamp.Format(Stamp)))
-
-	if e.Instance != "" {
-		sb.WriteString(fmt.Sprintf(", instance=%s", e.Instance))
-	}
-
-	if e.Task != "" {
-		sb.WriteString(fmt.Sprintf(", task=%s", e.Task))
-	}
-
-	if e.Check != "" {
-		sb.WriteString(fmt.Sprintf(", check=%s", e.Check))
-	}
-
-	if e.Old != "" {
-		sb.WriteString(fmt.Sprintf(", old=%s", e.Old))
-	}
-
-	if e.New != "" {
-		sb.WriteString(fmt.Sprintf(", new=%s", e.New))
-	}
-
-	if e.Msg != "" {
-		sb.WriteString(fmt.Sprintf(", msg=%s", e.Msg))
-	}
-
-	sb.WriteString("}")
+	sb.WriteString(fmt.Sprintf("[%s] ", e.TimeStamp.Format(Stamp)))
+	sb.WriteString(e.Description)
 	return sb.String()
 }
 
-// Timeline represents a timeline of gravity statuses. The Timeline
-// can hold a specified amount of entries and uses a FIFO eviction policy.
+// Timeline represents a timeline of cluster status events. The Timeline
+// can hold a specified amount of events and uses a FIFO eviction policy.
 type Timeline struct {
-	// size specifies the max size of the timeline
-	size int
-	// timeline holds the latest status entries
-	timeline []string
-	// cluster holds the latest cluster status
-	cluster *Cluster
+	// Size specifies the max size of the timeline.
+	Size int
+	// Timeline holds the latest status events.
+	Timeline []string
+	// Cluster holds the latest cluster status.
+	Cluster *Cluster
 }
 
 // NewTimeline initializes and returns a new StatusTimeline with the
 // specified size.
-func NewTimeline(size int) *Timeline {
-	return &Timeline{
-		size:     size,
-		timeline: []string{},
-		cluster:  &Cluster{},
+func NewTimeline(size int) Timeline {
+	return Timeline{
+		Size:     size,
+		Timeline: []string{},
+		Cluster:  &Cluster{},
 	}
 }
 
@@ -105,42 +89,44 @@ func NewTimeline(size int) *Timeline {
 // status into the Timeline.
 func (t *Timeline) RecordStatus(status *pb.SystemStatus) {
 	cluster := parseSystemStatus(status)
-	entries := t.cluster.diffCluster(cluster)
-	for _, entry := range entries {
-		t.addEntry(entry)
+	events := t.Cluster.diffCluster(cluster)
+	for _, event := range events {
+		t.addEvent(event)
 	}
-	t.cluster = cluster
+	t.Cluster = cluster
 }
 
 // GetTimeline returns the current timeline.
 func (t *Timeline) GetTimeline() []string {
-	return t.timeline
+	return t.Timeline
 }
 
-// addEntry appends the provided entry to the timeline.
-func (t *Timeline) addEntry(entry string) {
-	if len(t.timeline) > t.size {
-		t.timeline = t.timeline[1:]
+// addEvent appends the provided event to the timeline.
+func (t *Timeline) addEvent(event Event) {
+	if len(t.Timeline) > t.Size {
+		t.Timeline = t.Timeline[1:]
 	}
-	t.timeline = append(t.timeline, entry)
+	t.Timeline = append(t.Timeline, event.String())
 }
 
 // Cluster represents the overall status of a cluster.
 type Cluster struct {
+	// Status specifies the cluster status.
 	Status string
-	Nodes  map[string]*Node
+	// Nodes specify the individual node statuses.
+	Nodes map[string]*Node
 }
 
-func (c *Cluster) diffCluster(cluster *Cluster) []string {
-	entries := []string{}
+// difCluster calculates the differences from the provided cluster and returns
+// the differences as a list of events.
+func (c *Cluster) diffCluster(cluster *Cluster) []Event {
+	events := []Event{}
 
 	// Compare cluster status
 	if c.Status != cluster.Status {
-		entry := NewEntry()
-		entry.Task = "cluster_status"
-		entry.Old = c.Status
-		entry.New = cluster.Status
-		entries = append(entries, entry.String())
+		event := NewEvent()
+		event.Description = fmt.Sprintf("cluster status changed from [%s] to [%s]", c.Status, cluster.Status)
+		events = append(events, event)
 	}
 
 	// Keep track of removed nodes
@@ -152,47 +138,47 @@ func (c *Cluster) diffCluster(cluster *Cluster) []string {
 	// Nodes added or modified
 	for name, newNode := range cluster.Nodes {
 		if oldNode, ok := c.Nodes[name]; !ok {
-			entry := NewEntry()
-			entry.Instance = name
-			entry.Task = "heartbeat"
-			entry.New = "success"
-			entries = append(entries, entry.String())
+			event := NewEvent()
+			event.Description = fmt.Sprintf("[%s] has been added to the cluster", name)
+			events = append(events, event)
 		} else {
-			entries = append(entries, oldNode.diffNode(newNode)...)
+			events = append(events, oldNode.diffNode(newNode)...)
 			delete(removed, name)
 		}
 	}
 
 	// Nodes removed from the cluster
 	for name := range removed {
-		entry := NewEntry()
-		entry.Instance = name
-		entry.Task = "heartbeat"
-		entry.Old = "success"
-		entries = append(entries, entry.String())
+		event := NewEvent()
+		event.Description = fmt.Sprintf("[%s] has been removed from the cluster", name)
+		events = append(events, event)
 	}
 
-	return entries
+	return events
 }
 
 // Node represents the status of a node.
 type Node struct {
-	Name   string
+	// Name specifies the name of the node.
+	Name string
+	// Status specifies the status of the node.
 	Status string
+	// MemberStatus specifies the node serf membership status.
+	MemberStatus string
+	// Probes specify the individual probe results.
 	Probes map[string]*Probe
 }
 
-func (n *Node) diffNode(node *Node) []string {
-	entries := []string{}
+// diffNode calculates the differences from the provided node and returns the
+// differences as a list of events.
+func (n *Node) diffNode(node *Node) []Event {
+	events := []Event{}
 
 	// Compare node status
 	if n.Status != node.Status {
-		entry := NewEntry()
-		entry.Instance = n.Name
-		entry.Task = "node_status"
-		entry.Old = n.Status
-		entry.New = node.Status
-		entries = append(entries, entry.String())
+		event := NewEvent()
+		event.Description = fmt.Sprintf("[%s] status changed from [%s] to [%s]", n.Name, n.Status, node.Status)
+		events = append(events, event)
 	}
 
 	// Keep track of removed probes
@@ -204,56 +190,58 @@ func (n *Node) diffNode(node *Node) []string {
 	// Probes added or modified
 	for name, newProbe := range node.Probes {
 		if oldProbe, ok := n.Probes[name]; !ok {
-			entry := NewEntry()
-			entry.Instance = n.Name
-			entry.Task = "health_check"
-			entry.Check = name
-			entry.New = newProbe.Status
-			entry.Msg = newProbe.Message
-			entries = append(entries, entry.String())
+			event := NewEvent()
+			event.Description = fmt.Sprintf("[%s:%s] probe has been added to node [%s]", n.Name, name, n.Name)
+			events = append(events, event)
 		} else {
-			entries = append(entries, oldProbe.diffProbe(n.Name, newProbe)...)
+			events = append(events, oldProbe.diffProbe(n.Name, newProbe)...)
 			delete(removed, name)
 		}
 	}
 
 	// Probes removed from the node
 	for name := range removed {
-		entry := NewEntry()
-		entry.Instance = n.Name
-		entry.Task = "health_check"
-		entry.Check = name
-		entry.Old = n.Probes[name].Status
-		entries = append(entries, entry.String())
+		event := NewEvent()
+		event.Description = fmt.Sprintf("[%s:%s] probe has been removed from node [%s]", n.Name, name, n.Name)
+		events = append(events, event)
 	}
 
-	return entries
+	return events
 }
 
 // Probe represents the result of a probe.
+// TODO: What fields do we need to store?
+// Available fields:
+// - Checker -> Name
+// - CheckerData
+// - Code
+// - Detail -> Detail
+// - Error
+// - Severity
+// - Status -> Status
 type Probe struct {
-	Name    string
-	Status  string
-	Message string
+	// Name specifies the type of probe.
+	Name string
+	// Status specifies the result of the probe.
+	Status string
+	// Detail specifies any specific details attached to the probe.
+	Detail string
 }
 
-func (p *Probe) diffProbe(nodeName string, probe *Probe) []string {
-	entries := []string{}
+// diffProbe calculates the differences from the provided probe and returns the
+// differences as a list of events.
+func (p *Probe) diffProbe(nodeName string, probe *Probe) []Event {
+	events := []Event{}
 	if p.Status != probe.Status {
-		entry := NewEntry()
-		entry.Instance = nodeName
-		entry.Task = "health_check"
-		entry.Check = p.Name
-		entry.Old = p.Status
-		entry.New = probe.Status
-		entry.Msg = probe.Message
-		entries = append(entries, entry.String())
+		event := NewEvent()
+		desc := fmt.Sprintf("[%s:%s] status changed from [%s] to [%s]", nodeName, p.Name, p.Status, probe.Status)
+		event.Description = desc
+		events = append(events, event)
 	}
-	return entries
+	return events
 }
 
-//// UTIL ////
-
+// parseSystemStatus parses and returns the systemStatus as a Cluster.
 func parseSystemStatus(status *pb.SystemStatus) *Cluster {
 	cluster := &Cluster{
 		Status: status.GetStatus().String(),
@@ -268,10 +256,11 @@ func parseSystemStatus(status *pb.SystemStatus) *Cluster {
 	return cluster
 }
 
+// parseNodeStatus parses and returns the nodeStatus as a Node.
 func parseNodeStatus(nodeStatus *pb.NodeStatus) *Node {
 	node := &Node{
 		Name:   nodeStatus.GetName(),
-		Status: nodeStatus.GetStatus().String(),
+		Status: nodeStatus.GetMemberStatus().GetStatus().String(),
 	}
 
 	probes := map[string]*Probe{}
@@ -283,10 +272,11 @@ func parseNodeStatus(nodeStatus *pb.NodeStatus) *Node {
 	return node
 }
 
+// parseProbeStatus parses and returns the probeStatus as a Probe.
 func parseProbeStatus(probeStatus *pb.Probe) *Probe {
 	return &Probe{
-		Name:    probeStatus.GetChecker(),
-		Status:  probeStatus.GetStatus().String(),
-		Message: probeStatus.GetDetail(),
+		Name:   probeStatus.GetChecker(),
+		Status: probeStatus.GetStatus().String(),
+		Detail: probeStatus.GetDetail(),
 	}
 }
