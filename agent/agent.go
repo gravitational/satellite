@@ -24,15 +24,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-
 	"github.com/gravitational/satellite/agent/cache"
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/lib/timeline"
 	"github.com/gravitational/trace"
 
 	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
@@ -135,6 +135,7 @@ func New(config *Config) (Agent, error) {
 	agent := &agent{
 		Config:          *config,
 		SerfClient:      client,
+		Timeline:        timeline.NewTimeline(256),
 		name:            config.Name,
 		cache:           config.Cache,
 		dialRPC:         DefaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
@@ -220,6 +221,9 @@ type agent struct {
 
 	// Config is the agent configuration.
 	Config
+
+	// Timeline keeps track of status change events.
+	Timeline timeline.Timeline
 }
 
 // DialRPC returns RPC client for the provided Serf member.
@@ -451,6 +455,9 @@ func (r *agent) statusUpdateLoop() {
 					log.Warnf("Error collecting system status: %v.", err)
 				}
 				if status != nil {
+					// DEMO record all status changes into timeline
+					r.Timeline.RecordStatus(status)
+
 					if err = r.cache.UpdateStatus(status); err != nil {
 						log.Warnf("Error updating system status in cache: %v", err)
 					}

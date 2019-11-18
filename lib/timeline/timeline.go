@@ -77,8 +77,8 @@ type Timeline struct {
 
 // NewTimeline initializes and returns a new StatusTimeline with the
 // specified size.
-func NewTimeline(size int) *Timeline {
-	return &Timeline{
+func NewTimeline(size int) Timeline {
+	return Timeline{
 		Size:     size,
 		Timeline: []string{},
 		Cluster:  &Cluster{},
