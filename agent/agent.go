@@ -226,7 +226,7 @@ type agent struct {
 	// Config is the agent configuration.
 	Config
 
-	// DEMO
+	// Timeline keeps track of status change events.
 	Timeline history.Timeline
 }
 
@@ -367,21 +367,15 @@ func (r *agent) runChecks(ctx context.Context) *pb.NodeStatus {
 // If the checker panics, the resulting probe will describe the checker failure.
 // Semaphore channel is guaranteed to receive a value upon completion.
 func runChecker(ctx context.Context, checker health.Checker, probeCh chan<- health.Probes, semaphoreCh <-chan struct{}) {
-	if checker == nil {
-		log.Debugf("checker is nil")
-		return
-	}
 	defer func() {
 		if err := recover(); err != nil {
 			var probes health.Probes
-			if checker != nil {
-				probes.Add(&pb.Probe{
-					Checker:  checker.Name(),
-					Status:   pb.Probe_Failed,
-					Severity: pb.Probe_Critical,
-					Error:    trace.Errorf("checker panicked: %v\n%s", err, debug.Stack()).Error(),
-				})
-			}
+			probes.Add(&pb.Probe{
+				Checker:  checker.Name(),
+				Status:   pb.Probe_Failed,
+				Severity: pb.Probe_Critical,
+				Error:    trace.Errorf("checker panicked: %v\n%s", err, debug.Stack()).Error(),
+			})
 			probeCh <- probes
 		}
 		// release checker slot
@@ -469,9 +463,6 @@ func (r *agent) statusUpdateLoop() {
 						log.Warnf("Error updating system status in cache: %v", err)
 					}
 					r.Timeline.RecordStatus(status)
-					log.WithField("status", status).Debug("BERD RecordStatus")
-					timeline := r.Timeline.GetEvents()
-					log.WithField("timeline", timeline).Debug("BERD GetTimeline")
 				}
 				select {
 				case <-r.done:
