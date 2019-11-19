@@ -108,7 +108,7 @@ func (c *Cluster) diffCluster(cluster *Cluster) []Event {
 			event.SetMetadata("new", newNode.Status)
 			events = append(events, event)
 
-			// Added probes as well.
+			// Add new probes as well.
 			events = append(events, (&Node{}).diffNode(newNode)...)
 		} else {
 			events = append(events, oldNode.diffNode(newNode)...)
