@@ -113,7 +113,7 @@ func (e *Event) ToProto() *pb.TimelineEvent {
 			Seconds:     int64(e.timeStamp.UTC().Second()),
 			Nanoseconds: int32(e.timeStamp.UTC().Nanosecond()),
 		},
-		Type:     pb.TimelineEvent_ClusterDegraded,
+		Type:     e.eventType.ToProto(),
 		Metadata: e.metadata,
 	}
 }
