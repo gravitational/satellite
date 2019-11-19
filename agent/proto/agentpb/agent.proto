@@ -126,12 +126,37 @@ message TimeResponse {
   Timestamp timestamp = 1;
 }
 
-// TimelineRequest is a request to get the cluster status timeline
 message TimelineRequest {}
 
-// TimelineResponse contains the cluster status timeline events
+message TimelineEvent {
+  // Timestamp is the node's local timestamp in UTC.
+  Timestamp timestamp = 1;
+  
+  // Type defines the possible event types.
+  enum Type {
+    ClusterRecovered = 0;
+    ClusterDegraded = 1;
+    NodeAdded = 2;
+    NodeRemoved = 3;
+    NodeRecovered = 4;
+    NodeDegraded = 5;
+    ProbeAdded = 6;
+    ProbeRemoved = 7;
+    ProbePassed = 8;
+    ProbeFailed = 9;
+    Unknown = 10;
+  }
+  
+  // Type specifies the event type.
+  Type type = 2; 
+  
+  // Metadata contains the event-specific metadata.
+  map<string, string> metadata = 3;
+}
+
 message TimelineResponse {
-  repeated string timeline = 1;
+  // Events contains a list of timeline events that occurred.
+  repeated TimelineEvent events = 1;
 }
 
 // Agent describes the API provided by GRPC agents
