@@ -28,5 +28,5 @@ type Timeline interface {
 	// recorded status.
 	RecordStatus(status *pb.SystemStatus)
 	// GetEvents returns the currently stored list of events.
-	GetEvents() []Event
+	GetEvents() []*Event
 }

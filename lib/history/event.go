@@ -37,8 +37,8 @@ type Event struct {
 }
 
 // newEvent initializes and returns a new Event with the specified eventType.
-func newEvent(eventType EventType) Event {
-	return Event{
+func newEvent(eventType EventType) *Event {
+	return &Event{
 		timeStamp: time.Now(),
 		eventType: eventType,
 		metadata:  make(map[string]string),
@@ -47,53 +47,53 @@ func newEvent(eventType EventType) Event {
 
 // NewClusterRecoveredEvent initializes and returns a new cluster recovered
 // event.
-func NewClusterRecoveredEvent() Event {
+func NewClusterRecoveredEvent() *Event {
 	return newEvent(ClusterRecovered)
 }
 
 // NewClusterDegradedEvent initializes and returns a new cluster degraded
 // event.
-func NewClusterDegradedEvent() Event {
+func NewClusterDegradedEvent() *Event {
 	return newEvent(ClusterDegraded)
 }
 
 // NewNodeAddedEvent initializes and returns a new node added event.
-func NewNodeAddedEvent() Event {
+func NewNodeAddedEvent() *Event {
 	return newEvent(NodeAdded)
 }
 
 // NewNodeRemovedEvent initializes and returns a new node removed event.
-func NewNodeRemovedEvent() Event {
+func NewNodeRemovedEvent() *Event {
 	return newEvent(NodeRemoved)
 }
 
 // NewNodeRecoveredEvent initializes and returns a new node recovered event.
-func NewNodeRecoveredEvent() Event {
+func NewNodeRecoveredEvent() *Event {
 	return newEvent(NodeRecovered)
 }
 
 // NewNodeDegradedEvent initializes and returns a new node degraded event.
-func NewNodeDegradedEvent() Event {
+func NewNodeDegradedEvent() *Event {
 	return newEvent(NodeDegraded)
 }
 
 // NewProbeAddedEvent initializes and returns a new probe added event.
-func NewProbeAddedEvent() Event {
+func NewProbeAddedEvent() *Event {
 	return newEvent(ProbeAdded)
 }
 
 // NewProbeRemovedEvent initializes and returns a new probe removed event.
-func NewProbeRemovedEvent() Event {
+func NewProbeRemovedEvent() *Event {
 	return newEvent(ProbeRemoved)
 }
 
 // NewProbePassedEvent initializes and returns a new probe passed event.
-func NewProbePassedEvent() Event {
+func NewProbePassedEvent() *Event {
 	return newEvent(ProbePassed)
 }
 
 // NewProbeFailedEvent initializes and returns a new probe failed event.
-func NewProbeFailedEvent() Event {
+func NewProbeFailedEvent() *Event {
 	return newEvent(ProbeFailed)
 }
 

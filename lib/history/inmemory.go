@@ -29,7 +29,7 @@ type MemTimeline struct {
 	// Size specifies the max size of the timeline.
 	Size int
 	// Events holds the latest status events.
-	Events []Event
+	Events []*Event
 	// LastStatus holds the last recorded cluster status.
 	LastStatus *Cluster
 }
@@ -39,7 +39,7 @@ type MemTimeline struct {
 func NewMemTimeline(size int) Timeline {
 	return &MemTimeline{
 		Size:       size,
-		Events:     make([]Event, 0, size),
+		Events:     make([]*Event, 0, size),
 		LastStatus: &Cluster{},
 	}
 }
@@ -56,12 +56,12 @@ func (t *MemTimeline) RecordStatus(status *pb.SystemStatus) {
 }
 
 // GetEvents returns the current timeline.
-func (t *MemTimeline) GetEvents() []Event {
+func (t *MemTimeline) GetEvents() []*Event {
 	return t.Events
 }
 
 // addEvent appends the provided event to the timeline.
-func (t *MemTimeline) addEvent(event Event) {
+func (t *MemTimeline) addEvent(event *Event) {
 	if len(t.Events) > t.Size {
 		t.Events = t.Events[1:]
 	}
@@ -78,12 +78,12 @@ type Cluster struct {
 
 // diffCluster calculates the differences from the provided cluster and returns
 // the differences as a list of events.
-func (c *Cluster) diffCluster(cluster *Cluster) []Event {
-	events := []Event{}
+func (c *Cluster) diffCluster(cluster *Cluster) []*Event {
+	events := []*Event{}
 
 	// Compare cluster status
 	if c.Status != cluster.Status {
-		var event Event
+		var event *Event
 		if cluster.Status == pb.SystemStatus_Running.String() {
 			event = NewClusterRecoveredEvent()
 		} else {
@@ -141,12 +141,12 @@ type Node struct {
 
 // diffNode calculates the differences from the provided node and returns the
 // differences as a list of events.
-func (n *Node) diffNode(node *Node) []Event {
-	events := []Event{}
+func (n *Node) diffNode(node *Node) []*Event {
+	events := []*Event{}
 
 	// Compare node status
 	if n.Status != node.Status {
-		var event Event
+		var event *Event
 		if node.Status == pb.NodeStatus_Running.String() {
 			event = NewNodeRecoveredEvent()
 		} else {
@@ -211,10 +211,10 @@ type Probe struct {
 
 // diffProbe calculates the differences from the provided probe and returns the
 // differences as a list of events.
-func (p *Probe) diffProbe(nodeName string, probe *Probe) []Event {
-	events := []Event{}
+func (p *Probe) diffProbe(nodeName string, probe *Probe) []*Event {
+	events := []*Event{}
 	if p.Status != probe.Status {
-		var event Event
+		var event *Event
 		if probe.Status == pb.Probe_Running.String() {
 			event = NewProbePassedEvent()
 		} else {
