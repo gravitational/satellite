@@ -84,10 +84,14 @@ func (r *server) Time(ctx context.Context, req *pb.TimeRequest) (*pb.TimeRespons
 
 // Timeline sends the current status timeline
 func (r *server) Timeline(ctx context.Context, req *pb.TimelineRequest) (*pb.TimelineResponse, error) {
-	timeline := r.agent.Timeline.GetTimeline()
-	resp := &pb.TimelineResponse{}
-	resp.Timeline = timeline
-	return resp, nil
+	timelineEvents := r.agent.Timeline.GetEvents()
+	events := make([]*pb.TimelineEvent, 0, len(timelineEvents))
+	for _, event := range timelineEvents {
+		events = append(events, event.ToProto())
+	}
+	return &pb.TimelineResponse{
+		Events: events,
+	}, nil
 }
 
 // newRPCServer creates an agent RPC endpoint for each provided listener.

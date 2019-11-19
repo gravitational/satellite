@@ -27,7 +27,7 @@ import (
 	"github.com/gravitational/satellite/agent/cache"
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-	"github.com/gravitational/satellite/lib/timeline"
+	"github.com/gravitational/satellite/lib/history"
 
 	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
@@ -99,6 +99,9 @@ type Config struct {
 	// Tags is a trivial means for adding extra semantic information to an agent.
 	Tags map[string]string
 
+	// MaxHistory specifies the max size of the status timeline.
+	MaxHistory int
+
 	// Cache is a short-lived storage used by the agent to persist latest health stats.
 	cache.Cache
 }
@@ -142,7 +145,8 @@ func New(config *Config) (Agent, error) {
 		recycleClock:    clock,
 		localStatus:     emptyNodeStatus(config.Name),
 		metricsListener: metricsListener,
-		Timeline:        timeline.NewTimeline(256),
+		Timeline:        history.NewMemTimeline(config.MaxHistory),
+		done:            make(chan struct{}),
 	}
 
 	agent.rpc, err = newRPCServer(agent, config.CAFile, config.CertFile, config.KeyFile, config.RPCAddrs)
@@ -223,7 +227,7 @@ type agent struct {
 	Config
 
 	// DEMO
-	Timeline timeline.Timeline
+	Timeline history.Timeline
 }
 
 // DialRPC returns RPC client for the provided Serf member.
@@ -237,7 +241,6 @@ func (r *agent) GetConfig() Config {
 // Start starts the agent's background tasks.
 func (r *agent) Start() error {
 	errChan := make(chan error, 1)
-	r.done = make(chan struct{})
 
 	go r.statusUpdateLoop()
 
@@ -467,7 +470,7 @@ func (r *agent) statusUpdateLoop() {
 					}
 					r.Timeline.RecordStatus(status)
 					log.WithField("status", status).Debug("BERD RecordStatus")
-					timeline := r.Timeline.GetTimeline()
+					timeline := r.Timeline.GetEvents()
 					log.WithField("timeline", timeline).Debug("BERD GetTimeline")
 				}
 				select {

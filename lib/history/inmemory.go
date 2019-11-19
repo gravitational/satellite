@@ -1,112 +1,55 @@
-/*
-Copyright 2019 Gravitational, Inc.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
-// Package timeline provides interfaces for keeping track of cluster status events.
-package timeline
+package history
 
 import (
-	"fmt"
-	"strings"
-	"time"
-
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 )
 
-// Stamp defines default timestamp format for events.
-const Stamp = "Jan _2 15:04:05"
-
-// Event represents a Timeline event. An event occurrs  whenever there is a
-// change in the cluster status. An event could be triggered by a failed
-// heartbeat or a failed health check.
-type Event struct {
-	// TimeStamp specifies when the event occurred.
-	TimeStamp time.Time
-
-	// TODO: can we rely on user CLI sessions to provide colored text?
-	// If not, maybe we should indicate the different event types a different
-	// way.
-
-	// Color specifies the color of the event.
-	// Red -> Indicates change has caused state to degraded.
-	// Yellow -> Indicates change has not caused any state changes.
-	// Green -> Indicates changes has caused state to recover.
-	Color string
-
-	// Description specifies a description of the event.
-	Description string
-}
-
-// NewEvent initializes and returns a new Event with the current timestamp.
-func NewEvent() Event {
-	return Event{
-		TimeStamp: time.Now(),
-	}
-}
-
-// String returns a string representation of Event.
-func (e *Event) String() string {
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("[%s] ", e.TimeStamp.Format(Stamp)))
-	sb.WriteString(e.Description)
-	return sb.String()
-}
-
-// Timeline represents a timeline of cluster status events. The Timeline
+// MemTimeline represents a timeline of cluster status events. The Timeline
 // can hold a specified amount of events and uses a FIFO eviction policy.
-type Timeline struct {
+// Timeline events are only stored in memory.
+//
+// Implements Timeline
+type MemTimeline struct {
 	// Size specifies the max size of the timeline.
 	Size int
-	// Timeline holds the latest status events.
-	Timeline []string
-	// Cluster holds the latest cluster status.
-	Cluster *Cluster
+	// Events holds the latest status events.
+	Events []Event
+	// LastStatus holds the last recorded cluster status.
+	LastStatus *Cluster
 }
 
-// NewTimeline initializes and returns a new StatusTimeline with the
-// specified size.
-func NewTimeline(size int) Timeline {
-	return Timeline{
-		Size:     size,
-		Timeline: []string{},
-		Cluster:  &Cluster{},
+// NewMemTimeline initializes and returns a new MemTimeline with the specified
+// size.
+func NewMemTimeline(size int) Timeline {
+	return &MemTimeline{
+		Size:       size,
+		Events:     make([]Event, 0, size),
+		LastStatus: &Cluster{},
 	}
 }
 
 // RecordStatus records differences of the previous status to the provided
 // status into the Timeline.
-func (t *Timeline) RecordStatus(status *pb.SystemStatus) {
+func (t *MemTimeline) RecordStatus(status *pb.SystemStatus) {
 	cluster := parseSystemStatus(status)
-	events := t.Cluster.diffCluster(cluster)
+	events := t.LastStatus.diffCluster(cluster)
 	for _, event := range events {
 		t.addEvent(event)
 	}
-	t.Cluster = cluster
+	t.LastStatus = cluster
 }
 
-// GetTimeline returns the current timeline.
-func (t *Timeline) GetTimeline() []string {
-	return t.Timeline
+// GetEvents returns the current timeline.
+func (t *MemTimeline) GetEvents() []Event {
+	return t.Events
 }
 
 // addEvent appends the provided event to the timeline.
-func (t *Timeline) addEvent(event Event) {
-	if len(t.Timeline) > t.Size {
-		t.Timeline = t.Timeline[1:]
+func (t *MemTimeline) addEvent(event Event) {
+	if len(t.Events) > t.Size {
+		t.Events = t.Events[1:]
 	}
-	t.Timeline = append(t.Timeline, event.String())
+	t.Events = append(t.Events, event)
 }
 
 // Cluster represents the overall status of a cluster.
@@ -117,15 +60,21 @@ type Cluster struct {
 	Nodes map[string]*Node
 }
 
-// difCluster calculates the differences from the provided cluster and returns
+// diffCluster calculates the differences from the provided cluster and returns
 // the differences as a list of events.
 func (c *Cluster) diffCluster(cluster *Cluster) []Event {
 	events := []Event{}
 
 	// Compare cluster status
 	if c.Status != cluster.Status {
-		event := NewEvent()
-		event.Description = fmt.Sprintf("cluster status changed from [%s] to [%s]", c.Status, cluster.Status)
+		var event Event
+		if cluster.Status == pb.SystemStatus_Running.String() {
+			event = NewClusterRecoveredEvent()
+		} else {
+			event = NewClusterDegradedEvent()
+		}
+		event.SetMetadata("old", c.Status)
+		event.SetMetadata("new", cluster.Status)
 		events = append(events, event)
 	}
 
@@ -138,9 +87,13 @@ func (c *Cluster) diffCluster(cluster *Cluster) []Event {
 	// Nodes added or modified
 	for name, newNode := range cluster.Nodes {
 		if oldNode, ok := c.Nodes[name]; !ok {
-			event := NewEvent()
-			event.Description = fmt.Sprintf("[%s] has been added to the cluster", name)
+			event := NewNodeAddedEvent()
+			event.SetMetadata("node", name)
+			event.SetMetadata("new", newNode.Status)
 			events = append(events, event)
+
+			// Added probes as well.
+			events = append(events, (&Node{}).diffNode(newNode)...)
 		} else {
 			events = append(events, oldNode.diffNode(newNode)...)
 			delete(removed, name)
@@ -149,8 +102,9 @@ func (c *Cluster) diffCluster(cluster *Cluster) []Event {
 
 	// Nodes removed from the cluster
 	for name := range removed {
-		event := NewEvent()
-		event.Description = fmt.Sprintf("[%s] has been removed from the cluster", name)
+		event := NewNodeRemovedEvent()
+		event.SetMetadata("node", name)
+		event.SetMetadata("old", c.Nodes[name].Status)
 		events = append(events, event)
 	}
 
@@ -176,8 +130,15 @@ func (n *Node) diffNode(node *Node) []Event {
 
 	// Compare node status
 	if n.Status != node.Status {
-		event := NewEvent()
-		event.Description = fmt.Sprintf("[%s] status changed from [%s] to [%s]", n.Name, n.Status, node.Status)
+		var event Event
+		if node.Status == pb.NodeStatus_Running.String() {
+			event = NewNodeRecoveredEvent()
+		} else {
+			event = NewNodeDegradedEvent()
+		}
+		event.SetMetadata("node", n.Name)
+		event.SetMetadata("old", n.Status)
+		event.SetMetadata("new", node.Status)
 		events = append(events, event)
 	}
 
@@ -190,8 +151,11 @@ func (n *Node) diffNode(node *Node) []Event {
 	// Probes added or modified
 	for name, newProbe := range node.Probes {
 		if oldProbe, ok := n.Probes[name]; !ok {
-			event := NewEvent()
-			event.Description = fmt.Sprintf("[%s:%s] probe has been added to node [%s]", n.Name, name, n.Name)
+			event := NewProbeAddedEvent()
+			event.SetMetadata("node", n.Name)
+			event.SetMetadata("probe", name)
+			event.SetMetadata("new", newProbe.Status)
+			event.SetMetadata("detail", newProbe.Detail)
 			events = append(events, event)
 		} else {
 			events = append(events, oldProbe.diffProbe(n.Name, newProbe)...)
@@ -201,8 +165,9 @@ func (n *Node) diffNode(node *Node) []Event {
 
 	// Probes removed from the node
 	for name := range removed {
-		event := NewEvent()
-		event.Description = fmt.Sprintf("[%s:%s] probe has been removed from node [%s]", n.Name, name, n.Name)
+		event := NewProbeRemovedEvent()
+		event.SetMetadata("node", n.Name)
+		event.SetMetadata("old", n.Probes[name].Status)
 		events = append(events, event)
 	}
 
@@ -233,9 +198,17 @@ type Probe struct {
 func (p *Probe) diffProbe(nodeName string, probe *Probe) []Event {
 	events := []Event{}
 	if p.Status != probe.Status {
-		event := NewEvent()
-		desc := fmt.Sprintf("[%s:%s] status changed from [%s] to [%s]", nodeName, p.Name, p.Status, probe.Status)
-		event.Description = desc
+		var event Event
+		if probe.Status == pb.Probe_Running.String() {
+			event = NewProbePassedEvent()
+		} else {
+			event = NewProbeFailedEvent()
+		}
+		event.SetMetadata("node", nodeName)
+		event.SetMetadata("probe", p.Name)
+		event.SetMetadata("old", p.Status)
+		event.SetMetadata("new", probe.Status)
+		event.SetMetadata("detail", probe.Detail)
 		events = append(events, event)
 	}
 	return events

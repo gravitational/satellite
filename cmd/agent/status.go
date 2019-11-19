@@ -96,7 +96,7 @@ func statusHistory(RPCPort int, caFile, certFile, keyFile string) (ok bool, err 
 		return false, trace.Wrap(err)
 	}
 
-	for _, entry := range timeline.GetTimeline() {
+	for _, entry := range timeline.GetEvents() {
 		fmt.Println(entry)
 	}
 

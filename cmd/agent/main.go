@@ -60,6 +60,7 @@ func run() error {
 		cagentMetricsAddr           = cagent.Flag("metrics-addr", "Address to listen on for web interface and telemetry for Prometheus metrics").Default("127.0.0.1:7580").String()
 		cagentInitialCluster        = KeyValueListFlag(cagent.Flag("initial-cluster", "Initial cluster configuration as a comma-separated list of peers").OverrideDefaultFromEnvar(EnvInitialCluster))
 		cagentTags                  = KeyValueListFlag(cagent.Flag("tags", "Define a tags as comma-separated list of key:value pairs").OverrideDefaultFromEnvar(EnvTags))
+		cagentMaxHistory            = cagent.Flag("max-history", "Max number of timeline events to store").Default("256").Int()
 		disableInterPodCheck        = cagent.Flag("disable-interpod-check", "Disable inter-pod check for single node cluster").Bool()
 		// etcd configuration
 		cagentEtcdServers  = ListFlag(cagent.Flag("etcd-servers", "List of etcd endpoints (http://host:port), comma separated").Default("http://127.0.0.1:2379"))
@@ -153,6 +154,7 @@ func run() error {
 			CAFile:      *cagentCAFile,
 			CertFile:    *cagentCertFile,
 			KeyFile:     *cagentKeyFile,
+			MaxHistory:  *cagentMaxHistory,
 		}
 		monitoringConfig := &config{
 			role:                 agent.Role(agentRole),
