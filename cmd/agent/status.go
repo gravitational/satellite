@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gravitational/satellite/agent"
@@ -96,9 +97,24 @@ func statusHistory(RPCPort int, caFile, certFile, keyFile string) (ok bool, err 
 		return false, trace.Wrap(err)
 	}
 
+	var sb strings.Builder
 	for _, entry := range timeline.GetEvents() {
-		fmt.Println(entry)
+
+		// Get timestamp
+		ts := time.Unix(entry.GetTimestamp().GetSeconds(), 0)
+		sb.WriteString(fmt.Sprintf("[%s] ", ts.Format(Stamp)))
+
+		// Get metadata
+		for key, val := range entry.GetMetadata() {
+			sb.WriteString(fmt.Sprintf(", %s=%s", key, val))
+		}
+
+		fmt.Println(sb.String())
+		sb.Reset()
 	}
 
 	return true, nil
 }
+
+// Stamp is default timestamp format.
+const Stamp = "Jan _2 15:04:05"
