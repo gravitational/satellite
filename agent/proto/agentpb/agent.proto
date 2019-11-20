@@ -140,11 +140,9 @@ message TimelineEvent {
     NodeRemoved = 3;
     NodeRecovered = 4;
     NodeDegraded = 5;
-    ProbeAdded = 6;
-    ProbeRemoved = 7;
-    ProbePassed = 8;
-    ProbeFailed = 9;
-    Unknown = 10;
+    ProbePassed = 6;
+    ProbeFailed = 7;
+    Unknown = 8;
   }
   
   // Type specifies the event type.

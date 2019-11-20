@@ -75,16 +75,6 @@ func NewNodeDegradedEvent() *Event {
 	return newEvent(NodeDegraded)
 }
 
-// NewProbeAddedEvent initializes and returns a new probe added event.
-func NewProbeAddedEvent() *Event {
-	return newEvent(ProbeAdded)
-}
-
-// NewProbeRemovedEvent initializes and returns a new probe removed event.
-func NewProbeRemovedEvent() *Event {
-	return newEvent(ProbeRemoved)
-}
-
 // NewProbePassedEvent initializes and returns a new probe passed event.
 func NewProbePassedEvent() *Event {
 	return newEvent(ProbePassed)
@@ -130,10 +120,6 @@ const (
 	//NodeDegraded specifies an event that caused the cluster's state to degrade.
 	NodeDegraded = "NodeDegraded"
 
-	// ProbeAdded specifies an event when a probe is added to a node.
-	ProbeAdded = "ProbeAdded"
-	// ProbeRemoved specifies an event when a probe is removed from a node.
-	ProbeRemoved = "ProbeRemoved"
 	// ProbePassed specifies an event when a probe result changed to passsing.
 	ProbePassed = "ProbePassed"
 	// ProbeFailed specifies an event when a probe result changed to failing.
@@ -155,10 +141,6 @@ func (t EventType) ToProto() pb.TimelineEvent_Type {
 		return pb.TimelineEvent_NodeRecovered
 	case NodeDegraded:
 		return pb.TimelineEvent_NodeDegraded
-	case ProbeAdded:
-		return pb.TimelineEvent_ProbeAdded
-	case ProbeRemoved:
-		return pb.TimelineEvent_ProbeRemoved
 	case ProbePassed:
 		return pb.TimelineEvent_ProbePassed
 	case ProbeFailed:

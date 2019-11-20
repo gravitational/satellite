@@ -74,10 +74,7 @@ func (c *Cluster) diffCluster(cluster *Cluster) []*Event {
 		// Nodes added to the cluster
 		event := NewNodeAddedEvent()
 		event.SetMetadata("node", name)
-		event.SetMetadata("new", newNode.Status)
 		events = append(events, event)
-
-		// Add new probes as well.
 		events = append(events, (&Node{}).diffNode(newNode)...)
 	}
 
@@ -85,7 +82,6 @@ func (c *Cluster) diffCluster(cluster *Cluster) []*Event {
 	for name := range removed {
 		event := NewNodeRemovedEvent()
 		event.SetMetadata("node", name)
-		event.SetMetadata("old", c.Nodes[name].Status)
 		events = append(events, event)
 	}
 
@@ -123,34 +119,10 @@ func (n *Node) diffNode(node *Node) []*Event {
 		events = append(events, event)
 	}
 
-	// Keep track of removed probes
-	removed := map[string]bool{}
-	for name := range n.Probes {
-		removed[name] = true
-	}
-
 	for name, newProbe := range node.Probes {
-		// Probes modified
 		if oldProbe, ok := n.Probes[name]; ok {
 			events = append(events, oldProbe.diffProbe(node.Name, newProbe)...)
-			delete(removed, name)
-			continue
 		}
-
-		// Probes added to the node
-		event := NewProbeAddedEvent()
-		event.SetMetadata("node", node.Name)
-		event.SetMetadata("probe", name)
-		event.SetMetadata("new", newProbe.Status)
-		events = append(events, event)
-	}
-
-	// Probes removed from the node
-	for name := range removed {
-		event := NewProbeRemovedEvent()
-		event.SetMetadata("node", node.Name)
-		event.SetMetadata("old", n.Probes[name].Status)
-		events = append(events, event)
 	}
 
 	return events
@@ -212,7 +184,7 @@ func parseSystemStatus(status *pb.SystemStatus) *Cluster {
 func parseNodeStatus(nodeStatus *pb.NodeStatus) *Node {
 	node := &Node{
 		Name:   nodeStatus.GetName(),
-		Status: nodeStatus.GetMemberStatus().GetStatus().String(),
+		Status: nodeStatus.GetStatus().String(),
 	}
 
 	probes := map[string]*Probe{}
