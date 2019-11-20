@@ -103,10 +103,9 @@ func (e *Event) SetMetadata(key, value string) {
 // ToProto converts Event into protobuf message.
 func (e *Event) ToProto() *pb.TimelineEvent {
 	return &pb.TimelineEvent{
-		// TODO: not sure if correct way to record timestamp...
 		Timestamp: &pb.Timestamp{
-			Seconds:     int64(e.timeStamp.UTC().Second()),
-			Nanoseconds: int32(e.timeStamp.UTC().Nanosecond()),
+			Seconds:     e.timeStamp.Unix(),
+			Nanoseconds: int32(e.timeStamp.UnixNano()),
 		},
 		Type:     e.eventType.ToProto(),
 		Metadata: e.metadata,
