@@ -26,7 +26,7 @@ import (
 // Event represents a single timeline event. An event exposes a type and
 // metadata.
 type Event struct {
-	// timeStamp specifies the when the event occurred.
+	// timeStamp specifies the time when the event occurred.
 	timeStamp time.Time
 	// eventType specifies the type of event.
 	eventType EventType

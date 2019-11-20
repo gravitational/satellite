@@ -63,20 +63,22 @@ func (c *Cluster) diffCluster(cluster *Cluster) []*Event {
 		removed[name] = true
 	}
 
-	// Nodes added or modified
 	for name, newNode := range cluster.Nodes {
-		if oldNode, ok := c.Nodes[name]; !ok {
-			event := NewNodeAddedEvent()
-			event.SetMetadata("node", name)
-			event.SetMetadata("new", newNode.Status)
-			events = append(events, event)
-
-			// Add new probes as well.
-			events = append(events, (&Node{}).diffNode(newNode)...)
-		} else {
+		// Nodes modified
+		if oldNode, ok := c.Nodes[name]; ok {
 			events = append(events, oldNode.diffNode(newNode)...)
 			delete(removed, name)
+			continue
 		}
+
+		// Nodes added to the cluster
+		event := NewNodeAddedEvent()
+		event.SetMetadata("node", name)
+		event.SetMetadata("new", newNode.Status)
+		events = append(events, event)
+
+		// Add new probes as well.
+		events = append(events, (&Node{}).diffNode(newNode)...)
 	}
 
 	// Nodes removed from the cluster
@@ -115,7 +117,7 @@ func (n *Node) diffNode(node *Node) []*Event {
 		} else {
 			event = NewNodeDegradedEvent()
 		}
-		event.SetMetadata("node", n.Name)
+		event.SetMetadata("node", node.Name)
 		event.SetMetadata("old", n.Status)
 		event.SetMetadata("new", node.Status)
 		events = append(events, event)
@@ -127,25 +129,27 @@ func (n *Node) diffNode(node *Node) []*Event {
 		removed[name] = true
 	}
 
-	// Probes added or modified
 	for name, newProbe := range node.Probes {
-		if oldProbe, ok := n.Probes[name]; !ok {
-			event := NewProbeAddedEvent()
-			event.SetMetadata("node", n.Name)
-			event.SetMetadata("probe", name)
-			event.SetMetadata("new", newProbe.Status)
-			event.SetMetadata("detail", newProbe.Detail)
-			events = append(events, event)
-		} else {
-			events = append(events, oldProbe.diffProbe(n.Name, newProbe)...)
+		// Probes modified
+		if oldProbe, ok := n.Probes[name]; ok {
+			events = append(events, oldProbe.diffProbe(node.Name, newProbe)...)
 			delete(removed, name)
+			continue
 		}
+
+		// Probes added to the node
+		event := NewProbeAddedEvent()
+		event.SetMetadata("node", node.Name)
+		event.SetMetadata("probe", name)
+		event.SetMetadata("new", newProbe.Status)
+		event.SetMetadata("detail", newProbe.Detail)
+		events = append(events, event)
 	}
 
 	// Probes removed from the node
 	for name := range removed {
 		event := NewProbeRemovedEvent()
-		event.SetMetadata("node", n.Name)
+		event.SetMetadata("node", node.Name)
 		event.SetMetadata("old", n.Probes[name].Status)
 		events = append(events, event)
 	}

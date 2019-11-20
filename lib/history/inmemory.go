@@ -53,6 +53,9 @@ func NewMemTimeline(size int) Timeline {
 func (t *MemTimeline) RecordStatus(status *pb.SystemStatus) {
 	cluster := parseSystemStatus(status)
 	events := t.LastStatus.diffCluster(cluster)
+	if len(events) == 0 {
+		return
+	}
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
