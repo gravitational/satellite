@@ -23,6 +23,7 @@ destroy:
 status:
 	vagrant status
 
+# initialize ansible ssh config and inventory
 .PHONY: ansible-inventory
 ansible-inventory:
 	vagrant ssh-config | tee '$(CWD)/ansible/ssh-config'
@@ -38,6 +39,7 @@ ansible-inventory:
 		echo "$${machines[0]}" ; \
 	) | tee '$(CWD)/ansible/inventory'
 
+# execute ansible playbooks
 .PHONY: ansible-%
 ansible-%:  ansible-inventory
 	ansible-playbook \

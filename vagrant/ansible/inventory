@@ -1,8 +1,0 @@
-[local]
-localhost ansible_connection=local
-[nodes]
-k8s-master
-node-1
-node-2
-[first]
-k8s-master
