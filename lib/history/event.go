@@ -17,7 +17,6 @@ limitations under the License.
 package history
 
 import (
-	"sync"
 	"time"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
@@ -30,13 +29,12 @@ type Event struct {
 	timeStamp time.Time
 	// eventType specifies the type of event.
 	eventType EventType
-	// mu locks access to metadata
-	mu sync.Mutex
 	// metadata is a collection of event-specific metadata.
 	metadata map[string]string
 }
 
 // newEvent initializes and returns a new Event with the specified eventType.
+// TODO: Pass metadata into constructor
 func newEvent(eventType EventType) *Event {
 	return &Event{
 		timeStamp: time.Now(),
@@ -99,16 +97,13 @@ func NewProbeFailedEvent() *Event {
 
 // SetMetadata stores the key/value pair in event metadata.
 func (e *Event) SetMetadata(key, value string) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
 	e.metadata[key] = value
 }
 
 // ToProto converts Event into protobuf message.
 func (e *Event) ToProto() *pb.TimelineEvent {
-	e.mu.Lock()
-	defer e.mu.Unlock()
 	return &pb.TimelineEvent{
+		// TODO: not sure if correct way to record timestamp...
 		Timestamp: &pb.Timestamp{
 			Seconds:     int64(e.timeStamp.UTC().Second()),
 			Nanoseconds: int32(e.timeStamp.UTC().Nanosecond()),
