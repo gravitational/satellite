@@ -173,6 +173,11 @@ func newHealthHandler(s *server) http.HandlerFunc {
 			return
 		}
 
+		if r.URL.Path == "history" || r.URL.Path == "/history/" {
+			handleHistory(ctx, s, w, r)
+			return
+		}
+
 		status, err := s.Status(ctx, nil)
 		if err != nil {
 			roundtrip.ReplyJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
@@ -201,6 +206,18 @@ func handleLocalStatus(ctx context.Context, s *server, w http.ResponseWriter, r 
 	}
 
 	roundtrip.ReplyJSON(w, httpStatus, status.GetStatus())
+}
+
+// handleHistory handles status history API call.
+func handleHistory(ctx context.Context, s *server, w http.ResponseWriter, r *http.Request) {
+	timeline, err := s.Timeline(ctx, nil)
+	if err != nil {
+		roundtrip.ReplyJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+		return
+	}
+
+	httpStatus := http.StatusOK
+	roundtrip.ReplyJSON(w, httpStatus, timeline.GetEvents())
 }
 
 // grpcHandlerFunc returns an http.Handler that delegates to
