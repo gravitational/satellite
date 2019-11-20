@@ -134,7 +134,6 @@ func (n *Node) diffNode(node *Node) []*Event {
 			event.SetMetadata("node", n.Name)
 			event.SetMetadata("probe", name)
 			event.SetMetadata("new", newProbe.Status)
-			event.SetMetadata("detail", newProbe.Detail)
 			events = append(events, event)
 		} else {
 			events = append(events, oldProbe.diffProbe(n.Name, newProbe)...)
@@ -159,7 +158,7 @@ func (n *Node) diffNode(node *Node) []*Event {
 // - Checker -> Name
 // - CheckerData
 // - Code
-// - Detail -> Detail
+// - Detail [X] Output might be too large
 // - Error
 // - Severity
 // - Status -> Status
@@ -168,8 +167,6 @@ type Probe struct {
 	Name string
 	// Status specifies the result of the probe.
 	Status string
-	// Detail specifies any specific details attached to the probe.
-	Detail string
 }
 
 // diffProbe calculates the differences from the provided probe and returns the
@@ -187,7 +184,6 @@ func (p *Probe) diffProbe(nodeName string, probe *Probe) []*Event {
 		event.SetMetadata("probe", p.Name)
 		event.SetMetadata("old", p.Status)
 		event.SetMetadata("new", probe.Status)
-		event.SetMetadata("detail", probe.Detail)
 		events = append(events, event)
 	}
 	return events
@@ -229,6 +225,5 @@ func parseProbeStatus(probeStatus *pb.Probe) *Probe {
 	return &Probe{
 		Name:   probeStatus.GetChecker(),
 		Status: probeStatus.GetStatus().String(),
-		Detail: probeStatus.GetDetail(),
 	}
 }
