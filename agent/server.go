@@ -173,7 +173,7 @@ func newHealthHandler(s *server) http.HandlerFunc {
 			return
 		}
 
-		if r.URL.Path == "history" || r.URL.Path == "/history/" {
+		if r.URL.Path == "/history" || r.URL.Path == "/history/" {
 			handleHistory(ctx, s, w, r)
 			return
 		}
