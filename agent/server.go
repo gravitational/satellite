@@ -217,7 +217,7 @@ func handleHistory(ctx context.Context, s *server, w http.ResponseWriter, r *htt
 	}
 
 	httpStatus := http.StatusOK
-	roundtrip.ReplyJSON(w, httpStatus, timeline.GetEvents())
+	roundtrip.ReplyJSON(w, httpStatus, timeline)
 }
 
 // grpcHandlerFunc returns an http.Handler that delegates to
