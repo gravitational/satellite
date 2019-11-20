@@ -44,6 +44,7 @@ type RPCServer interface {
 	Status(context.Context, *pb.StatusRequest) (*pb.StatusResponse, error)
 	LocalStatus(context.Context, *pb.LocalStatusRequest) (*pb.LocalStatusResponse, error)
 	Time(context.Context, *pb.TimeRequest) (*pb.TimeResponse, error)
+	Timeline(context.Context, *pb.TimelineResponse) (*pb.TimelineResponse, error)
 	Stop()
 }
 
