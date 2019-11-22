@@ -1122,7 +1122,7 @@ type AgentClient interface {
 	LocalStatus(ctx context.Context, in *LocalStatusRequest, opts ...grpc.CallOption) (*LocalStatusResponse, error)
 	// Time requests the node's local time in UTC
 	Time(ctx context.Context, in *TimeRequest, opts ...grpc.CallOption) (*TimeResponse, error)
-	// Timeline collects the status Timeline
+	// Timeline collects the status timeline
 	Timeline(ctx context.Context, in *TimelineRequest, opts ...grpc.CallOption) (*TimelineResponse, error)
 }
 
@@ -1178,7 +1178,7 @@ type AgentServer interface {
 	LocalStatus(context.Context, *LocalStatusRequest) (*LocalStatusResponse, error)
 	// Time requests the node's local time in UTC
 	Time(context.Context, *TimeRequest) (*TimeResponse, error)
-	// Timeline collects the status Timeline
+	// Timeline collects the status timeline
 	Timeline(context.Context, *TimelineRequest) (*TimelineResponse, error)
 }
 

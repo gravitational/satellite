@@ -85,11 +85,6 @@ func NewProbeFailedEvent() *Event {
 	return newEvent(ProbeFailed)
 }
 
-// SetMetadata stores the key/value pair in event metadata.
-func (e *Event) SetMetadata(key, value string) {
-	e.metadata[key] = value
-}
-
 // ToProto converts Event into protobuf message.
 func (e *Event) ToProto() *pb.TimelineEvent {
 	return &pb.TimelineEvent{
@@ -100,6 +95,11 @@ func (e *Event) ToProto() *pb.TimelineEvent {
 		Type:     e.eventType.ToProto(),
 		Metadata: e.metadata,
 	}
+}
+
+// setMetadata stores the key/value pair in event metadata.
+func (e *Event) setMetadata(key, value string) {
+	e.metadata[key] = value
 }
 
 // EventType specifies the type of event.

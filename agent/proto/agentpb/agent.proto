@@ -165,6 +165,6 @@ service Agent {
   rpc LocalStatus(LocalStatusRequest) returns (LocalStatusResponse) {}
   // Time requests the node's local time in UTC
   rpc Time(TimeRequest) returns (TimeResponse) {}
-  // Timeline collects the status Timeline
+  // Timeline collects the status timeline
   rpc Timeline(TimelineRequest) returns (TimelineResponse) {}
 }

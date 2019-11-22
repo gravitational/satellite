@@ -52,8 +52,8 @@ func (c *Cluster) diffCluster(cluster *Cluster) []*Event {
 		} else {
 			event = NewClusterDegradedEvent()
 		}
-		event.SetMetadata("old", c.Status)
-		event.SetMetadata("new", cluster.Status)
+		event.setMetadata("old", c.Status)
+		event.setMetadata("new", cluster.Status)
 		events = append(events, event)
 	}
 
@@ -73,7 +73,7 @@ func (c *Cluster) diffCluster(cluster *Cluster) []*Event {
 
 		// Nodes added to the cluster
 		event := NewNodeAddedEvent()
-		event.SetMetadata("node", name)
+		event.setMetadata("node", name)
 		events = append(events, event)
 		events = append(events, (&Node{}).diffNode(newNode)...)
 	}
@@ -81,7 +81,7 @@ func (c *Cluster) diffCluster(cluster *Cluster) []*Event {
 	// Nodes removed from the cluster
 	for name := range removed {
 		event := NewNodeRemovedEvent()
-		event.SetMetadata("node", name)
+		event.setMetadata("node", name)
 		events = append(events, event)
 	}
 
@@ -113,9 +113,9 @@ func (n *Node) diffNode(node *Node) []*Event {
 		} else {
 			event = NewNodeDegradedEvent()
 		}
-		event.SetMetadata("node", node.Name)
-		event.SetMetadata("old", n.Status)
-		event.SetMetadata("new", node.Status)
+		event.setMetadata("node", node.Name)
+		event.setMetadata("old", n.Status)
+		event.setMetadata("new", node.Status)
 		events = append(events, event)
 	}
 
@@ -156,10 +156,10 @@ func (p *Probe) diffProbe(nodeName string, probe *Probe) []*Event {
 		} else {
 			event = NewProbeFailedEvent()
 		}
-		event.SetMetadata("node", nodeName)
-		event.SetMetadata("probe", p.Name)
-		event.SetMetadata("old", p.Status)
-		event.SetMetadata("new", probe.Status)
+		event.setMetadata("node", nodeName)
+		event.setMetadata("probe", p.Name)
+		event.setMetadata("old", p.Status)
+		event.setMetadata("new", probe.Status)
 		events = append(events, event)
 	}
 	return events
