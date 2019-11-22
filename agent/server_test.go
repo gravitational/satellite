@@ -578,6 +578,7 @@ func (r *AgentSuite) newAgent(node string, rpcPort int, members []serf.Member,
 		recycleClock: recycleClock,
 		localStatus:  emptyNodeStatus(node),
 		Timeline:     history.NewMemTimeline(256),
+		done:         make(chan struct{}),
 	}
 }
 
