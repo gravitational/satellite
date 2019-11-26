@@ -31,6 +31,8 @@ type Timeline interface {
 	RecordStatus(status *pb.SystemStatus)
 	// GetEvents returns the currently stored list of events.
 	GetEvents() []*Event
+	// TODO: Add method to query/filter events.
+	// Query(...) []*Event
 }
 
 // Cluster represents the overall status of a cluster.
