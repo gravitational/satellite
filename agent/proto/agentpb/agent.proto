@@ -126,6 +126,37 @@ message TimeResponse {
   Timestamp timestamp = 1;
 }
 
+message TimelineRequest {}
+
+message TimelineEvent {
+  // Timestamp is the node's local timestamp in UTC.
+  Timestamp timestamp = 1;
+  
+  // Type defines the possible event types.
+  enum Type {
+    ClusterRecovered = 0;
+    ClusterDegraded = 1;
+    NodeAdded = 2;
+    NodeRemoved = 3;
+    NodeRecovered = 4;
+    NodeDegraded = 5;
+    ProbePassed = 6;
+    ProbeFailed = 7;
+    Unknown = 8;
+  }
+  
+  // Type specifies the event type.
+  Type type = 2; 
+  
+  // Metadata contains the event-specific metadata.
+  map<string, string> metadata = 3;
+}
+
+message TimelineResponse {
+  // Events contains a list of timeline events that occurred.
+  repeated TimelineEvent events = 1;
+}
+
 // Agent describes the API provided by GRPC agents
 service Agent {
   // Status collects the global cluster status
@@ -134,4 +165,6 @@ service Agent {
   rpc LocalStatus(LocalStatusRequest) returns (LocalStatusResponse) {}
   // Time requests the node's local time in UTC
   rpc Time(TimeRequest) returns (TimeResponse) {}
+  // Timeline collects the status timeline
+  rpc Timeline(TimelineRequest) returns (TimelineResponse) {}
 }

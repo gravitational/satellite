@@ -177,6 +177,53 @@ func (Probe_Severity) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_56ede974c0020f77, []int{7, 1}
 }
 
+// Type defines the possible event types.
+type TimelineEvent_Type int32
+
+const (
+	TimelineEvent_ClusterRecovered TimelineEvent_Type = 0
+	TimelineEvent_ClusterDegraded  TimelineEvent_Type = 1
+	TimelineEvent_NodeAdded        TimelineEvent_Type = 2
+	TimelineEvent_NodeRemoved      TimelineEvent_Type = 3
+	TimelineEvent_NodeRecovered    TimelineEvent_Type = 4
+	TimelineEvent_NodeDegraded     TimelineEvent_Type = 5
+	TimelineEvent_ProbePassed      TimelineEvent_Type = 6
+	TimelineEvent_ProbeFailed      TimelineEvent_Type = 7
+	TimelineEvent_Unknown          TimelineEvent_Type = 8
+)
+
+var TimelineEvent_Type_name = map[int32]string{
+	0: "ClusterRecovered",
+	1: "ClusterDegraded",
+	2: "NodeAdded",
+	3: "NodeRemoved",
+	4: "NodeRecovered",
+	5: "NodeDegraded",
+	6: "ProbePassed",
+	7: "ProbeFailed",
+	8: "Unknown",
+}
+
+var TimelineEvent_Type_value = map[string]int32{
+	"ClusterRecovered": 0,
+	"ClusterDegraded":  1,
+	"NodeAdded":        2,
+	"NodeRemoved":      3,
+	"NodeRecovered":    4,
+	"NodeDegraded":     5,
+	"ProbePassed":      6,
+	"ProbeFailed":      7,
+	"Unknown":          8,
+}
+
+func (x TimelineEvent_Type) String() string {
+	return proto.EnumName(TimelineEvent_Type_name, int32(x))
+}
+
+func (TimelineEvent_Type) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_56ede974c0020f77, []int{12, 0}
+}
+
 type StatusRequest struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -815,12 +862,166 @@ func (m *TimeResponse) GetTimestamp() *Timestamp {
 	return nil
 }
 
+type TimelineRequest struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *TimelineRequest) Reset()         { *m = TimelineRequest{} }
+func (m *TimelineRequest) String() string { return proto.CompactTextString(m) }
+func (*TimelineRequest) ProtoMessage()    {}
+func (*TimelineRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_56ede974c0020f77, []int{11}
+}
+func (m *TimelineRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *TimelineRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_TimelineRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *TimelineRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TimelineRequest.Merge(m, src)
+}
+func (m *TimelineRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *TimelineRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_TimelineRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_TimelineRequest proto.InternalMessageInfo
+
+type TimelineEvent struct {
+	// Timestamp is the node's local timestamp in UTC.
+	Timestamp *Timestamp `protobuf:"bytes,1,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	// Type specifies the event type.
+	Type TimelineEvent_Type `protobuf:"varint,2,opt,name=type,proto3,enum=agentpb.TimelineEvent_Type" json:"type,omitempty"`
+	// Metadata contains the event-specific metadata.
+	Metadata             map[string]string `protobuf:"bytes,3,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
+	XXX_unrecognized     []byte            `json:"-"`
+	XXX_sizecache        int32             `json:"-"`
+}
+
+func (m *TimelineEvent) Reset()         { *m = TimelineEvent{} }
+func (m *TimelineEvent) String() string { return proto.CompactTextString(m) }
+func (*TimelineEvent) ProtoMessage()    {}
+func (*TimelineEvent) Descriptor() ([]byte, []int) {
+	return fileDescriptor_56ede974c0020f77, []int{12}
+}
+func (m *TimelineEvent) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *TimelineEvent) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_TimelineEvent.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *TimelineEvent) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TimelineEvent.Merge(m, src)
+}
+func (m *TimelineEvent) XXX_Size() int {
+	return m.Size()
+}
+func (m *TimelineEvent) XXX_DiscardUnknown() {
+	xxx_messageInfo_TimelineEvent.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_TimelineEvent proto.InternalMessageInfo
+
+func (m *TimelineEvent) GetTimestamp() *Timestamp {
+	if m != nil {
+		return m.Timestamp
+	}
+	return nil
+}
+
+func (m *TimelineEvent) GetType() TimelineEvent_Type {
+	if m != nil {
+		return m.Type
+	}
+	return TimelineEvent_ClusterRecovered
+}
+
+func (m *TimelineEvent) GetMetadata() map[string]string {
+	if m != nil {
+		return m.Metadata
+	}
+	return nil
+}
+
+type TimelineResponse struct {
+	// Events contains a list of timeline events that occurred.
+	Events               []*TimelineEvent `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}         `json:"-"`
+	XXX_unrecognized     []byte           `json:"-"`
+	XXX_sizecache        int32            `json:"-"`
+}
+
+func (m *TimelineResponse) Reset()         { *m = TimelineResponse{} }
+func (m *TimelineResponse) String() string { return proto.CompactTextString(m) }
+func (*TimelineResponse) ProtoMessage()    {}
+func (*TimelineResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_56ede974c0020f77, []int{13}
+}
+func (m *TimelineResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *TimelineResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_TimelineResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *TimelineResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TimelineResponse.Merge(m, src)
+}
+func (m *TimelineResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *TimelineResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_TimelineResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_TimelineResponse proto.InternalMessageInfo
+
+func (m *TimelineResponse) GetEvents() []*TimelineEvent {
+	if m != nil {
+		return m.Events
+	}
+	return nil
+}
+
 func init() {
 	proto.RegisterEnum("agentpb.SystemStatus_Type", SystemStatus_Type_name, SystemStatus_Type_value)
 	proto.RegisterEnum("agentpb.MemberStatus_Type", MemberStatus_Type_name, MemberStatus_Type_value)
 	proto.RegisterEnum("agentpb.NodeStatus_Type", NodeStatus_Type_name, NodeStatus_Type_value)
 	proto.RegisterEnum("agentpb.Probe_Type", Probe_Type_name, Probe_Type_value)
 	proto.RegisterEnum("agentpb.Probe_Severity", Probe_Severity_name, Probe_Severity_value)
+	proto.RegisterEnum("agentpb.TimelineEvent_Type", TimelineEvent_Type_name, TimelineEvent_Type_value)
 	proto.RegisterType((*StatusRequest)(nil), "agentpb.StatusRequest")
 	proto.RegisterType((*StatusResponse)(nil), "agentpb.StatusResponse")
 	proto.RegisterType((*LocalStatusRequest)(nil), "agentpb.LocalStatusRequest")
@@ -833,58 +1034,74 @@ func init() {
 	proto.RegisterType((*Timestamp)(nil), "agentpb.Timestamp")
 	proto.RegisterType((*TimeRequest)(nil), "agentpb.TimeRequest")
 	proto.RegisterType((*TimeResponse)(nil), "agentpb.TimeResponse")
+	proto.RegisterType((*TimelineRequest)(nil), "agentpb.TimelineRequest")
+	proto.RegisterType((*TimelineEvent)(nil), "agentpb.TimelineEvent")
+	proto.RegisterMapType((map[string]string)(nil), "agentpb.TimelineEvent.MetadataEntry")
+	proto.RegisterType((*TimelineResponse)(nil), "agentpb.TimelineResponse")
 }
 
 func init() { proto.RegisterFile("agent.proto", fileDescriptor_56ede974c0020f77) }
 
 var fileDescriptor_56ede974c0020f77 = []byte{
-	// 735 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x55, 0xcf, 0x6e, 0xd3, 0x4e,
-	0x10, 0x8e, 0x1d, 0x3b, 0x7f, 0x26, 0x6e, 0x7e, 0xd6, 0x36, 0x6d, 0xad, 0xfc, 0x50, 0x08, 0x3e,
-	0xa0, 0x22, 0x44, 0xa8, 0x52, 0x21, 0x50, 0x41, 0x40, 0x4b, 0x01, 0x09, 0x95, 0x0a, 0xb9, 0x41,
-	0x1c, 0xab, 0x4d, 0x3c, 0x04, 0xab, 0xf1, 0x3a, 0xd8, 0x9b, 0xa0, 0xbc, 0x49, 0xdf, 0x08, 0x8e,
-	0xdc, 0xb8, 0xa2, 0x22, 0x21, 0xf1, 0x16, 0xc8, 0xeb, 0x75, 0x62, 0xa7, 0xa9, 0x80, 0xdb, 0xce,
-	0x37, 0x33, 0xdf, 0xcc, 0x7c, 0x19, 0x4f, 0xa0, 0x46, 0x87, 0xc8, 0x78, 0x67, 0x1c, 0x06, 0x3c,
-	0x20, 0x65, 0x61, 0x8c, 0xfb, 0xf6, 0x7f, 0xb0, 0x76, 0xc2, 0x29, 0x9f, 0x44, 0x0e, 0x7e, 0x9c,
-	0x60, 0xc4, 0xed, 0x27, 0x50, 0x4f, 0x81, 0x68, 0x1c, 0xb0, 0x08, 0xc9, 0x1d, 0x28, 0x45, 0x02,
-	0xb1, 0x94, 0xb6, 0xb2, 0x5d, 0xeb, 0x6e, 0x74, 0x64, 0x72, 0xe7, 0x64, 0x16, 0x71, 0xf4, 0x65,
-	0xb8, 0x0c, 0xb2, 0x1b, 0x40, 0x8e, 0x82, 0x01, 0x1d, 0xe5, 0x69, 0x0f, 0x60, 0x3d, 0x87, 0x4a,
-	0xee, 0xdb, 0x4b, 0xdc, 0xeb, 0x73, 0xee, 0xe3, 0xc0, 0xc5, 0x25, 0xe6, 0x5f, 0x0a, 0x18, 0xd9,
-	0x92, 0xa4, 0x9b, 0xcb, 0xae, 0x77, 0x9b, 0x2b, 0x3b, 0xeb, 0xf4, 0x66, 0x63, 0x4c, 0x49, 0xc8,
-	0x2d, 0xd0, 0x59, 0xe0, 0x62, 0x64, 0xa9, 0xed, 0xe2, 0x55, 0x05, 0x93, 0x08, 0xb2, 0x03, 0x55,
-	0xee, 0xf9, 0x18, 0x71, 0xea, 0x8f, 0xad, 0xa2, 0xe8, 0x8f, 0xcc, 0xc3, 0x7b, 0xa9, 0xc7, 0x59,
-	0x04, 0x11, 0x0b, 0xca, 0xd1, 0xc4, 0xf7, 0x69, 0x38, 0xb3, 0xb4, 0xb6, 0xb2, 0x5d, 0x75, 0x52,
-	0xd3, 0xee, 0x80, 0x16, 0xb7, 0x41, 0x6a, 0x50, 0x7e, 0xcb, 0xce, 0x58, 0xf0, 0x89, 0x99, 0x85,
-	0xd8, 0x70, 0x26, 0x8c, 0x79, 0x6c, 0x68, 0x2a, 0xc4, 0x80, 0xca, 0x21, 0x0e, 0x43, 0xea, 0xa2,
-	0x6b, 0xaa, 0xf6, 0xb9, 0x0a, 0xc6, 0x6b, 0xf4, 0xfb, 0x18, 0xca, 0x59, 0x09, 0x68, 0x8c, 0xfa,
-	0x28, 0x26, 0xad, 0x3a, 0xe2, 0x1d, 0x63, 0xd4, 0x75, 0x43, 0x4b, 0x4d, 0xb0, 0xf8, 0x9d, 0xd1,
-	0xa4, 0xb8, 0xa4, 0x49, 0x96, 0x2e, 0xaf, 0xc9, 0x2e, 0x68, 0x9c, 0x0e, 0x23, 0x4b, 0x13, 0x92,
-	0x5c, 0xbf, 0x22, 0x83, 0x0e, 0xa3, 0xe7, 0x8c, 0x87, 0x33, 0x47, 0x04, 0x37, 0xef, 0x43, 0x75,
-	0x0e, 0x11, 0x13, 0x8a, 0x67, 0x38, 0x93, 0xcd, 0xc5, 0x4f, 0xd2, 0x00, 0x7d, 0x4a, 0x47, 0x13,
-	0x94, 0xcd, 0x25, 0xc6, 0x9e, 0xfa, 0x40, 0xb1, 0x1f, 0x4b, 0x29, 0x2a, 0xa0, 0x1d, 0x07, 0x0c,
-	0xcd, 0x02, 0xa9, 0x82, 0xbe, 0x3f, 0xf2, 0xa6, 0x68, 0x2a, 0xb1, 0x24, 0x47, 0x48, 0xa7, 0xb1,
-	0x24, 0x6a, 0x1c, 0x71, 0x84, 0xef, 0xb9, 0x59, 0x24, 0x00, 0xa5, 0x17, 0xd4, 0x1b, 0xa1, 0x6b,
-	0x6a, 0xf6, 0x4f, 0x05, 0x60, 0xf1, 0x63, 0xad, 0x14, 0x66, 0x0f, 0xd6, 0x7c, 0xd1, 0xfb, 0xa9,
-	0xd4, 0x42, 0x5d, 0xda, 0xdc, 0xec, 0x64, 0x8e, 0xe1, 0x67, 0x85, 0xde, 0x59, 0x12, 0xd0, 0x5a,
-	0xb1, 0x21, 0x79, 0xf9, 0x6e, 0x42, 0x69, 0x1c, 0x06, 0x7d, 0x4c, 0x05, 0xac, 0xcf, 0x33, 0xde,
-	0xc4, 0xb0, 0x23, 0xbd, 0xff, 0xbc, 0x03, 0xdf, 0x54, 0xd0, 0x05, 0x43, 0xbc, 0x57, 0x83, 0x0f,
-	0x38, 0x38, 0xc3, 0x50, 0x8e, 0x99, 0x9a, 0x64, 0x13, 0x4a, 0x2e, 0x72, 0xea, 0x8d, 0xa4, 0xce,
-	0xd2, 0x8a, 0x55, 0x19, 0x04, 0x2e, 0x8a, 0x19, 0xaa, 0x8e, 0x78, 0x67, 0x3e, 0x36, 0x4d, 0x4c,
-	0xb6, 0x9e, 0xef, 0x33, 0x3f, 0x54, 0x03, 0x74, 0x0c, 0xc3, 0x20, 0xb4, 0xf4, 0xe4, 0xf7, 0x13,
-	0x06, 0xb9, 0x01, 0x86, 0xac, 0x7c, 0xea, 0x52, 0x4e, 0xad, 0x52, 0x5b, 0xd9, 0x36, 0x9c, 0x9a,
-	0xc4, 0x0e, 0x29, 0xa7, 0x64, 0x17, 0x2a, 0x11, 0x4e, 0x31, 0xf4, 0xf8, 0xcc, 0x2a, 0x8b, 0x3a,
-	0x5b, 0x4b, 0x75, 0x4e, 0xa4, 0xdb, 0x99, 0x07, 0xda, 0x8f, 0xfe, 0x28, 0xcd, 0x62, 0x03, 0x54,
-	0x52, 0x07, 0xe8, 0x61, 0xe8, 0x7b, 0x8c, 0x72, 0x74, 0xcd, 0xa2, 0x7d, 0x17, 0x2a, 0x29, 0x67,
-	0x66, 0xab, 0x0c, 0xa8, 0x3c, 0x0b, 0x3d, 0xee, 0x0d, 0xe8, 0x28, 0x59, 0xac, 0x77, 0x34, 0x14,
-	0x64, 0xaa, 0xfd, 0x12, 0xaa, 0xbd, 0xdc, 0x47, 0x8b, 0x83, 0x80, 0xb9, 0xc9, 0x19, 0x29, 0x3a,
-	0xa9, 0x49, 0xda, 0x50, 0x63, 0x94, 0x05, 0xa9, 0x37, 0x56, 0x58, 0x77, 0xb2, 0x90, 0xbd, 0x06,
-	0xb5, 0x98, 0x28, 0xbd, 0x72, 0x4f, 0xc1, 0x48, 0x4c, 0x79, 0xde, 0x72, 0x17, 0x44, 0xf9, 0x8b,
-	0x0b, 0xd2, 0xfd, 0xac, 0x80, 0xbe, 0x1f, 0x07, 0x90, 0x87, 0x50, 0x92, 0x1b, 0xb9, 0xb9, 0x38,
-	0x6b, 0xd9, 0x9b, 0xda, 0xdc, 0xba, 0x84, 0x27, 0x65, 0xed, 0x02, 0x79, 0x05, 0xb5, 0xcc, 0xb9,
-	0x25, 0xff, 0xcf, 0x23, 0x2f, 0x9f, 0xe6, 0xe6, 0xb5, 0xd5, 0xce, 0x39, 0xd7, 0x3d, 0xd0, 0xe2,
-	0x56, 0x49, 0x23, 0xd7, 0x79, 0x9a, 0xbd, 0xb1, 0x84, 0xa6, 0x69, 0x07, 0xe6, 0x97, 0x8b, 0x96,
-	0xf2, 0xf5, 0xa2, 0xa5, 0x7c, 0xbf, 0x68, 0x29, 0xe7, 0x3f, 0x5a, 0x85, 0x7e, 0x49, 0xfc, 0xf7,
-	0xec, 0xfe, 0x0e, 0x00, 0x00, 0xff, 0xff, 0x9d, 0xdb, 0x67, 0x3a, 0x8a, 0x06, 0x00, 0x00,
+	// 925 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x56, 0xe1, 0x8e, 0xdb, 0x44,
+	0x10, 0x8e, 0x1d, 0xdb, 0x49, 0x26, 0x4e, 0xce, 0xdd, 0x4b, 0x5b, 0x13, 0xd0, 0x11, 0x2c, 0x84,
+	0x0e, 0x21, 0xd2, 0x2a, 0x27, 0x04, 0x6a, 0x11, 0xf4, 0xae, 0x2d, 0x48, 0xe8, 0x5a, 0x55, 0xbe,
+	0x43, 0xfc, 0xac, 0xf6, 0xe2, 0x21, 0x58, 0x17, 0xaf, 0xc3, 0x7a, 0x13, 0x94, 0x57, 0xe0, 0x09,
+	0xca, 0x03, 0xf0, 0x2e, 0xfc, 0xe4, 0x1f, 0x7f, 0xd1, 0x21, 0x21, 0xf1, 0x16, 0x68, 0xd7, 0x6b,
+	0xc7, 0xce, 0xe5, 0x04, 0xf7, 0x6f, 0xe7, 0xdb, 0x99, 0x6f, 0x67, 0xbe, 0x9d, 0x1d, 0x1b, 0xba,
+	0x74, 0x86, 0x4c, 0x8c, 0x17, 0x3c, 0x15, 0x29, 0x69, 0x29, 0x63, 0x71, 0x11, 0xec, 0x41, 0xef,
+	0x4c, 0x50, 0xb1, 0xcc, 0x42, 0xfc, 0x71, 0x89, 0x99, 0x08, 0xbe, 0x84, 0x7e, 0x01, 0x64, 0x8b,
+	0x94, 0x65, 0x48, 0x3e, 0x06, 0x27, 0x53, 0x88, 0x6f, 0x8c, 0x8c, 0xc3, 0xee, 0xe4, 0xee, 0x58,
+	0x07, 0x8f, 0xcf, 0xd6, 0x99, 0xc0, 0x44, 0xbb, 0x6b, 0xa7, 0x60, 0x00, 0xe4, 0x34, 0x9d, 0xd2,
+	0x79, 0x9d, 0xf6, 0x04, 0xf6, 0x6b, 0xa8, 0xe6, 0xfe, 0x68, 0x8b, 0x7b, 0xbf, 0xe4, 0x7e, 0x99,
+	0x46, 0xb8, 0xc5, 0xfc, 0x8f, 0x01, 0x6e, 0xf5, 0x48, 0x32, 0xa9, 0x45, 0xf7, 0x27, 0xc3, 0x9d,
+	0x99, 0x8d, 0xcf, 0xd7, 0x0b, 0x2c, 0x48, 0xc8, 0x87, 0x60, 0xb3, 0x34, 0xc2, 0xcc, 0x37, 0x47,
+	0xcd, 0x9b, 0x0e, 0xcc, 0x3d, 0xc8, 0x43, 0xe8, 0x88, 0x38, 0xc1, 0x4c, 0xd0, 0x64, 0xe1, 0x37,
+	0x55, 0x7e, 0xa4, 0x74, 0x3f, 0x2f, 0x76, 0xc2, 0x8d, 0x13, 0xf1, 0xa1, 0x95, 0x2d, 0x93, 0x84,
+	0xf2, 0xb5, 0x6f, 0x8d, 0x8c, 0xc3, 0x4e, 0x58, 0x98, 0xc1, 0x18, 0x2c, 0x99, 0x06, 0xe9, 0x42,
+	0xeb, 0x5b, 0x76, 0xc9, 0xd2, 0x9f, 0x98, 0xd7, 0x90, 0x46, 0xb8, 0x64, 0x2c, 0x66, 0x33, 0xcf,
+	0x20, 0x2e, 0xb4, 0x9f, 0xe1, 0x8c, 0xd3, 0x08, 0x23, 0xcf, 0x0c, 0xde, 0x98, 0xe0, 0xbe, 0xc0,
+	0xe4, 0x02, 0xb9, 0xae, 0x95, 0x80, 0xc5, 0x68, 0x82, 0xaa, 0xd2, 0x4e, 0xa8, 0xd6, 0x12, 0xa3,
+	0x51, 0xc4, 0x7d, 0x33, 0xc7, 0xe4, 0xba, 0xa2, 0x49, 0x73, 0x4b, 0x93, 0x2a, 0x5d, 0x5d, 0x93,
+	0x23, 0xb0, 0x04, 0x9d, 0x65, 0xbe, 0xa5, 0x24, 0x79, 0xf7, 0x86, 0x08, 0x3a, 0xcb, 0x9e, 0x33,
+	0xc1, 0xd7, 0xa1, 0x72, 0x1e, 0x7e, 0x0a, 0x9d, 0x12, 0x22, 0x1e, 0x34, 0x2f, 0x71, 0xad, 0x93,
+	0x93, 0x4b, 0x32, 0x00, 0x7b, 0x45, 0xe7, 0x4b, 0xd4, 0xc9, 0xe5, 0xc6, 0x23, 0xf3, 0x33, 0x23,
+	0xf8, 0x42, 0x4b, 0xd1, 0x06, 0xeb, 0x65, 0xca, 0xd0, 0x6b, 0x90, 0x0e, 0xd8, 0xc7, 0xf3, 0x78,
+	0x85, 0x9e, 0x21, 0x25, 0x39, 0x45, 0xba, 0x92, 0x92, 0x98, 0xd2, 0xe3, 0x14, 0xbf, 0x17, 0x5e,
+	0x93, 0x00, 0x38, 0x5f, 0xd1, 0x78, 0x8e, 0x91, 0x67, 0x05, 0x7f, 0x1b, 0x00, 0x9b, 0xcb, 0xda,
+	0x29, 0xcc, 0x23, 0xe8, 0x25, 0x2a, 0xf7, 0xd7, 0x5a, 0x0b, 0x73, 0xab, 0x73, 0xab, 0x95, 0x85,
+	0x6e, 0x52, 0x15, 0xfa, 0xe1, 0x96, 0x80, 0xfe, 0x8e, 0x0e, 0xa9, 0xcb, 0xf7, 0x01, 0x38, 0x0b,
+	0x9e, 0x5e, 0x60, 0x21, 0x60, 0xbf, 0x8c, 0x78, 0x25, 0xe1, 0x50, 0xef, 0xde, 0xba, 0x07, 0xfe,
+	0x30, 0xc1, 0x56, 0x0c, 0xb2, 0xaf, 0xa6, 0x3f, 0xe0, 0xf4, 0x12, 0xb9, 0x2e, 0xb3, 0x30, 0xc9,
+	0x3d, 0x70, 0x22, 0x14, 0x34, 0x9e, 0x6b, 0x9d, 0xb5, 0x25, 0x55, 0x99, 0xa6, 0x11, 0xaa, 0x1a,
+	0x3a, 0xa1, 0x5a, 0x57, 0x1e, 0x9b, 0xa5, 0x2a, 0xdb, 0xaf, 0xe7, 0x59, 0x2f, 0x6a, 0x00, 0x36,
+	0x72, 0x9e, 0x72, 0xdf, 0xce, 0xef, 0x4f, 0x19, 0xe4, 0x3d, 0x70, 0xf5, 0xc9, 0xaf, 0x23, 0x2a,
+	0xa8, 0xef, 0x8c, 0x8c, 0x43, 0x37, 0xec, 0x6a, 0xec, 0x19, 0x15, 0x94, 0x1c, 0x41, 0x3b, 0xc3,
+	0x15, 0xf2, 0x58, 0xac, 0xfd, 0x96, 0x3a, 0xe7, 0xfe, 0xd6, 0x39, 0x67, 0x7a, 0x3b, 0x2c, 0x1d,
+	0x83, 0xcf, 0xff, 0x53, 0x9a, 0x4d, 0x07, 0x98, 0xa4, 0x0f, 0x70, 0x8e, 0x3c, 0x89, 0x19, 0x15,
+	0x18, 0x79, 0xcd, 0xe0, 0x01, 0xb4, 0x0b, 0xce, 0x4a, 0x57, 0xb9, 0xd0, 0x7e, 0xca, 0x63, 0x11,
+	0x4f, 0xe9, 0x3c, 0x6f, 0xac, 0xef, 0x28, 0x57, 0x64, 0x66, 0xf0, 0x35, 0x74, 0xce, 0x6b, 0x8f,
+	0x16, 0xa7, 0x29, 0x8b, 0xf2, 0x31, 0xd2, 0x0c, 0x0b, 0x93, 0x8c, 0xa0, 0xcb, 0x28, 0x4b, 0x8b,
+	0x5d, 0xa9, 0xb0, 0x1d, 0x56, 0xa1, 0xa0, 0x07, 0x5d, 0x49, 0x54, 0x4c, 0xb9, 0x27, 0xe0, 0xe6,
+	0xa6, 0x1e, 0x6f, 0xb5, 0x09, 0x62, 0xfc, 0x8f, 0x09, 0x12, 0xdc, 0x81, 0x3d, 0x89, 0xcf, 0x63,
+	0x56, 0x92, 0xfe, 0xd2, 0x84, 0x5e, 0x81, 0x3d, 0x5f, 0x21, 0x13, 0xb7, 0xa7, 0x25, 0x0f, 0xc0,
+	0x12, 0xeb, 0x45, 0xfe, 0x18, 0xfb, 0x93, 0xb7, 0x6b, 0xce, 0x25, 0x6f, 0xde, 0x00, 0xca, 0x91,
+	0x3c, 0x81, 0x76, 0x82, 0x82, 0xaa, 0x4b, 0x6e, 0xaa, 0xae, 0x7e, 0xff, 0x86, 0xa0, 0x17, 0xda,
+	0x2d, 0x9f, 0x0d, 0x65, 0xd4, 0xf0, 0x31, 0xf4, 0x6a, 0x5b, 0xb7, 0x9a, 0x11, 0xbf, 0x1a, 0xba,
+	0x21, 0x06, 0xe0, 0x3d, 0x9d, 0x2f, 0x33, 0x81, 0x3c, 0xc4, 0x69, 0xba, 0x42, 0x8e, 0x91, 0xd7,
+	0x20, 0xfb, 0xb0, 0xa7, 0xd1, 0xf2, 0xb9, 0x18, 0xa4, 0x07, 0x1d, 0xf9, 0x42, 0x8f, 0x23, 0xf5,
+	0x7a, 0xc8, 0x1e, 0x74, 0xa5, 0x19, 0x62, 0x92, 0xae, 0x64, 0x97, 0x90, 0x3b, 0xd0, 0xcb, 0x81,
+	0x82, 0xc7, 0x22, 0x1e, 0xb8, 0x12, 0x2a, 0x49, 0x6c, 0x19, 0xa5, 0x9a, 0xf4, 0x15, 0xcd, 0x32,
+	0x8c, 0x3c, 0xa7, 0x04, 0x74, 0xf3, 0xb5, 0xaa, 0x2d, 0xda, 0x0e, 0x4e, 0xc0, 0xdb, 0x5c, 0x97,
+	0xbe, 0xf4, 0x31, 0x38, 0x28, 0x95, 0x91, 0xed, 0x24, 0x85, 0xbb, 0xb7, 0x5b, 0xb8, 0x50, 0x7b,
+	0x4d, 0x7e, 0x36, 0xc1, 0x3e, 0x96, 0x1e, 0xe4, 0x31, 0x38, 0x7a, 0x08, 0x6d, 0x62, 0x6a, 0x9f,
+	0xd1, 0xe1, 0xfd, 0x6b, 0x78, 0x7e, 0x68, 0xd0, 0x20, 0xdf, 0x40, 0xb7, 0xf2, 0x85, 0x25, 0x9b,
+	0x3b, 0xbe, 0xfe, 0x35, 0x1e, 0xbe, 0xb3, 0x7b, 0xb3, 0xe4, 0xfa, 0x04, 0x2c, 0x99, 0x2b, 0x19,
+	0xd4, 0x52, 0x2f, 0xa2, 0xef, 0x6e, 0xa1, 0x65, 0xd8, 0x31, 0xb4, 0x8b, 0x12, 0x89, 0x7f, 0xad,
+	0xea, 0x22, 0xfc, 0xad, 0x1d, 0x3b, 0x05, 0xc5, 0x89, 0xf7, 0xdb, 0xd5, 0x81, 0xf1, 0xfb, 0xd5,
+	0x81, 0xf1, 0xe7, 0xd5, 0x81, 0xf1, 0xe6, 0xaf, 0x83, 0xc6, 0x85, 0xa3, 0xfe, 0x58, 0x8e, 0xfe,
+	0x0d, 0x00, 0x00, 0xff, 0xff, 0xca, 0x06, 0xf5, 0xc7, 0xc0, 0x08, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -905,6 +1122,8 @@ type AgentClient interface {
 	LocalStatus(ctx context.Context, in *LocalStatusRequest, opts ...grpc.CallOption) (*LocalStatusResponse, error)
 	// Time requests the node's local time in UTC
 	Time(ctx context.Context, in *TimeRequest, opts ...grpc.CallOption) (*TimeResponse, error)
+	// Timeline collects the status timeline
+	Timeline(ctx context.Context, in *TimelineRequest, opts ...grpc.CallOption) (*TimelineResponse, error)
 }
 
 type agentClient struct {
@@ -942,6 +1161,15 @@ func (c *agentClient) Time(ctx context.Context, in *TimeRequest, opts ...grpc.Ca
 	return out, nil
 }
 
+func (c *agentClient) Timeline(ctx context.Context, in *TimelineRequest, opts ...grpc.CallOption) (*TimelineResponse, error) {
+	out := new(TimelineResponse)
+	err := c.cc.Invoke(ctx, "/agentpb.Agent/Timeline", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentServer is the server API for Agent service.
 type AgentServer interface {
 	// Status collects the global cluster status
@@ -950,6 +1178,8 @@ type AgentServer interface {
 	LocalStatus(context.Context, *LocalStatusRequest) (*LocalStatusResponse, error)
 	// Time requests the node's local time in UTC
 	Time(context.Context, *TimeRequest) (*TimeResponse, error)
+	// Timeline collects the status timeline
+	Timeline(context.Context, *TimelineRequest) (*TimelineResponse, error)
 }
 
 func RegisterAgentServer(s *grpc.Server, srv AgentServer) {
@@ -1010,6 +1240,24 @@ func _Agent_Time_Handler(srv interface{}, ctx context.Context, dec func(interfac
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Agent_Timeline_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TimelineRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServer).Timeline(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/agentpb.Agent/Timeline",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServer).Timeline(ctx, req.(*TimelineRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _Agent_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "agentpb.Agent",
 	HandlerType: (*AgentServer)(nil),
@@ -1025,6 +1273,10 @@ var _Agent_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Time",
 			Handler:    _Agent_Time_Handler,
+		},
+		{
+			MethodName: "Timeline",
+			Handler:    _Agent_Timeline_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -1442,6 +1694,113 @@ func (m *TimeResponse) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
+func (m *TimelineRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *TimelineRequest) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *TimelineEvent) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *TimelineEvent) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.Timestamp != nil {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintAgent(dAtA, i, uint64(m.Timestamp.Size()))
+		n6, err := m.Timestamp.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n6
+	}
+	if m.Type != 0 {
+		dAtA[i] = 0x10
+		i++
+		i = encodeVarintAgent(dAtA, i, uint64(m.Type))
+	}
+	if len(m.Metadata) > 0 {
+		for k, _ := range m.Metadata {
+			dAtA[i] = 0x1a
+			i++
+			v := m.Metadata[k]
+			mapSize := 1 + len(k) + sovAgent(uint64(len(k))) + 1 + len(v) + sovAgent(uint64(len(v)))
+			i = encodeVarintAgent(dAtA, i, uint64(mapSize))
+			dAtA[i] = 0xa
+			i++
+			i = encodeVarintAgent(dAtA, i, uint64(len(k)))
+			i += copy(dAtA[i:], k)
+			dAtA[i] = 0x12
+			i++
+			i = encodeVarintAgent(dAtA, i, uint64(len(v)))
+			i += copy(dAtA[i:], v)
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *TimelineResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *TimelineResponse) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if len(m.Events) > 0 {
+		for _, msg := range m.Events {
+			dAtA[i] = 0xa
+			i++
+			i = encodeVarintAgent(dAtA, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(dAtA[i:])
+			if err != nil {
+				return 0, err
+			}
+			i += n
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
 func encodeVarintAgent(dAtA []byte, offset int, v uint64) int {
 	for v >= 1<<7 {
 		dAtA[offset] = uint8(v&0x7f | 0x80)
@@ -1673,6 +2032,63 @@ func (m *TimeResponse) Size() (n int) {
 	if m.Timestamp != nil {
 		l = m.Timestamp.Size()
 		n += 1 + l + sovAgent(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *TimelineRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *TimelineEvent) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Timestamp != nil {
+		l = m.Timestamp.Size()
+		n += 1 + l + sovAgent(uint64(l))
+	}
+	if m.Type != 0 {
+		n += 1 + sovAgent(uint64(m.Type))
+	}
+	if len(m.Metadata) > 0 {
+		for k, v := range m.Metadata {
+			_ = k
+			_ = v
+			mapEntrySize := 1 + len(k) + sovAgent(uint64(len(k))) + 1 + len(v) + sovAgent(uint64(len(v)))
+			n += mapEntrySize + 1 + sovAgent(uint64(mapEntrySize))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *TimelineResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Events) > 0 {
+		for _, e := range m.Events {
+			l = e.Size()
+			n += 1 + l + sovAgent(uint64(l))
+		}
 	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
@@ -3057,6 +3473,384 @@ func (m *TimeResponse) Unmarshal(dAtA []byte) error {
 				m.Timestamp = &Timestamp{}
 			}
 			if err := m.Timestamp.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipAgent(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthAgent
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthAgent
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *TimelineRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowAgent
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: TimelineRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: TimelineRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipAgent(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthAgent
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthAgent
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *TimelineEvent) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowAgent
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: TimelineEvent: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: TimelineEvent: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Timestamp", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowAgent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthAgent
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthAgent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Timestamp == nil {
+				m.Timestamp = &Timestamp{}
+			}
+			if err := m.Timestamp.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Type", wireType)
+			}
+			m.Type = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowAgent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Type |= TimelineEvent_Type(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Metadata", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowAgent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthAgent
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthAgent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Metadata == nil {
+				m.Metadata = make(map[string]string)
+			}
+			var mapkey string
+			var mapvalue string
+			for iNdEx < postIndex {
+				entryPreIndex := iNdEx
+				var wire uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowAgent
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					wire |= uint64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				fieldNum := int32(wire >> 3)
+				if fieldNum == 1 {
+					var stringLenmapkey uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowAgent
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapkey |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapkey := int(stringLenmapkey)
+					if intStringLenmapkey < 0 {
+						return ErrInvalidLengthAgent
+					}
+					postStringIndexmapkey := iNdEx + intStringLenmapkey
+					if postStringIndexmapkey < 0 {
+						return ErrInvalidLengthAgent
+					}
+					if postStringIndexmapkey > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
+					iNdEx = postStringIndexmapkey
+				} else if fieldNum == 2 {
+					var stringLenmapvalue uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowAgent
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapvalue |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapvalue := int(stringLenmapvalue)
+					if intStringLenmapvalue < 0 {
+						return ErrInvalidLengthAgent
+					}
+					postStringIndexmapvalue := iNdEx + intStringLenmapvalue
+					if postStringIndexmapvalue < 0 {
+						return ErrInvalidLengthAgent
+					}
+					if postStringIndexmapvalue > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapvalue = string(dAtA[iNdEx:postStringIndexmapvalue])
+					iNdEx = postStringIndexmapvalue
+				} else {
+					iNdEx = entryPreIndex
+					skippy, err := skipAgent(dAtA[iNdEx:])
+					if err != nil {
+						return err
+					}
+					if skippy < 0 {
+						return ErrInvalidLengthAgent
+					}
+					if (iNdEx + skippy) > postIndex {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += skippy
+				}
+			}
+			m.Metadata[mapkey] = mapvalue
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipAgent(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthAgent
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthAgent
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *TimelineResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowAgent
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: TimelineResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: TimelineResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Events", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowAgent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthAgent
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthAgent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Events = append(m.Events, &TimelineEvent{})
+			if err := m.Events[len(m.Events)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

@@ -44,6 +44,7 @@ type RPCServer interface {
 	Status(context.Context, *pb.StatusRequest) (*pb.StatusResponse, error)
 	LocalStatus(context.Context, *pb.LocalStatusRequest) (*pb.LocalStatusResponse, error)
 	Time(context.Context, *pb.TimeRequest) (*pb.TimeResponse, error)
+	Timeline(context.Context, *pb.TimelineRequest) (*pb.TimelineResponse, error)
 	Stop()
 }
 
@@ -79,6 +80,18 @@ func (r *server) LocalStatus(ctx context.Context, req *pb.LocalStatusRequest) (r
 func (r *server) Time(ctx context.Context, req *pb.TimeRequest) (*pb.TimeResponse, error) {
 	return &pb.TimeResponse{
 		Timestamp: pb.NewTimeToProto(time.Now().UTC()),
+	}, nil
+}
+
+// Timeline sends the current status timeline
+func (r *server) Timeline(ctx context.Context, req *pb.TimelineRequest) (*pb.TimelineResponse, error) {
+	timelineEvents := r.agent.Timeline.GetEvents()
+	events := make([]*pb.TimelineEvent, 0, len(timelineEvents))
+	for _, event := range timelineEvents {
+		events = append(events, event.ToProto())
+	}
+	return &pb.TimelineResponse{
+		Events: events,
 	}, nil
 }
 
@@ -143,7 +156,6 @@ func serve(addr, certFile, keyFile string, tlsConfig *tls.Config, handler http.H
 		TLSConfig: tlsConfig,
 		Handler:   handler,
 	}
-
 	return server.ListenAndServeTLS(certFile, keyFile)
 }
 
@@ -159,6 +171,11 @@ func newHealthHandler(s *server) http.HandlerFunc {
 		ctx := context.TODO()
 		if r.URL.Path == "/local" || r.URL.Path == "/local/" {
 			handleLocalStatus(ctx, s, w, r)
+			return
+		}
+
+		if r.URL.Path == "/history" || r.URL.Path == "/history/" {
+			handleHistory(ctx, s, w, r)
 			return
 		}
 
@@ -190,6 +207,18 @@ func handleLocalStatus(ctx context.Context, s *server, w http.ResponseWriter, r 
 	}
 
 	roundtrip.ReplyJSON(w, httpStatus, status.GetStatus())
+}
+
+// handleHistory handles status history API call.
+func handleHistory(ctx context.Context, s *server, w http.ResponseWriter, r *http.Request) {
+	timeline, err := s.Timeline(ctx, nil)
+	if err != nil {
+		roundtrip.ReplyJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+		return
+	}
+
+	httpStatus := http.StatusOK
+	roundtrip.ReplyJSON(w, httpStatus, timeline)
 }
 
 // grpcHandlerFunc returns an http.Handler that delegates to

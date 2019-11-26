@@ -98,11 +98,7 @@ func newClient(ctx context.Context, addr, serverName, caFile, certFile, keyFile 
 // NewClientWithCreds creates a new agent RPC client to the given address
 // using specified credentials creds
 func NewClientWithCreds(ctx context.Context, addr string, creds credentials.TransportCredentials) (*client, error) {
-	conn, err := grpc.DialContext(
-		ctx,
-		addr,
-		grpc.WithTransportCredentials(creds),
-	)
+	conn, err := grpc.DialContext(ctx, addr, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to dial")
 	}
@@ -141,6 +137,18 @@ func (r *client) Time(ctx context.Context, req *pb.TimeRequest) (time *pb.TimeRe
 		grpc.FailFast(false),
 	}
 	resp, err := r.AgentClient.Time(ctx, req, opts...)
+	if err != nil {
+		return nil, ConvertGRPCError(err)
+	}
+	return resp, nil
+}
+
+// Timeline returns the current status timeline.
+func (r *client) Timeline(ctx context.Context) (timeline *pb.TimelineResponse, err error) {
+	opts := []grpc.CallOption{
+		grpc.FailFast(false),
+	}
+	resp, err := r.AgentClient.Timeline(ctx, &pb.TimelineRequest{}, opts...)
 	if err != nil {
 		return nil, ConvertGRPCError(err)
 	}

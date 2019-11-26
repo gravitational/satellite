@@ -24,15 +24,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-
 	"github.com/gravitational/satellite/agent/cache"
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-	"github.com/gravitational/trace"
+	"github.com/gravitational/satellite/lib/history"
 
+	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
@@ -99,6 +99,9 @@ type Config struct {
 	// Tags is a trivial means for adding extra semantic information to an agent.
 	Tags map[string]string
 
+	// MaxHistory specifies the max size of the status timeline.
+	MaxHistory int
+
 	// Cache is a short-lived storage used by the agent to persist latest health stats.
 	cache.Cache
 }
@@ -142,6 +145,8 @@ func New(config *Config) (Agent, error) {
 		recycleClock:    clock,
 		localStatus:     emptyNodeStatus(config.Name),
 		metricsListener: metricsListener,
+		Timeline:        history.NewMemTimeline(config.MaxHistory),
+		done:            make(chan struct{}),
 	}
 
 	agent.rpc, err = newRPCServer(agent, config.CAFile, config.CertFile, config.KeyFile, config.RPCAddrs)
@@ -220,6 +225,9 @@ type agent struct {
 
 	// Config is the agent configuration.
 	Config
+
+	// Timeline keeps track of status change events.
+	Timeline history.Timeline
 }
 
 // DialRPC returns RPC client for the provided Serf member.
@@ -233,7 +241,6 @@ func (r *agent) GetConfig() Config {
 // Start starts the agent's background tasks.
 func (r *agent) Start() error {
 	errChan := make(chan error, 1)
-	r.done = make(chan struct{})
 
 	go r.statusUpdateLoop()
 
@@ -409,7 +416,8 @@ const statusUpdateTimeout = 30 * time.Second
 // implement.
 const recycleTimeout = 10 * time.Minute
 
-// statusQueryReplyTimeout is the amount of time to wait for status query reply.
+// statusQueryReplyTimeout specifies the amount of time to wait for the cluster
+// status query reply.
 const statusQueryReplyTimeout = 30 * time.Second
 
 // nodeTimeout specifies the amout of time to wait for a node status query reply.
@@ -454,6 +462,7 @@ func (r *agent) statusUpdateLoop() {
 					if err = r.cache.UpdateStatus(status); err != nil {
 						log.Warnf("Error updating system status in cache: %v", err)
 					}
+					r.Timeline.RecordStatus(status)
 				}
 				select {
 				case <-r.done:
@@ -493,6 +502,7 @@ func (r *agent) collectStatus(ctx context.Context) (systemStatus *pb.SystemStatu
 		return nil, trace.Wrap(err, "failed to query serf members")
 	}
 	members = filterLeft(members)
+
 	log.Debugf("Started collecting statuses from members %v.", members)
 
 	ctxNode, cancelNode := context.WithTimeout(ctx, nodeTimeout)
