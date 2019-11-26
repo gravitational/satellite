@@ -17,8 +17,6 @@ limitations under the License.
 package history
 
 import (
-	"time"
-
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
 	. "gopkg.in/check.v1"
@@ -292,12 +290,4 @@ func (s *HistorySuite) TestParseProbe(c *C) {
 	expected := &Probe{Name: "test-probe", Status: pb.Probe_Running.String()}
 
 	c.Assert(actual, DeepEquals, expected)
-}
-
-// removeTimestamp removes timestamp from events. Events save timestamp on
-// initialization. Easier to test by just removing timestamps.
-func removeTimestamps(events []*Event) {
-	for _, event := range events {
-		event.timeStamp = time.Time{}
-	}
 }

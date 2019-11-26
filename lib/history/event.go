@@ -26,7 +26,7 @@ import (
 // metadata.
 type Event struct {
 	// timeStamp specifies the time when the event occurred.
-	timeStamp time.Time
+	timestamp time.Time
 	// eventType specifies the type of event.
 	eventType EventType
 	// metadata is a collection of event-specific metadata.
@@ -34,10 +34,9 @@ type Event struct {
 }
 
 // newEvent initializes and returns a new Event with the specified eventType.
-// TODO: Pass metadata into constructor
-func newEvent(eventType EventType) *Event {
+func newEvent(timestamp time.Time, eventType EventType) *Event {
 	return &Event{
-		timeStamp: time.Now(),
+		timestamp: timestamp,
 		eventType: eventType,
 		metadata:  make(map[string]string),
 	}
@@ -45,61 +44,90 @@ func newEvent(eventType EventType) *Event {
 
 // NewClusterRecoveredEvent initializes and returns a new cluster recovered
 // event.
-func NewClusterRecoveredEvent() *Event {
-	return newEvent(ClusterRecovered)
+func NewClusterRecoveredEvent(timestamp time.Time, old, new string) *Event {
+	event := newEvent(timestamp, ClusterRecovered)
+	event.metadata["old"] = old
+	event.metadata["new"] = new
+	return event
 }
 
 // NewClusterDegradedEvent initializes and returns a new cluster degraded
 // event.
-func NewClusterDegradedEvent() *Event {
-	return newEvent(ClusterDegraded)
+func NewClusterDegradedEvent(timestamp time.Time, old, new string) *Event {
+	event := newEvent(timestamp, ClusterDegraded)
+	event.metadata["old"] = old
+	event.metadata["new"] = new
+	return event
 }
 
 // NewNodeAddedEvent initializes and returns a new node added event.
-func NewNodeAddedEvent() *Event {
-	return newEvent(NodeAdded)
+func NewNodeAddedEvent(timestamp time.Time, node string) *Event {
+	event := newEvent(timestamp, NodeAdded)
+	event.metadata["node"] = node
+	return event
 }
 
 // NewNodeRemovedEvent initializes and returns a new node removed event.
-func NewNodeRemovedEvent() *Event {
-	return newEvent(NodeRemoved)
+func NewNodeRemovedEvent(timestamp time.Time, node string) *Event {
+	event := newEvent(timestamp, NodeRemoved)
+	event.metadata["node"] = node
+	return event
 }
 
 // NewNodeRecoveredEvent initializes and returns a new node recovered event.
-func NewNodeRecoveredEvent() *Event {
-	return newEvent(NodeRecovered)
+func NewNodeRecoveredEvent(timestamp time.Time, node, old, new string) *Event {
+	event := newEvent(timestamp, NodeRecovered)
+	event.metadata["node"] = node
+	event.metadata["old"] = old
+	event.metadata["new"] = new
+	return event
 }
 
 // NewNodeDegradedEvent initializes and returns a new node degraded event.
-func NewNodeDegradedEvent() *Event {
-	return newEvent(NodeDegraded)
+func NewNodeDegradedEvent(timestamp time.Time, node, old, new string) *Event {
+	event := newEvent(timestamp, NodeDegraded)
+	event.metadata["node"] = node
+	event.metadata["old"] = old
+	event.metadata["new"] = new
+	return event
 }
 
 // NewProbePassedEvent initializes and returns a new probe passed event.
-func NewProbePassedEvent() *Event {
-	return newEvent(ProbePassed)
+func NewProbePassedEvent(timestamp time.Time, node, probe, old, new string) *Event {
+	event := newEvent(timestamp, ProbePassed)
+	event.metadata["node"] = node
+	event.metadata["probe"] = probe
+	event.metadata["old"] = old
+	event.metadata["new"] = new
+	return event
 }
 
 // NewProbeFailedEvent initializes and returns a new probe failed event.
-func NewProbeFailedEvent() *Event {
-	return newEvent(ProbeFailed)
+func NewProbeFailedEvent(timestamp time.Time, node, probe, old, new string) *Event {
+	event := newEvent(timestamp, ProbeFailed)
+	event.metadata["node"] = node
+	event.metadata["probe"] = probe
+	event.metadata["old"] = old
+	event.metadata["new"] = new
+	return event
+}
+
+// NewUnknownEvent initializes an returns a new unknown event.
+func NewUnknownEvent(timestamp time.Time) *Event {
+	event := newEvent(timestamp, Unknown)
+	return event
 }
 
 // ToProto converts Event into protobuf message.
 func (e *Event) ToProto() *pb.TimelineEvent {
 	return &pb.TimelineEvent{
 		Timestamp: &pb.Timestamp{
-			Seconds:     e.timeStamp.Unix(),
-			Nanoseconds: int32(e.timeStamp.UnixNano()),
+			Seconds:     e.timestamp.Unix(),
+			Nanoseconds: int32(e.timestamp.UnixNano()),
 		},
 		Type:     e.eventType.ToProto(),
 		Metadata: e.metadata,
 	}
-}
-
-// setMetadata stores the key/value pair in event metadata.
-func (e *Event) setMetadata(key, value string) {
-	e.metadata[key] = value
 }
 
 // EventType specifies the type of event.
@@ -124,6 +152,9 @@ const (
 	ProbePassed = "ProbePassed"
 	// ProbeFailed specifies an event when a probe result changed to failing.
 	ProbeFailed = "ProbeFailed"
+
+	// Unknown specifies an unknown event type.
+	Unknown = "Unknown"
 )
 
 // ToProto converts the EventType into a protobuf TimelineEvent_Type.

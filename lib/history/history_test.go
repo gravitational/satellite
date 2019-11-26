@@ -18,6 +18,7 @@ package history
 
 import (
 	"testing"
+	"time"
 
 	. "gopkg.in/check.v1"
 )
@@ -28,3 +29,11 @@ func TestHistory(t *testing.T) { TestingT(t) }
 type HistorySuite struct{}
 
 var _ = Suite(&HistorySuite{})
+
+// removeTimestamp removes timestamp from events. Events save timestamp on
+// initialization. Easier to test by just removing timestamps.
+func removeTimestamps(events []*Event) {
+	for _, event := range events {
+		event.timestamp = time.Time{}
+	}
+}

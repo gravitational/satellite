@@ -18,6 +18,8 @@ limitations under the License.
 package history
 
 import (
+	"time"
+
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 )
 
@@ -48,12 +50,10 @@ func (c *Cluster) diffCluster(cluster *Cluster) []*Event {
 	if c.Status != cluster.Status {
 		var event *Event
 		if cluster.Status == pb.SystemStatus_Running.String() {
-			event = NewClusterRecoveredEvent()
+			event = NewClusterRecoveredEvent(time.Now(), c.Status, cluster.Status)
 		} else {
-			event = NewClusterDegradedEvent()
+			event = NewClusterDegradedEvent(time.Now(), c.Status, cluster.Status)
 		}
-		event.setMetadata("old", c.Status)
-		event.setMetadata("new", cluster.Status)
 		events = append(events, event)
 	}
 
@@ -72,16 +72,14 @@ func (c *Cluster) diffCluster(cluster *Cluster) []*Event {
 		}
 
 		// Nodes added to the cluster
-		event := NewNodeAddedEvent()
-		event.setMetadata("node", name)
+		event := NewNodeAddedEvent(time.Now(), name)
 		events = append(events, event)
 		events = append(events, (&Node{}).diffNode(newNode)...)
 	}
 
 	// Nodes removed from the cluster
 	for name := range removed {
-		event := NewNodeRemovedEvent()
-		event.setMetadata("node", name)
+		event := NewNodeRemovedEvent(time.Now(), name)
 		events = append(events, event)
 	}
 
@@ -109,13 +107,10 @@ func (n *Node) diffNode(node *Node) []*Event {
 	if n.Status != node.Status {
 		var event *Event
 		if node.Status == pb.NodeStatus_Running.String() {
-			event = NewNodeRecoveredEvent()
+			event = NewNodeRecoveredEvent(time.Now(), node.Name, n.Status, node.Status)
 		} else {
-			event = NewNodeDegradedEvent()
+			event = NewNodeDegradedEvent(time.Now(), node.Name, n.Status, node.Status)
 		}
-		event.setMetadata("node", node.Name)
-		event.setMetadata("old", n.Status)
-		event.setMetadata("new", node.Status)
 		events = append(events, event)
 	}
 
@@ -152,14 +147,10 @@ func (p *Probe) diffProbe(nodeName string, probe *Probe) []*Event {
 	if p.Status != probe.Status {
 		var event *Event
 		if probe.Status == pb.Probe_Running.String() {
-			event = NewProbePassedEvent()
+			event = NewProbePassedEvent(time.Now(), nodeName, p.Name, p.Status, probe.Status)
 		} else {
-			event = NewProbeFailedEvent()
+			event = NewProbeFailedEvent(time.Now(), nodeName, p.Name, p.Status, probe.Status)
 		}
-		event.setMetadata("node", nodeName)
-		event.setMetadata("probe", p.Name)
-		event.setMetadata("old", p.Status)
-		event.setMetadata("new", probe.Status)
 		events = append(events, event)
 	}
 	return events

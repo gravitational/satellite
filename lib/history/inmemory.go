@@ -28,12 +28,12 @@ import (
 //
 // Implements Timeline
 type MemTimeline struct {
-	// Size specifies the max size of the timeline.
-	Size int
-	// Events holds the latest status events.
-	Events []*Event
-	// LastStatus holds the last recorded cluster status.
-	LastStatus *Cluster
+	// size specifies the max size of the timeline.
+	size int
+	// events holds the latest status events.
+	events []*Event
+	// lastStatus holds the last recorded cluster status.
+	lastStatus *Cluster
 	// mu locks timeline access
 	mu sync.Mutex
 }
@@ -42,9 +42,9 @@ type MemTimeline struct {
 // size.
 func NewMemTimeline(size int) Timeline {
 	return &MemTimeline{
-		Size:       size,
-		Events:     make([]*Event, 0, size),
-		LastStatus: &Cluster{},
+		size:       size,
+		events:     make([]*Event, 0, size),
+		lastStatus: &Cluster{},
 	}
 }
 
@@ -52,7 +52,7 @@ func NewMemTimeline(size int) Timeline {
 // status into the Timeline.
 func (t *MemTimeline) RecordStatus(status *pb.SystemStatus) {
 	cluster := parseSystemStatus(status)
-	events := t.LastStatus.diffCluster(cluster)
+	events := t.lastStatus.diffCluster(cluster)
 	if len(events) == 0 {
 		return
 	}
@@ -63,20 +63,20 @@ func (t *MemTimeline) RecordStatus(status *pb.SystemStatus) {
 	for _, event := range events {
 		t.addEvent(event)
 	}
-	t.LastStatus = cluster
+	t.lastStatus = cluster
 }
 
 // GetEvents returns the current timeline.
 func (t *MemTimeline) GetEvents() []*Event {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return t.Events
+	return t.events
 }
 
 // addEvent appends the provided event to the timeline.
 func (t *MemTimeline) addEvent(event *Event) {
-	if len(t.Events) > t.Size {
-		t.Events = t.Events[1:]
+	if len(t.events) >= t.size {
+		t.events = t.events[1:]
 	}
-	t.Events = append(t.Events, event)
+	t.events = append(t.events, event)
 }
