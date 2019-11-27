@@ -17,6 +17,7 @@ limitations under the License.
 package history
 
 import (
+	"context"
 	"sync"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
@@ -33,6 +34,7 @@ type MemTimeline struct {
 	// events holds the latest status events.
 	events []*Event
 	// lastStatus holds the last recorded cluster status.
+	// Initial cluster status is `Unknown`.
 	lastStatus *Cluster
 	// mu locks timeline access
 	mu sync.Mutex
@@ -44,17 +46,18 @@ func NewMemTimeline(size int) Timeline {
 	return &MemTimeline{
 		size:       size,
 		events:     make([]*Event, 0, size),
-		lastStatus: &Cluster{},
+		lastStatus: &Cluster{Status: pb.SystemStatus_Unknown.String()},
 	}
 }
 
 // RecordStatus records differences of the previous status to the provided
 // status into the Timeline.
-func (t *MemTimeline) RecordStatus(status *pb.SystemStatus) {
+// Context unused for MemTimeline.
+func (t *MemTimeline) RecordStatus(ctx context.Context, status *pb.SystemStatus) error {
 	cluster := parseSystemStatus(status)
 	events := t.lastStatus.diffCluster(cluster)
 	if len(events) == 0 {
-		return
+		return nil
 	}
 
 	t.mu.Lock()
@@ -64,13 +67,14 @@ func (t *MemTimeline) RecordStatus(status *pb.SystemStatus) {
 		t.addEvent(event)
 	}
 	t.lastStatus = cluster
+	return nil
 }
 
 // GetEvents returns the current timeline.
-func (t *MemTimeline) GetEvents() []*Event {
+func (t *MemTimeline) GetEvents() ([]*Event, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return t.events
+	return t.events, nil
 }
 
 // addEvent appends the provided event to the timeline.

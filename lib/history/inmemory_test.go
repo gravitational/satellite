@@ -17,6 +17,7 @@ limitations under the License.
 package history
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -34,10 +35,15 @@ var _ = Suite(&InMemorySuite{})
 
 func (s *InMemorySuite) TestRecordStatus(c *C) {
 	timeline := NewMemTimeline(1)
-	timeline.RecordStatus(&pb.SystemStatus{Status: pb.SystemStatus_Running})
+	err := timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: pb.SystemStatus_Running})
+	c.Assert(err, IsNil)
 
-	actual := timeline.GetEvents()
-	expected := []*Event{NewClusterRecoveredEvent(time.Time{}, "", pb.SystemStatus_Running.String())}
+	actual, err := timeline.GetEvents()
+	c.Assert(err, IsNil)
+
+	expected := []*Event{
+		NewClusterRecoveredEvent(time.Time{}, pb.SystemStatus_Unknown.String(), pb.SystemStatus_Running.String()),
+	}
 
 	removeTimestamps(actual)
 	c.Assert(actual, DeepEquals, expected, Commentf("Test record status"))
@@ -48,10 +54,15 @@ func (s *InMemorySuite) TestFIFOEviction(c *C) {
 	new := pb.SystemStatus_Degraded
 
 	timeline := NewMemTimeline(1)
-	timeline.RecordStatus(&pb.SystemStatus{Status: old})
-	timeline.RecordStatus(&pb.SystemStatus{Status: new})
+	err := timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: old})
+	c.Assert(err, IsNil)
 
-	actual := timeline.GetEvents()
+	err = timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: new})
+	c.Assert(err, IsNil)
+
+	actual, err := timeline.GetEvents()
+	c.Assert(err, IsNil)
+
 	expected := []*Event{NewClusterDegradedEvent(time.Time{}, old.String(), new.String())}
 
 	removeTimestamps(actual)

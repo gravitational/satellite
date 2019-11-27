@@ -18,6 +18,7 @@ limitations under the License.
 package history
 
 import (
+	"context"
 	"time"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
@@ -28,9 +29,9 @@ import (
 type Timeline interface {
 	// RecordStatus records any changes that have occurred since the previous
 	// recorded status.
-	RecordStatus(status *pb.SystemStatus)
+	RecordStatus(ctx context.Context, status *pb.SystemStatus) error
 	// GetEvents returns the currently stored list of events.
-	GetEvents() []*Event
+	GetEvents() ([]*Event, error)
 	// TODO: Add method to query/filter events.
 	// Query(...) []*Event
 }
@@ -45,9 +46,7 @@ type Cluster struct {
 
 // diffCluster calculates the differences from the provided cluster and returns
 // the differences as a list of events.
-func (c *Cluster) diffCluster(cluster *Cluster) []*Event {
-	events := []*Event{}
-
+func (c *Cluster) diffCluster(cluster *Cluster) (events []*Event) {
 	// Compare cluster status
 	if c.Status != cluster.Status {
 		var event *Event
@@ -102,9 +101,7 @@ type Node struct {
 
 // diffNode calculates the differences from the provided node and returns the
 // differences as a list of events.
-func (n *Node) diffNode(node *Node) []*Event {
-	events := []*Event{}
-
+func (n *Node) diffNode(node *Node) (events []*Event) {
 	// Compare node status
 	if n.Status != node.Status {
 		var event *Event
@@ -144,8 +141,7 @@ type Probe struct {
 
 // diffProbe calculates the differences from the provided probe and returns the
 // differences as a list of events.
-func (p *Probe) diffProbe(nodeName string, probe *Probe) []*Event {
-	events := []*Event{}
+func (p *Probe) diffProbe(nodeName string, probe *Probe) (events []*Event) {
 	if p.Status != probe.Status {
 		var event *Event
 		if probe.Status == pb.Probe_Running.String() {
