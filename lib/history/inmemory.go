@@ -29,7 +29,7 @@ import (
 //
 // Implements Timeline
 type MemTimeline struct {
-	// size specifies the max size of the timeline.
+	// size specifies the max number of events stored in the timeline.
 	size int
 	// events holds the latest status events.
 	events []*Event
