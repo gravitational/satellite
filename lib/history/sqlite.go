@@ -27,7 +27,6 @@ import (
 
 	"github.com/gravitational/trace"
 	_ "github.com/mattn/go-sqlite3" // initialize sqlite3
-	log "github.com/sirupsen/logrus"
 )
 
 // SQLiteTimeline represents a timeline of cluster status events. The timeline
@@ -146,7 +145,6 @@ func (t *SQLiteTimeline) GetEvents() (events []*Event, err error) {
 			event = NewProbeFailedEvent(timestamp, node, probe, old, new)
 		default:
 			event = NewUnknownEvent(timestamp)
-			log.Warnf("Unknown event: %v\n", eventType)
 		}
 
 		events = append(events, event)
