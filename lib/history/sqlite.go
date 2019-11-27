@@ -59,15 +59,9 @@ func NewSQLiteTimeline(database *sql.DB, size int) (Timeline, error) {
 
 // initEventTable initializes event table schema.
 func initEventTable(db *sql.DB) error {
-	createTables, err := db.Prepare(createTableEvent)
-	if err != nil {
+	if _, err := db.Exec(createTableEvent); err != nil {
 		return trace.Wrap(err)
 	}
-
-	if _, err := createTables.Exec(); err != nil {
-		return trace.Wrap(err)
-	}
-
 	return nil
 }
 
@@ -85,11 +79,13 @@ func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status *pb.SystemStat
 		return trace.Wrap(err)
 	}
 
-	if err := t.insertEvents(tx, events); err != nil {
+	if err := t.insertEvents(events); err != nil {
+		tx.Rollback()
 		return trace.Wrap(err, "failed to insert events.")
 	}
 
-	if err := t.evictEvents(tx); err != nil {
+	if err := t.evictEvents(); err != nil {
+		tx.Rollback()
 		return trace.Wrap(err, "failed to evict old events.")
 	}
 
@@ -157,7 +153,7 @@ func (t *SQLiteTimeline) GetEvents() (events []*Event, err error) {
 }
 
 // insertEvents inserts the provided events into the timeline.
-func (t *SQLiteTimeline) insertEvents(tx *sql.Tx, events []*Event) error {
+func (t *SQLiteTimeline) insertEvents(events []*Event) error {
 
 	// prepare bulk insert statement
 	valueStrings := make([]string, 0, len(events))
@@ -174,7 +170,6 @@ func (t *SQLiteTimeline) insertEvents(tx *sql.Tx, events []*Event) error {
 	insertEvents := fmt.Sprintf(insertIntoEvent, strings.Join(valueStrings, ","))
 
 	if _, err := t.database.Exec(insertEvents, valueArgs...); err != nil {
-		tx.Rollback()
 		return trace.Wrap(err)
 	}
 
@@ -183,9 +178,8 @@ func (t *SQLiteTimeline) insertEvents(tx *sql.Tx, events []*Event) error {
 
 // evictEvents deletes oldest events if the timeline is larger than its max
 // size.
-func (t *SQLiteTimeline) evictEvents(tx *sql.Tx) error {
+func (t *SQLiteTimeline) evictEvents() error {
 	if _, err := t.database.Exec(deleteOldFromEvent, t.size); err != nil {
-		tx.Rollback()
 		return trace.Wrap(err)
 	}
 	return nil
