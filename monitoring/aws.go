@@ -18,14 +18,16 @@ package monitoring
 
 import (
 	"context"
-	"encoding/json"
-	"path"
+	"net/http"
+	"net/url"
 	"strings"
+	"time"
 
 	"github.com/gravitational/satellite/agent/health"
+	"github.com/gravitational/satellite/lib/httplib"
 
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
-	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/gravitational/trace"
 )
@@ -52,7 +54,8 @@ func (c *awsHasProfileChecker) Name() string {
 func (c *awsHasProfileChecker) Check(ctx context.Context, reporter health.Reporter) {
 	probes, err := c.check(ctx)
 	if err != nil {
-		probes.Add(NewProbeFromErr(c.Name(), "failed to validate IAM profile", err))
+		reporter.Add(NewProbeFromErr(c.Name(), "failed to validate IAM profile", err))
+		return
 	}
 	health.AddFrom(reporter, probes)
 }
@@ -66,8 +69,18 @@ func (c *awsHasProfileChecker) check(ctx context.Context) (probes health.Reporte
 		return probes, trace.Wrap(err, "failed to create session")
 	}
 
-	metadata := ec2metadata.New(sess)
-	err = c.iamInfo(ctx, metadata)
+	config := sess.ClientConfig(ec2metadata.ServiceName)
+	config.Config.HTTPClient = &http.Client{
+		Transport: httplib.NewTransportWithContext(ctx),
+		Timeout:   5 * time.Second,
+	}
+
+	metadata := ec2metadata.NewClient(*config.Config, config.Handlers, config.Endpoint, config.SigningRegion)
+
+	_, err = metadata.IAMInfo()
+	if isContextCanceledError(err) {
+		return probes, trace.Wrap(err, "context canceled")
+	}
 	if err != nil {
 		return probes, trace.Wrap(err, "failed to determine node IAM profile")
 	}
@@ -76,56 +89,39 @@ func (c *awsHasProfileChecker) check(ctx context.Context) (probes health.Reporte
 	return probes, nil
 }
 
-// iamInfo checks if an IAM profile is assigned to the node.
-// Takes a context for cancelation.
-//
-// This is a slight modification to `EC2Metadata.IAMInfo(...)`
-// https://github.com/aws/aws-sdk-go/blob/13ad2b09f6ff7e16808b4a45c32684e6c66bf86d/aws/ec2metadata/api.go#L92
-func (c *awsHasProfileChecker) iamInfo(ctx context.Context, metadata *ec2metadata.EC2Metadata) error {
-	resp, err := c.getIAMInfo(ctx, metadata)
-	if err != nil {
-		return trace.Wrap(err, "failed to get EC2 IAM info")
-	}
-
-	var info ec2metadata.EC2IAMInfo
-	if err := json.NewDecoder(strings.NewReader(resp)).Decode(&info); err != nil {
-		return trace.Wrap(err, "failed to decode EC2 IAM info")
-	}
-
-	if info.Code != "Success" {
-		return trace.Wrap(err, "failed to get EC2 IAM Info (%s)", info.Code)
-	}
-	return nil
-}
-
-// getIAMInfo sends a request for IAM info and return the response content.
-// Takes a context for cancelation and gets IAM info.
-//
-// This is a slight modification to `EC2Metadata.GetMetadata(...)`
-// https://github.com/aws/aws-sdk-go/blob/13ad2b09f6ff7e16808b4a45c32684e6c66bf86d/aws/ec2metadata/api.go#L18
-func (c *awsHasProfileChecker) getIAMInfo(ctx context.Context, metadata *ec2metadata.EC2Metadata) (string, error) {
-	op := &request.Operation{
-		Name:       "GetMetadata",
-		HTTPMethod: "GET",
-		HTTPPath:   path.Join("/", "meta-data", "iam/info"),
-	}
-	output := &metadataOutput{}
-	req := metadata.NewRequest(op, nil, output)
-	req.SetContext(ctx)
-	return output.Content, trace.Wrap(req.Send())
-}
-
-// metadataOutput contains the returned content when requesting ec2metadata.
-type metadataOutput struct {
-	Content string
-}
-
 // IsRunningOnAWS attempts to use the AWS metadata API to determine if the
 // currently running node is an AWS node or not
 func IsRunningOnAWS() bool {
 	session := session.New()
 	metadata := ec2metadata.New(session)
 	return metadata.Available()
+}
+
+// isContextCanceledError returns true if the error is a context canceled error.
+func isContextCanceledError(err error) bool {
+	if err == nil {
+		return false
+	}
+	switch err := unwrapAWSError(err).(type) {
+	case *url.Error:
+		return err.Err == context.Canceled
+	default:
+		return strings.Contains(err.Error(), "context canceled")
+	}
+}
+
+// unwrapAWSError unwraps the aws error and returns the orignal error. Returns
+// the provided error if it is not an aws error.
+func unwrapAWSError(err error) error {
+	if err != nil {
+		switch origErr := err.(type) {
+		case awserr.Error:
+			err = origErr.OrigErr()
+		default:
+			return err
+		}
+	}
+	return err
 }
 
 const awsHasProfileCheckerID = "aws"
