@@ -41,7 +41,7 @@ type MemTimeline struct {
 
 // NewMemTimeline initializes and returns a new MemTimeline with the specified
 // size. Initial cluster status is `Unknown`.
-func NewMemTimeline(size int) Timeline {
+func NewMemTimeline(size int) *MemTimeline {
 	return &MemTimeline{
 		size:       size,
 		events:     make([]*Event, 0, size),

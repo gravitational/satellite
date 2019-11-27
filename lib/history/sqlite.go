@@ -27,6 +27,7 @@ import (
 
 	"github.com/gravitational/trace"
 	_ "github.com/mattn/go-sqlite3" // initialize sqlite3
+	log "github.com/sirupsen/logrus"
 )
 
 // SQLiteTimeline represents a timeline of cluster status events. The timeline
@@ -45,7 +46,7 @@ type SQLiteTimeline struct {
 
 // NewSQLiteTimeline initializes and returns a new SQLiteTimeline with the
 // specified size. Initial cluster status is `Unknown`.
-func NewSQLiteTimeline(database *sql.DB, size int) (Timeline, error) {
+func NewSQLiteTimeline(database *sql.DB, size int) (*SQLiteTimeline, error) {
 	if err := initEventTable(database); err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -79,13 +80,17 @@ func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status *pb.SystemStat
 		return trace.Wrap(err)
 	}
 
+	defer func() {
+		if err := tx.Rollback(); err != nil {
+			log.WithError(err).Error("Failed to rollback sql transaction.")
+		}
+	}()
+
 	if err := t.insertEvents(events); err != nil {
-		tx.Rollback()
 		return trace.Wrap(err, "failed to insert events.")
 	}
 
 	if err := t.evictEvents(); err != nil {
-		tx.Rollback()
 		return trace.Wrap(err, "failed to evict old events.")
 	}
 
@@ -104,6 +109,12 @@ func (t *SQLiteTimeline) GetEvents() (events []*Event, err error) {
 		return nil, trace.Wrap(err)
 	}
 
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.WithError(err).Error("Failed to close sql rows.")
+		}
+	}()
+
 	var (
 		id        int
 		timestamp time.Time
@@ -116,7 +127,6 @@ func (t *SQLiteTimeline) GetEvents() (events []*Event, err error) {
 
 	for rows.Next() {
 		if err := rows.Scan(&id, &timestamp, &eventType, &node, &probe, &old, &new); err != nil {
-			rows.Close()
 			return nil, trace.Wrap(err)
 		}
 
@@ -154,6 +164,8 @@ func (t *SQLiteTimeline) GetEvents() (events []*Event, err error) {
 
 // insertEvents inserts the provided events into the timeline.
 func (t *SQLiteTimeline) insertEvents(events []*Event) error {
+	// eventSize specifies the number of fields contained in an Event entry.
+	const eventSize = 6
 
 	// prepare bulk insert statement
 	valueStrings := make([]string, 0, len(events))
@@ -210,9 +222,6 @@ INSERT INTO event (
 	new
 ) VALUES %s
 `
-
-// eventSize specifies the number of fields contained in an Event entry.
-const eventSize = 6
 
 // eventValueString specifies the insert values tring for an Event.
 const eventValueString = "(?, ?, ?, ?, ?, ?)"
