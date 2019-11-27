@@ -34,14 +34,13 @@ type MemTimeline struct {
 	// events holds the latest status events.
 	events []*Event
 	// lastStatus holds the last recorded cluster status.
-	// Initial cluster status is `Unknown`.
 	lastStatus *Cluster
 	// mu locks timeline access
 	mu sync.Mutex
 }
 
 // NewMemTimeline initializes and returns a new MemTimeline with the specified
-// size.
+// size. Initial cluster status is `Unknown`.
 func NewMemTimeline(size int) Timeline {
 	return &MemTimeline{
 		size:       size,

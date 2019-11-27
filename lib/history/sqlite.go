@@ -40,12 +40,11 @@ type SQLiteTimeline struct {
 	// database points to underlying sqlite database.
 	database *sql.DB
 	// lastStatus holds the last recorded cluster status.
-	// Initial cluster status is `Unknown`.
 	lastStatus *Cluster
 }
 
 // NewSQLiteTimeline initializes and returns a new SQLiteTimeline with the
-// specified size.
+// specified size. Initial cluster status is `Unknown`.
 func NewSQLiteTimeline(database *sql.DB, size int) (Timeline, error) {
 	if err := initEventTable(database); err != nil {
 		return nil, trace.Wrap(err)
