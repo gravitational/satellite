@@ -118,7 +118,7 @@ func NewUnknownEvent(timestamp time.Time) *Event {
 	return event
 }
 
-// ToProto converts Event into protobuf message.
+// ToProto returns the event as a protobuf message.
 func (e *Event) ToProto() *pb.TimelineEvent {
 	return &pb.TimelineEvent{
 		Timestamp: &pb.Timestamp{
@@ -128,6 +128,17 @@ func (e *Event) ToProto() *pb.TimelineEvent {
 		Type:     e.eventType.ToProto(),
 		Metadata: e.metadata,
 	}
+}
+
+// ToArgs returns the event as a list of arguments.
+func (e *Event) ToArgs() (valueArgs []interface{}) {
+	valueArgs = append(valueArgs, e.timestamp)
+	valueArgs = append(valueArgs, e.eventType)
+	valueArgs = append(valueArgs, e.metadata["node"])
+	valueArgs = append(valueArgs, e.metadata["probe"])
+	valueArgs = append(valueArgs, e.metadata["old"])
+	valueArgs = append(valueArgs, e.metadata["new"])
+	return valueArgs
 }
 
 // EventType specifies the type of event.

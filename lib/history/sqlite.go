@@ -207,12 +207,7 @@ func prepareBulkInsert(events []*Event) (insertEvents string, valueArgs []interf
 	valueStrings := make([]string, 0, len(events))
 	for _, event := range events {
 		valueStrings = append(valueStrings, eventValueString)
-		valueArgs = append(valueArgs, event.timestamp)
-		valueArgs = append(valueArgs, event.eventType)
-		valueArgs = append(valueArgs, event.metadata["node"])
-		valueArgs = append(valueArgs, event.metadata["probe"])
-		valueArgs = append(valueArgs, event.metadata["old"])
-		valueArgs = append(valueArgs, event.metadata["new"])
+		valueArgs = append(valueArgs, event.ToArgs())
 	}
 	insertEvents = fmt.Sprintf(insertIntoEvents, strings.Join(valueStrings, ","))
 	return insertEvents, valueArgs
