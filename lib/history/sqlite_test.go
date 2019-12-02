@@ -18,7 +18,6 @@ package history
 
 import (
 	"context"
-	"database/sql"
 	"os"
 	"testing"
 	"time"
@@ -33,32 +32,32 @@ import (
 func TestSQLite(t *testing.T) { TestingT(t) }
 
 type SQLiteSuite struct {
-	db *sql.DB
+	timeline *SQLiteTimeline
 }
 
 var _ = Suite(&SQLiteSuite{})
 
+// TestDBPath specifies location of test database.
+const TestDBPath = "/tmp/test.db"
+
 // SetupTest initializes test database.
 func (s *SQLiteSuite) SetUpTest(c *C) {
-	db, err := sql.Open("sqlite3", "/tmp/test.db")
+	timeline, err := NewSQLiteTimeline(SQLiteTimelineConfig{DBPath: TestDBPath, Capacity: 1})
 	c.Assert(err, IsNil)
-	s.db = db
+
+	s.timeline = timeline
 }
 
 // TearDownTest closes database and removed file.
 func (s *SQLiteSuite) TearDownTest(c *C) {
-	s.db.Close()
 	os.Remove("/tmp/test.db")
 }
 
 func (s *SQLiteSuite) TestRecordStatus(c *C) {
-	timeline, err := NewSQLiteTimeline(s.db, 1)
+	err := s.timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: pb.SystemStatus_Running})
 	c.Assert(err, IsNil)
 
-	err = timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: pb.SystemStatus_Running})
-	c.Assert(err, IsNil)
-
-	actual, err := timeline.GetEvents()
+	actual, err := s.timeline.GetEvents()
 	c.Assert(err, IsNil)
 
 	expected := []*Event{
@@ -73,16 +72,13 @@ func (s *SQLiteSuite) TestFIFOEviction(c *C) {
 	old := pb.SystemStatus_Running
 	new := pb.SystemStatus_Degraded
 
-	timeline, err := NewSQLiteTimeline(s.db, 1)
+	err := s.timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: old})
 	c.Assert(err, IsNil)
 
-	err = timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: old})
+	err = s.timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: new})
 	c.Assert(err, IsNil)
 
-	err = timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: new})
-	c.Assert(err, IsNil)
-
-	actual, err := timeline.GetEvents()
+	actual, err := s.timeline.GetEvents()
 	c.Assert(err, IsNil)
 
 	expected := []*Event{NewClusterDegradedEvent(time.Time{}, old.String(), new.String())}

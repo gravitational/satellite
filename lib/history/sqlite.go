@@ -209,7 +209,7 @@ func prepareBulkInsert(events []*Event) (insertEvents string, valueArgs []interf
 	valueStrings := make([]string, 0, len(events))
 	for _, event := range events {
 		valueStrings = append(valueStrings, eventValueString)
-		valueArgs = append(valueArgs, event.ToArgs())
+		valueArgs = append(valueArgs, event.ToArgs()...)
 	}
 	insertEvents = fmt.Sprintf(insertIntoEvents, strings.Join(valueStrings, ","))
 	return insertEvents, valueArgs
@@ -240,7 +240,7 @@ CREATE TABLE IF NOT EXISTS events (
 
 // TODO: index node/probe fields to improve filtering performance.
 
-// insertIntoEvents is sql statement to insert entry into `event` table. Used for
+// insertIntoEvents is sql statement to insert entry into `events` table. Used for
 // batch insert statement.
 const insertIntoEvents = `
 INSERT INTO events (
@@ -257,4 +257,4 @@ INSERT INTO events (
 const selectAllFromEvents = `SELECT * FROM events`
 
 // deleteOldFromEvents is sql statement to delete entries from `events` table when full.
-const deleteOldFromEvents = `DELETE FROM events WHERE id IN (SELECT id FROM event ORDER BY id DESC LIMIT -1 OFFSET ?);`
+const deleteOldFromEvents = `DELETE FROM events WHERE id IN (SELECT id FROM events ORDER BY id DESC LIMIT -1 OFFSET ?);`
