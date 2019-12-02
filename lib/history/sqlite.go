@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
@@ -36,38 +37,55 @@ import (
 //
 // Implements Timeline
 type SQLiteTimeline struct {
-	// size specifies the max number of events stored in the timeline.
+	// capacity specifies the max number of events that can be stored in the timeline.
+	capacity int
+	// size specifies the current number of events stored in the timeline.
 	size int
 	// database points to underlying sqlite database.
 	database *sql.DB
 	// lastStatus holds the last recorded cluster status.
 	lastStatus *Cluster
+	// mu locks timeline access.
+	mu sync.Mutex
+}
+
+// SQLiteTimelineConfig defines SQLiteTimeline configuration.
+type SQLiteTimelineConfig struct {
+	// DBPath specifies the database location.
+	DBPath string
+	// Capacity specifies the max number of events that can be stored in the timeline.
+	Capacity int
 }
 
 // NewSQLiteTimeline initializes and returns a new SQLiteTimeline with the
-// specified size. Initial cluster status is `Unknown`.
-func NewSQLiteTimeline(database *sql.DB, size int) (*SQLiteTimeline, error) {
-	if err := initEventTable(database); err != nil {
+// specified configuration.
+func NewSQLiteTimeline(config SQLiteTimelineConfig) (*SQLiteTimeline, error) {
+	database, err := initSQLite(config.DBPath)
+	if err != nil {
 		return nil, trace.Wrap(err)
 	}
 
 	return &SQLiteTimeline{
-		size:       size,
-		database:   database,
+		capacity: config.Capacity,
+		size:     0,
+		database: database,
+		// TODO: store and recover lastStatus in case satellite agent restarts.
 		lastStatus: &Cluster{Status: pb.SystemStatus_Unknown.String()},
 	}, nil
 }
 
-// initEventTable initializes event table schema.
-func initEventTable(db *sql.DB) error {
-	if _, err := db.Exec(createTableEvent); err != nil {
-		return trace.Wrap(err)
+// initSQLite initializes connection to database provided by dbPath and
+// initializes `events` table.
+func initSQLite(dbPath string) (*sql.DB, error) {
+	database, _ := sql.Open("sqlite3", dbPath)
+	if _, err := database.Exec(createTableEvents); err != nil {
+		return nil, trace.Wrap(err)
 	}
-	return nil
+	return database, nil
 }
 
-// RecordStatus records differences of the previous status to the provided
-// status into the Timeline.
+// RecordStatus records the differences between the previously stored status and
+// the provided status.
 func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status *pb.SystemStatus) error {
 	cluster := parseSystemStatus(status)
 	events := t.lastStatus.diffCluster(cluster)
@@ -75,23 +93,31 @@ func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status *pb.SystemStat
 		return nil
 	}
 
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	t.size = t.size + len(events)
+
 	tx, err := t.database.BeginTx(ctx, nil)
 	if err != nil {
 		return trace.Wrap(err)
 	}
 
 	defer func() {
+		// revert timeline size
+		t.size = t.size - len(events)
+
 		if err := tx.Rollback(); err != nil {
 			log.WithError(err).Error("Failed to rollback sql transaction.")
 		}
 	}()
 
 	if err := t.insertEvents(events); err != nil {
-		return trace.Wrap(err, "failed to insert events.")
+		return trace.Wrap(err, "failed to insert events")
 	}
 
 	if err := t.evictEvents(); err != nil {
-		return trace.Wrap(err, "failed to evict old events.")
+		return trace.Wrap(err, "failed to evict old events")
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -104,7 +130,7 @@ func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status *pb.SystemStat
 
 // GetEvents returns the current timeline.
 func (t *SQLiteTimeline) GetEvents() (events []*Event, err error) {
-	rows, err := t.database.Query(selectAllFromEvent)
+	rows, err := t.database.Query(selectAllFromEvents)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -164,12 +190,21 @@ func (t *SQLiteTimeline) GetEvents() (events []*Event, err error) {
 
 // insertEvents inserts the provided events into the timeline.
 func (t *SQLiteTimeline) insertEvents(events []*Event) error {
-	// eventSize specifies the number of fields contained in an Event entry.
-	const eventSize = 6
+	insertEvents, valueArgs := prepareBulkInsert(events)
+	if _, err := t.database.Exec(insertEvents, valueArgs...); err != nil {
+		return trace.Wrap(err)
+	}
+	return nil
+}
+
+// prepareBulkInsert prepares bulk insert events statement and value arguments.
+func prepareBulkInsert(events []*Event) (insertEvents string, valueArgs []interface{}) {
+	// eventValueString specifies the insert value string for an Event.
+	// It should be consistent with the number of fields in an event.
+	const eventValueString = "(?, ?, ?, ?, ?, ?)"
 
 	// prepare bulk insert statement
 	valueStrings := make([]string, 0, len(events))
-	valueArgs := make([]interface{}, 0, len(events)*eventSize)
 	for _, event := range events {
 		valueStrings = append(valueStrings, eventValueString)
 		valueArgs = append(valueArgs, event.timestamp)
@@ -179,55 +214,55 @@ func (t *SQLiteTimeline) insertEvents(events []*Event) error {
 		valueArgs = append(valueArgs, event.metadata["old"])
 		valueArgs = append(valueArgs, event.metadata["new"])
 	}
-	insertEvents := fmt.Sprintf(insertIntoEvent, strings.Join(valueStrings, ","))
-
-	if _, err := t.database.Exec(insertEvents, valueArgs...); err != nil {
-		return trace.Wrap(err)
-	}
-
-	return nil
+	insertEvents = fmt.Sprintf(insertIntoEvents, strings.Join(valueStrings, ","))
+	return insertEvents, valueArgs
 }
 
 // evictEvents deletes oldest events if the timeline is larger than its max
-// size.
+// capcity.
 func (t *SQLiteTimeline) evictEvents() error {
-	if _, err := t.database.Exec(deleteOldFromEvent, t.size); err != nil {
+	if t.size <= t.capacity {
+		return nil
+	}
+
+	if _, err := t.database.Exec(deleteOldFromEvents, t.capacity); err != nil {
 		return trace.Wrap(err)
 	}
+
+	t.size = t.capacity
 	return nil
 }
 
-// createTableEvent is sql statement to create an `event` table.
-const createTableEvent = `
-CREATE TABLE event (
+// createTableEvents is sql statement to create an `events` table.
+const createTableEvents = `
+CREATE TABLE IF NOT EXISTS events (
 	id INTEGER PRIMARY KEY,
-	timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-	type TEXT,
+	timestamp DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	type TEXT NOT NULL,
 	node TEXT,
 	probe TEXT,
-	old TEXT,
-	new TEXT
+	oldState TEXT,
+	newState TEXT
 )
 `
 
-// insertIntoEvent is sql statement to insert entry into `event` table. Used for
+// TODO: index node/probe fields to improve filtering performance.
+
+// insertIntoEvents is sql statement to insert entry into `event` table. Used for
 // batch insert statement.
-const insertIntoEvent = `
-INSERT INTO event (
+const insertIntoEvents = `
+INSERT INTO events (
 	timestamp,
 	type,
 	node,
 	probe,
-	old,
-	new
+	oldState,
+	newState
 ) VALUES %s
 `
 
-// eventValueString specifies the insert values tring for an Event.
-const eventValueString = "(?, ?, ?, ?, ?, ?)"
+// selectAllFromEvents is sql query to select all entries from `events` table.
+const selectAllFromEvents = `SELECT * FROM events`
 
-// selectAllFromEvent is sql query to select all entries from `event` table.
-const selectAllFromEvent = `SELECT * FROM event`
-
-// deleteOldFromEvent is sql statement to delete entries from `event` table when full.
-const deleteOldFromEvent = `DELETE FROM event WHERE id IN (SELECT id FROM event ORDER BY id DESC LIMIT -1 OFFSET ?);`
+// deleteOldFromEvents is sql statement to delete entries from `events` table when full.
+const deleteOldFromEvents = `DELETE FROM events WHERE id IN (SELECT id FROM event ORDER BY id DESC LIMIT -1 OFFSET ?);`
