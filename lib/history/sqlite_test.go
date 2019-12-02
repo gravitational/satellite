@@ -50,7 +50,7 @@ func (s *SQLiteSuite) SetUpTest(c *C) {
 
 // TearDownTest closes database and removed file.
 func (s *SQLiteSuite) TearDownTest(c *C) {
-	os.Remove("/tmp/test.db")
+	os.Remove(TestDBPath)
 }
 
 func (s *SQLiteSuite) TestRecordStatus(c *C) {
