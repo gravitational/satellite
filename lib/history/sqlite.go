@@ -96,17 +96,12 @@ func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status *pb.SystemStat
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	t.size = t.size + len(events)
-
 	tx, err := t.database.BeginTx(ctx, nil)
 	if err != nil {
 		return trace.Wrap(err)
 	}
 
 	defer func() {
-		// revert timeline size
-		t.size = t.size - len(events)
-
 		if err := tx.Rollback(); err != nil {
 			log.WithError(err).Error("Failed to rollback sql transaction.")
 		}
@@ -116,12 +111,19 @@ func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status *pb.SystemStat
 		return trace.Wrap(err, "failed to insert events")
 	}
 
-	if err := t.evictEvents(); err != nil {
-		return trace.Wrap(err, "failed to evict old events")
+	if t.size+len(events) > t.capacity {
+		if err := t.evictEvents(); err != nil {
+			return trace.Wrap(err, "failed to evict old events")
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
 		return trace.Wrap(err)
+	}
+
+	t.size = t.size + len(events)
+	if t.size > t.capacity {
+		t.size = t.capacity
 	}
 
 	t.lastStatus = cluster
@@ -214,16 +216,11 @@ func prepareBulkInsert(events []*Event) (insertEvents string, valueArgs []interf
 }
 
 // evictEvents deletes oldest events if the timeline is larger than its max
-// capcity.
+// capacity.
 func (t *SQLiteTimeline) evictEvents() error {
-	if t.size <= t.capacity {
-		return nil
-	}
-
 	if _, err := t.database.Exec(deleteOldFromEvents, t.capacity); err != nil {
 		return trace.Wrap(err)
 	}
-
 	t.size = t.capacity
 	return nil
 }
