@@ -18,8 +18,6 @@ package history
 
 import (
 	"sync"
-
-	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 )
 
 // MemTimeline represents a timeline of cluster status events. The Timeline
@@ -31,28 +29,27 @@ type MemTimeline struct {
 	// size specifies the max size of the timeline.
 	size int
 	// events holds the latest status events.
-	events []*Event
+	events []Event
 	// lastStatus holds the last recorded cluster status.
-	lastStatus *Cluster
+	lastStatus *ClusterStatus
 	// mu locks timeline access
 	mu sync.Mutex
 }
 
 // NewMemTimeline initializes and returns a new MemTimeline with the specified
 // size.
-func NewMemTimeline(size int) Timeline {
+func NewMemTimeline(size int) *MemTimeline {
 	return &MemTimeline{
 		size:       size,
-		events:     make([]*Event, 0, size),
-		lastStatus: &Cluster{},
+		events:     make([]Event, 0, size),
+		lastStatus: &ClusterStatus{},
 	}
 }
 
 // RecordStatus records differences of the previous status to the provided
 // status into the Timeline.
-func (t *MemTimeline) RecordStatus(status *pb.SystemStatus) {
-	cluster := parseSystemStatus(status)
-	events := t.lastStatus.diffCluster(cluster)
+func (t *MemTimeline) RecordStatus(status *ClusterStatus) {
+	events := t.lastStatus.diffCluster(status)
 	if len(events) == 0 {
 		return
 	}
@@ -63,18 +60,18 @@ func (t *MemTimeline) RecordStatus(status *pb.SystemStatus) {
 	for _, event := range events {
 		t.addEvent(event)
 	}
-	t.lastStatus = cluster
+	t.lastStatus = status
 }
 
 // GetEvents returns the current timeline.
-func (t *MemTimeline) GetEvents() []*Event {
+func (t *MemTimeline) GetEvents() []Event {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.events
 }
 
 // addEvent appends the provided event to the timeline.
-func (t *MemTimeline) addEvent(event *Event) {
+func (t *MemTimeline) addEvent(event Event) {
 	if len(t.events) >= t.size {
 		t.events = t.events[1:]
 	}
