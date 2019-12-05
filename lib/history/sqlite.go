@@ -86,7 +86,7 @@ func initSQLite(dbPath string) (*sql.DB, error) {
 
 // RecordStatus records the differences between the previously stored status and
 // the provided status.
-func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status *pb.SystemStatus) error {
+func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status *pb.SystemStatus) (err error) {
 	cluster := parseSystemStatus(status)
 	events := t.lastStatus.diffCluster(cluster)
 	if len(events) == 0 {
@@ -103,22 +103,25 @@ func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status *pb.SystemStat
 
 	defer func() {
 		// The rollback will be ignored if the tx has already been committed.
+		if err == nil {
+			return
+		}
 		if err := tx.Rollback(); err != nil {
 			log.WithError(err).Error("Failed to rollback sql transaction.")
 		}
 	}()
 
-	if err := t.insertEvents(ctx, tx, events); err != nil {
+	if err = t.insertEvents(ctx, tx, events); err != nil {
 		return trace.Wrap(err, "failed to insert events")
 	}
 
 	if t.size+len(events) > t.capacity {
-		if err := t.evictEvents(ctx, tx); err != nil {
+		if err = t.evictEvents(ctx, tx); err != nil {
 			return trace.Wrap(err, "failed to evict old events")
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err = tx.Commit(); err != nil {
 		return trace.Wrap(err)
 	}
 
