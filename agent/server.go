@@ -44,6 +44,7 @@ type RPCServer interface {
 	Status(context.Context, *pb.StatusRequest) (*pb.StatusResponse, error)
 	LocalStatus(context.Context, *pb.LocalStatusRequest) (*pb.LocalStatusResponse, error)
 	Time(context.Context, *pb.TimeRequest) (*pb.TimeResponse, error)
+	Timeline(context.Context, *pb.TimelineRequest) (*pb.TimelineResponse, error)
 	Stop()
 }
 
@@ -173,7 +174,7 @@ func newHealthHandler(s *server) http.HandlerFunc {
 			return
 		}
 
-		if r.URL.Path == "history" || r.URL.Path == "/history/" {
+		if r.URL.Path == "/history" || r.URL.Path == "/history/" {
 			handleHistory(ctx, s, w, r)
 			return
 		}
@@ -217,7 +218,7 @@ func handleHistory(ctx context.Context, s *server, w http.ResponseWriter, r *htt
 	}
 
 	httpStatus := http.StatusOK
-	roundtrip.ReplyJSON(w, httpStatus, timeline.GetEvents())
+	roundtrip.ReplyJSON(w, httpStatus, timeline)
 }
 
 // grpcHandlerFunc returns an http.Handler that delegates to

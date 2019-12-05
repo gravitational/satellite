@@ -19,7 +19,7 @@ package history
 import (
 	"sync"
 
-	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/jonboulle/clockwork"
 )
 
 // MemTimeline represents a timeline of cluster status events. The Timeline
@@ -28,31 +28,34 @@ import (
 //
 // Implements Timeline
 type MemTimeline struct {
-	// Size specifies the max size of the timeline.
-	Size int
-	// Events holds the latest status events.
-	Events []*Event
-	// LastStatus holds the last recorded cluster status.
-	LastStatus *Cluster
+	// capacity specifies the max number of events stored in the timeline.
+	capacity int
+	// events holds the latest status events.
+	events []Event
+	// lastStatus holds the last recorded cluster status.
+	lastStatus ClusterStatus
 	// mu locks timeline access
 	mu sync.Mutex
 }
 
 // NewMemTimeline initializes and returns a new MemTimeline with the specified
 // size.
-func NewMemTimeline(size int) Timeline {
+func NewMemTimeline(capacity int) *MemTimeline {
 	return &MemTimeline{
-		Size:       size,
-		Events:     make([]*Event, 0, size),
-		LastStatus: &Cluster{},
+		capacity:   capacity,
+		events:     make([]Event, 0, capacity),
+		lastStatus: NewClusterStatus(nil),
 	}
 }
 
 // RecordStatus records differences of the previous status to the provided
-// status into the Timeline.
-func (t *MemTimeline) RecordStatus(status *pb.SystemStatus) {
-	cluster := parseSystemStatus(status)
-	events := t.LastStatus.diffCluster(cluster)
+// status into the Timeline. Timestamps will be recorded from the provided
+// clock.
+func (t *MemTimeline) RecordStatus(clock clockwork.Clock, status ClusterStatus) {
+	events := t.lastStatus.diffCluster(clock, status)
+	if len(events) == 0 {
+		return
+	}
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -60,20 +63,20 @@ func (t *MemTimeline) RecordStatus(status *pb.SystemStatus) {
 	for _, event := range events {
 		t.addEvent(event)
 	}
-	t.LastStatus = cluster
+	t.lastStatus = status
 }
 
 // GetEvents returns the current timeline.
-func (t *MemTimeline) GetEvents() []*Event {
+func (t *MemTimeline) GetEvents() []Event {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return t.Events
+	return t.events
 }
 
 // addEvent appends the provided event to the timeline.
-func (t *MemTimeline) addEvent(event *Event) {
-	if len(t.Events) > t.Size {
-		t.Events = t.Events[1:]
+func (t *MemTimeline) addEvent(event Event) {
+	if len(t.events) >= t.capacity {
+		t.events = t.events[1:]
 	}
-	t.Events = append(t.Events, event)
+	t.events = append(t.events, event)
 }

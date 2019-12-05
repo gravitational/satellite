@@ -40,6 +40,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gravitational/satellite/lib/history"
+
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/test"
@@ -575,6 +577,8 @@ func (r *AgentSuite) newAgent(node string, rpcPort int, members []serf.Member,
 		statusClock:  statusClock,
 		recycleClock: recycleClock,
 		localStatus:  emptyNodeStatus(node),
+		Timeline:     history.NewMemTimeline(256),
+		done:         make(chan struct{}),
 	}
 }
 

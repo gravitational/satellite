@@ -462,7 +462,11 @@ func (r *agent) statusUpdateLoop() {
 					if err = r.cache.UpdateStatus(status); err != nil {
 						log.Warnf("Error updating system status in cache: %v", err)
 					}
+<<<<<<< HEAD
 					r.Timeline.RecordStatus(status)
+=======
+					// TODO: Record status history
+>>>>>>> bernard/timeline-event-restructure
 				}
 				select {
 				case <-r.done:
