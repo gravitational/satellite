@@ -63,8 +63,14 @@ func (e ClusterRecovered) ToProto() *pb.TimelineEvent {
 
 // ToArgs returns the event as a list of arguments.
 func (e ClusterRecovered) ToArgs() (args []interface{}) {
-	// TODO
-	return args
+	return []interface{}{
+		e.event.GetTimestamp().ToTime(),
+		clusterRecoveredType,
+		"", // no node name
+		"", // no probe name
+		"", // no old value
+		"", // no new value
+	}
 }
 
 // ClusterDegraded defines an event that caused the cluster's status to
@@ -90,8 +96,14 @@ func (e ClusterDegraded) ToProto() *pb.TimelineEvent {
 
 // ToArgs returns the event as a list of arguments.
 func (e ClusterDegraded) ToArgs() (args []interface{}) {
-	// TODO
-	return args
+	return []interface{}{
+		e.event.GetTimestamp().ToTime(),
+		clusterDegradedType,
+		"", // no node name
+		"", // no probe name
+		"", // no old value
+		"", // no new value
+	}
 }
 
 // NodeAdded defines a cluster resize event.
@@ -115,8 +127,14 @@ func (e NodeAdded) ToProto() *pb.TimelineEvent {
 
 // ToArgs returns the event as a list of arguments.
 func (e NodeAdded) ToArgs() (args []interface{}) {
-	// TODO
-	return args
+	return []interface{}{
+		e.event.GetTimestamp().ToTime(),
+		nodeAddedType,
+		e.event.GetNodeAdded().GetNode(),
+		"", // no probe name
+		"", // no old value
+		"", // no new value
+	}
 }
 
 // NodeRemoved defines a cluster resize event.
@@ -140,8 +158,14 @@ func (e NodeRemoved) ToProto() *pb.TimelineEvent {
 
 // ToArgs returns the event as a list of arguments.
 func (e NodeRemoved) ToArgs() (args []interface{}) {
-	// TODO
-	return args
+	return []interface{}{
+		e.event.GetTimestamp().ToTime(),
+		nodeRemovedType,
+		e.event.GetNodeRemoved().GetNode(),
+		"", // no probe name
+		"", // no old value
+		"", // no new value
+	}
 }
 
 // NodeRecovered defines an event that caused a node's status to recover.
@@ -165,8 +189,14 @@ func (e NodeRecovered) ToProto() *pb.TimelineEvent {
 
 // ToArgs returns the event as a list of arguments.
 func (e NodeRecovered) ToArgs() (args []interface{}) {
-	// TODO
-	return args
+	return []interface{}{
+		e.event.GetTimestamp().ToTime(),
+		nodeRecoveredType,
+		e.event.GetNodeRecovered().GetNode(),
+		"", // no probe name
+		"", // no old value
+		"", // no new value
+	}
 }
 
 // NodeDegraded defines an event that caused the node's status to degrade.
@@ -190,8 +220,14 @@ func (e NodeDegraded) ToProto() *pb.TimelineEvent {
 
 // ToArgs returns the event as a list of arguments.
 func (e NodeDegraded) ToArgs() (args []interface{}) {
-	// TODO
-	return args
+	return []interface{}{
+		e.event.GetTimestamp().ToTime(),
+		nodeDegradedType,
+		e.event.GetNodeDegraded().GetNode(),
+		"", // no probe name
+		"", // no old value
+		"", // no new value
+	}
 }
 
 // ProbeSucceeded defines an event that caused the probe's status to be
@@ -221,8 +257,14 @@ func (e ProbeSucceeded) ToProto() *pb.TimelineEvent {
 
 // ToArgs returns the event as a list of arguments.
 func (e ProbeSucceeded) ToArgs() (args []interface{}) {
-	// TODO
-	return args
+	return []interface{}{
+		e.event.GetTimestamp().ToTime(),
+		probeSucceededType,
+		e.event.GetProbeSucceeded().GetNode(),
+		e.event.GetProbeSucceeded().GetProbe(),
+		"", // no old value
+		"", // no new value
+	}
 }
 
 // ProbeFailed defines an event that caused the probe's status to be failing.
@@ -249,8 +291,14 @@ func (e ProbeFailed) ToProto() *pb.TimelineEvent {
 
 // ToArgs returns the event as a list of arguments.
 func (e ProbeFailed) ToArgs() (args []interface{}) {
-	// TODO
-	return args
+	return []interface{}{
+		e.event.GetTimestamp().ToTime(),
+		probeFailedType,
+		e.event.GetProbeFailed().GetNode(),
+		e.event.GetProbeFailed().GetProbe(),
+		"", // no old value
+		"", // no new value
+	}
 }
 
 // These types are used to specify the type of an event when storing event

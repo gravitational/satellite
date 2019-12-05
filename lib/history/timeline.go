@@ -18,15 +18,17 @@ limitations under the License.
 package history
 
 import (
-	"github.com/jonboulle/clockwork"
+	"context"
 )
 
 // Timeline can be used to record changes in the system status and retrieve them
 // as a list of Events.
 type Timeline interface {
 	// RecordStatus records any changes that have occurred since the previous
-	// recorded status. Timestamps will be recorded from the provided clock.
-	RecordStatus(clock clockwork.Clock, status ClusterStatus)
+	// recorded status.
+	RecordStatus(ctx context.Context, status ClusterStatus) error
 	// GetEvents returns the currently stored list of events.
-	GetEvents() []Event
+	GetEvents() ([]Event, error)
+	// TODO: Add method to query/filter events.
+	// Query(...) ([]Event, error)
 }

@@ -18,8 +18,8 @@ package history
 
 import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-	"github.com/jonboulle/clockwork"
 
+	"github.com/jonboulle/clockwork"
 	. "gopkg.in/check.v1"
 )
 
