@@ -19,7 +19,6 @@ package history
 import (
 	"context"
 	"os"
-	"testing"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
@@ -27,9 +26,6 @@ import (
 	_ "github.com/mattn/go-sqlite3" // initialize sqlite3
 	. "gopkg.in/check.v1"
 )
-
-// Hook up gocheck into the "go test" runner.
-func TestSQLite(t *testing.T) { TestingT(t) }
 
 type SQLiteSuite struct {
 	clock    clockwork.FakeClock
@@ -71,6 +67,22 @@ func (s *SQLiteSuite) TestRecordStatus(c *C) {
 
 	expected := []Event{NewClusterRecovered(s.clock.Now())}
 	c.Assert(actual, DeepEquals, expected, Commentf("Test record status"))
+}
+
+func (s *SQLiteSuite) TestQuery(c *C) {
+	status := &pb.SystemStatus{Nodes: []*pb.NodeStatus{&pb.NodeStatus{Name: "node-1"}}}
+	err := s.timeline.RecordStatus(context.TODO(), NewClusterStatus(status))
+	c.Assert(err, IsNil)
+
+	query := map[string]string{
+		"type": nodeAddedType,
+		"node": "node-1",
+	}
+	actual, err := s.timeline.Query(context.TODO(), query)
+	c.Assert(err, IsNil)
+
+	expected := []Event{NewNodeAdded(s.clock.Now(), "node-1")}
+	c.Assert(actual, DeepEquals, expected, Commentf("Test query status"))
 }
 
 func (s *SQLiteSuite) TestFIFOEviction(c *C) {

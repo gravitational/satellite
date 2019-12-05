@@ -29,6 +29,6 @@ type Timeline interface {
 	RecordStatus(ctx context.Context, status ClusterStatus) error
 	// GetEvents returns the currently stored list of events.
 	GetEvents(ctx context.Context) ([]Event, error)
-	// TODO: Add method to query/filter events.
-	// Query(...) ([]Event, error)
+	// Query returns a filtered list of events based on the provided params.
+	Query(ctx context.Context, params map[string]string) ([]Event, error)
 }

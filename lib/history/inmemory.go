@@ -20,6 +20,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/gravitational/trace"
 	"github.com/jonboulle/clockwork"
 )
 
@@ -77,6 +78,12 @@ func (t *MemTimeline) GetEvents(ctx context.Context) ([]Event, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.events, nil
+}
+
+// Query returns a filtered list of events based on the provided params.
+func (t *MemTimeline) Query(ctx context.Context, params map[string]string) ([]Event, error) {
+	// TODO
+	return []Event{}, trace.NotImplemented("[Query] not yet implemented")
 }
 
 // addEvent appends the provided event to the timeline.

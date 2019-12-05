@@ -19,6 +19,8 @@ package history
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -88,7 +90,7 @@ func initSQLite(dbPath string) (*sql.DB, error) {
 
 // RecordStatus records the differences between the previously stored status and
 // the provided status.
-func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status ClusterStatus) error {
+func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status ClusterStatus) (err error) {
 	events := t.lastStatus.diffCluster(t.clock, status)
 	if len(events) == 0 {
 		return nil
@@ -104,6 +106,9 @@ func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status ClusterStatus)
 
 	defer func() {
 		// The rollback will be ignored if the tx has already been committed.
+		if err == nil {
+			return
+		}
 		if err := tx.Rollback(); err != nil {
 			log.WithError(err).Error("Failed to rollback sql transaction.")
 		}
@@ -164,6 +169,61 @@ func (t *SQLiteTimeline) GetEvents(ctx context.Context) (events []Event, err err
 	}
 
 	return events, nil
+}
+
+// Query returns a filtered list of events based on the provided params.
+func (t *SQLiteTimeline) Query(ctx context.Context, params map[string]string) (events []Event, err error) {
+	query, args := prepareQuery(params)
+	rows, err := t.database.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.WithError(err).Error("Failed to close sql rows.")
+		}
+	}()
+
+	for rows.Next() {
+		row, err := scanEventRow(rows)
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
+
+		event, err := rowToEvent(row)
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
+
+		events = append(events, event)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	return events, nil
+}
+
+func prepareQuery(params map[string]string) (query string, args []interface{}) {
+	var fields = []string{"type", "node", "probe", "old", "new"}
+	var sb strings.Builder
+	index := 0
+
+	sb.WriteString("SELECT * FROM events WHERE ")
+	for _, key := range fields {
+		if val, ok := params[key]; ok {
+			sb.WriteString(fmt.Sprintf("%s = ? ", key))
+			args = append(args, val)
+		}
+		if index < len(params)-1 {
+			sb.WriteString(" AND ")
+		}
+		index++
+	}
+
+	return sb.String(), args
 }
 
 // insertEvents inserts the provided events into the timeline.
