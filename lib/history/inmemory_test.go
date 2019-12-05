@@ -40,7 +40,7 @@ func (s *InMemorySuite) TestRecordStatus(c *C) {
 	err := timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: pb.SystemStatus_Running})
 	c.Assert(err, IsNil)
 
-	actual, err := timeline.GetEvents()
+	actual, err := timeline.GetEvents(context.TODO())
 	c.Assert(err, IsNil)
 
 	expected := []*Event{
@@ -64,7 +64,7 @@ func (s *InMemorySuite) TestFIFOEviction(c *C) {
 	err = timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: new})
 	c.Assert(err, IsNil)
 
-	actual, err := timeline.GetEvents()
+	actual, err := timeline.GetEvents(context.TODO())
 	c.Assert(err, IsNil)
 
 	expected := []*Event{NewClusterDegradedEvent(time.Time{}, old.String(), new.String())}

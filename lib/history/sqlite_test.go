@@ -57,7 +57,7 @@ func (s *SQLiteSuite) TestRecordStatus(c *C) {
 	err := s.timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: pb.SystemStatus_Running})
 	c.Assert(err, IsNil)
 
-	actual, err := s.timeline.GetEvents()
+	actual, err := s.timeline.GetEvents(context.TODO())
 	c.Assert(err, IsNil)
 
 	expected := []*Event{
@@ -78,7 +78,7 @@ func (s *SQLiteSuite) TestFIFOEviction(c *C) {
 	err = s.timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: new})
 	c.Assert(err, IsNil)
 
-	actual, err := s.timeline.GetEvents()
+	actual, err := s.timeline.GetEvents(context.TODO())
 	c.Assert(err, IsNil)
 
 	expected := []*Event{NewClusterDegradedEvent(time.Time{}, old.String(), new.String())}

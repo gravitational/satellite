@@ -31,7 +31,7 @@ type Timeline interface {
 	// recorded status.
 	RecordStatus(ctx context.Context, status *pb.SystemStatus) error
 	// GetEvents returns the currently stored list of events.
-	GetEvents() ([]*Event, error)
+	GetEvents(ctx context.Context) ([]*Event, error)
 	// TODO: Add method to query/filter events.
 	// Query(...) []*Event
 }

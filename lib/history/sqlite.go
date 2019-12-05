@@ -131,8 +131,8 @@ func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status *pb.SystemStat
 }
 
 // GetEvents returns the current timeline.
-func (t *SQLiteTimeline) GetEvents() (events []*Event, err error) {
-	rows, err := t.database.Query(selectAllFromEvents)
+func (t *SQLiteTimeline) GetEvents(ctx context.Context) (events []*Event, err error) {
+	rows, err := t.database.QueryContext(ctx, selectAllFromEvents)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
