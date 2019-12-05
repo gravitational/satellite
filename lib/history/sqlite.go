@@ -108,12 +108,12 @@ func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status *pb.SystemStat
 		}
 	}()
 
-	if err := t.insertEvents(ctx, events); err != nil {
+	if err := t.insertEvents(ctx, tx, events); err != nil {
 		return trace.Wrap(err, "failed to insert events")
 	}
 
 	if t.size+len(events) > t.capacity {
-		if err := t.evictEvents(ctx); err != nil {
+		if err := t.evictEvents(ctx, tx); err != nil {
 			return trace.Wrap(err, "failed to evict old events")
 		}
 	}
@@ -192,9 +192,9 @@ func (t *SQLiteTimeline) GetEvents(ctx context.Context) (events []*Event, err er
 }
 
 // insertEvents inserts the provided events into the timeline.
-func (t *SQLiteTimeline) insertEvents(ctx context.Context, events []*Event) error {
+func (t *SQLiteTimeline) insertEvents(ctx context.Context, tx *sql.Tx, events []*Event) error {
 	insertEvents, valueArgs := prepareBulkInsert(events)
-	if _, err := t.database.ExecContext(ctx, insertEvents, valueArgs...); err != nil {
+	if _, err := tx.ExecContext(ctx, insertEvents, valueArgs...); err != nil {
 		return trace.Wrap(err)
 	}
 	return nil
@@ -218,11 +218,10 @@ func prepareBulkInsert(events []*Event) (insertEvents string, valueArgs []interf
 
 // evictEvents deletes oldest events if the timeline is larger than its max
 // capacity.
-func (t *SQLiteTimeline) evictEvents(ctx context.Context) error {
-	if _, err := t.database.ExecContext(ctx, deleteOldFromEvents, t.capacity); err != nil {
+func (t *SQLiteTimeline) evictEvents(ctx context.Context, tx *sql.Tx) error {
+	if _, err := tx.ExecContext(ctx, deleteOldFromEvents, t.capacity); err != nil {
 		return trace.Wrap(err)
 	}
-	t.size = t.capacity
 	return nil
 }
 
