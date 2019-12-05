@@ -32,7 +32,8 @@ import (
 func TestSQLite(t *testing.T) { TestingT(t) }
 
 type SQLiteSuite struct {
-	timeline *SQLiteTimeline
+	clock    clockwork.FakeClock
+	timeline Timeline
 }
 
 var _ = Suite(&SQLiteSuite{})
@@ -42,15 +43,17 @@ const TestDBPath = "/tmp/test.db"
 
 // SetupTest initializes test database.
 func (s *SQLiteSuite) SetUpTest(c *C) {
+	clock := clockwork.NewFakeClock()
 	config := SQLiteTimelineConfig{
 		DBPath:   TestDBPath,
 		Capacity: 1,
-		Clock:    clockwork.NewFakeClock(),
+		Clock:    clock,
 	}
 
 	timeline, err := NewSQLiteTimeline(config)
 	c.Assert(err, IsNil)
 
+	s.clock = clock
 	s.timeline = timeline
 }
 
@@ -63,10 +66,10 @@ func (s *SQLiteSuite) TestRecordStatus(c *C) {
 	err := s.timeline.RecordStatus(context.TODO(), NewClusterStatus(&pb.SystemStatus{Status: pb.SystemStatus_Running}))
 	c.Assert(err, IsNil)
 
-	actual, err := s.timeline.GetEvents()
+	actual, err := s.timeline.GetEvents(context.TODO())
 	c.Assert(err, IsNil)
 
-	expected := []Event{NewClusterRecovered(s.timeline.clock.Now())}
+	expected := []Event{NewClusterRecovered(s.clock.Now())}
 	c.Assert(actual, DeepEquals, expected, Commentf("Test record status"))
 }
 
@@ -80,9 +83,9 @@ func (s *SQLiteSuite) TestFIFOEviction(c *C) {
 	err = s.timeline.RecordStatus(context.TODO(), new)
 	c.Assert(err, IsNil)
 
-	actual, err := s.timeline.GetEvents()
+	actual, err := s.timeline.GetEvents(context.TODO())
 	c.Assert(err, IsNil)
 
-	expected := []Event{NewClusterDegraded(s.timeline.clock.Now())}
+	expected := []Event{NewClusterDegraded(s.clock.Now())}
 	c.Assert(actual, DeepEquals, expected, Commentf("Test FIFO eviction"))
 }

@@ -72,7 +72,8 @@ func (t *MemTimeline) RecordStatus(ctx context.Context, status ClusterStatus) er
 }
 
 // GetEvents returns the current timeline.
-func (t *MemTimeline) GetEvents() ([]Event, error) {
+// Context unused for MemTimeline.
+func (t *MemTimeline) GetEvents(ctx context.Context) ([]Event, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.events, nil

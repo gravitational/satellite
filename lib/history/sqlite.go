@@ -103,17 +103,18 @@ func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status ClusterStatus)
 	}
 
 	defer func() {
+		// The rollback will be ignored if the tx has already been committed.
 		if err := tx.Rollback(); err != nil {
 			log.WithError(err).Error("Failed to rollback sql transaction.")
 		}
 	}()
 
-	if err := t.insertEvents(events); err != nil {
+	if err := t.insertEvents(ctx, tx, events); err != nil {
 		return trace.Wrap(err, "failed to insert events")
 	}
 
 	if t.size+len(events) > t.capacity {
-		if err := t.evictEvents(); err != nil {
+		if err := t.evictEvents(ctx, tx); err != nil {
 			return trace.Wrap(err, "failed to evict old events")
 		}
 	}
@@ -132,8 +133,8 @@ func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status ClusterStatus)
 }
 
 // GetEvents returns the current timeline.
-func (t *SQLiteTimeline) GetEvents() (events []Event, err error) {
-	rows, err := t.database.Query(selectAllFromEvents)
+func (t *SQLiteTimeline) GetEvents(ctx context.Context) (events []Event, err error) {
+	rows, err := t.database.QueryContext(ctx, selectAllFromEvents)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -166,10 +167,10 @@ func (t *SQLiteTimeline) GetEvents() (events []Event, err error) {
 }
 
 // insertEvents inserts the provided events into the timeline.
-func (t *SQLiteTimeline) insertEvents(events []Event) error {
+func (t *SQLiteTimeline) insertEvents(ctx context.Context, tx *sql.Tx, events []Event) error {
 	for _, event := range events {
 		insertEvent, args := event.PrepareInsert()
-		if _, err := t.database.Exec(insertEvent, args...); err != nil {
+		if _, err := tx.ExecContext(ctx, insertEvent, args...); err != nil {
 			return trace.Wrap(err)
 		}
 	}
@@ -178,8 +179,8 @@ func (t *SQLiteTimeline) insertEvents(events []Event) error {
 
 // evictEvents deletes oldest events if the timeline is larger than its max
 // capacity.
-func (t *SQLiteTimeline) evictEvents() error {
-	if _, err := t.database.Exec(deleteOldFromEvents, t.capacity); err != nil {
+func (t *SQLiteTimeline) evictEvents(ctx context.Context, tx *sql.Tx) error {
+	if _, err := tx.ExecContext(ctx, deleteOldFromEvents, t.capacity); err != nil {
 		return trace.Wrap(err)
 	}
 	return nil

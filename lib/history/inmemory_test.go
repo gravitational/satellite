@@ -36,21 +36,24 @@ func (s *InMemorySuite) SetUpSuite(c *C) {
 }
 
 func (s *InMemorySuite) TestRecordStatus(c *C) {
-	timeline := NewMemTimeline(s.clock, 1)
+	var timeline Timeline
+	timeline = NewMemTimeline(s.clock, 1)
 	err := timeline.RecordStatus(context.TODO(), NewClusterStatus(&pb.SystemStatus{Status: pb.SystemStatus_Running}))
 	c.Assert(err, IsNil)
 
-	actual, err := timeline.GetEvents()
+	actual, err := timeline.GetEvents(context.TODO())
 	c.Assert(err, IsNil)
 
-	expected := []Event{NewClusterRecovered(timeline.clock.Now())}
+	expected := []Event{NewClusterRecovered(s.clock.Now())}
 	c.Assert(actual, DeepEquals, expected, Commentf("Test record status"))
 }
 
 func (s *InMemorySuite) TestFIFOEviction(c *C) {
+	var timeline Timeline
+	timeline = NewMemTimeline(s.clock, 1)
+
 	old := NewClusterStatus(&pb.SystemStatus{Status: pb.SystemStatus_Running})
 	new := NewClusterStatus(&pb.SystemStatus{Status: pb.SystemStatus_Degraded})
-	timeline := NewMemTimeline(s.clock, 1)
 
 	err := timeline.RecordStatus(context.TODO(), old)
 	c.Assert(err, IsNil)
@@ -58,9 +61,9 @@ func (s *InMemorySuite) TestFIFOEviction(c *C) {
 	err = timeline.RecordStatus(context.TODO(), new)
 	c.Assert(err, IsNil)
 
-	actual, err := timeline.GetEvents()
+	actual, err := timeline.GetEvents(context.TODO())
 	c.Assert(err, IsNil)
 
-	expected := []Event{NewClusterDegraded(timeline.clock.Now())}
+	expected := []Event{NewClusterDegraded(s.clock.Now())}
 	c.Assert(actual, DeepEquals, expected, Commentf("Test FIFO eviction"))
 }
