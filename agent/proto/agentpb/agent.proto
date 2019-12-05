@@ -152,7 +152,7 @@ message TimelineEvent {
     NodeRecovered nodeRecovered = 7;
     NodeDegraded nodeDegraded = 8;
     
-    ProbePassed probePassed = 9;
+    ProbeSucceeded probeSucceeded = 9;
     ProbeFailed probeFailed = 10;
 
     // TODO: Additional events

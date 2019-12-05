@@ -53,15 +53,15 @@ message NodeDegraded {
     string node = 1;
 }
 
-// ProbePassed represents a change in a probe result from failing to passing.
-message ProbePassed {
+// ProbeSucceeded represents a probe result that changed from failure to succeessful.
+message ProbeSucceeded {
     // Node specifies the node name.
     string node = 1;
     // Probe specifies the probe name.
     string probe = 2;
 }
 
-// ProbeFailed represents a change in a probe result from passing to failing.
+// ProbeFailed represents a probe result that changed from successful to failure.
 message ProbeFailed {
     // Node specifies the node name.
     string node = 1;
