@@ -19,8 +19,6 @@ package history
 import (
 	"context"
 	"database/sql"
-	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -169,27 +167,13 @@ func (t *SQLiteTimeline) GetEvents() (events []Event, err error) {
 
 // insertEvents inserts the provided events into the timeline.
 func (t *SQLiteTimeline) insertEvents(events []Event) error {
-	insertEvents, valueArgs := prepareBulkInsert(events)
-	if _, err := t.database.Exec(insertEvents, valueArgs...); err != nil {
-		return trace.Wrap(err)
+	for _, event := range events {
+		insertEvent, args := event.PrepareInsert()
+		if _, err := t.database.Exec(insertEvent, args...); err != nil {
+			return trace.Wrap(err)
+		}
 	}
 	return nil
-}
-
-// prepareBulkInsert prepares bulk insert events statement and value arguments.
-func prepareBulkInsert(events []Event) (insertEvents string, valueArgs []interface{}) {
-	// eventValueString specifies the insert value string for an Event.
-	// It should be consistent with the number of fields in an event.
-	const eventValueString = "(?, ?, ?, ?, ?, ?)"
-
-	// prepare bulk insert statement
-	valueStrings := make([]string, 0, len(events))
-	for _, event := range events {
-		valueStrings = append(valueStrings, eventValueString)
-		valueArgs = append(valueArgs, event.ToArgs()...)
-	}
-	insertEvents = fmt.Sprintf(insertIntoEvents, strings.Join(valueStrings, ","))
-	return insertEvents, valueArgs
 }
 
 // evictEvents deletes oldest events if the timeline is larger than its max
@@ -198,7 +182,6 @@ func (t *SQLiteTimeline) evictEvents() error {
 	if _, err := t.database.Exec(deleteOldFromEvents, t.capacity); err != nil {
 		return trace.Wrap(err)
 	}
-	t.size = t.capacity
 	return nil
 }
 
@@ -206,10 +189,10 @@ type eventRow struct {
 	id        int
 	timestamp time.Time
 	eventType string
-	node      string
-	probe     string
-	old       string
-	new       string
+	node      sql.NullString
+	probe     sql.NullString
+	old       sql.NullString
+	new       sql.NullString
 }
 
 func scanEventRow(rows *sql.Rows) (row eventRow, err error) {
@@ -234,17 +217,17 @@ func rowToEvent(row eventRow) (Event, error) {
 	case clusterDegradedType:
 		return NewClusterDegraded(row.timestamp), nil
 	case nodeAddedType:
-		return NewNodeAdded(row.timestamp, row.node), nil
+		return NewNodeAdded(row.timestamp, row.node.String), nil
 	case nodeRemovedType:
-		return NewNodeRemoved(row.timestamp, row.node), nil
+		return NewNodeRemoved(row.timestamp, row.node.String), nil
 	case nodeRecoveredType:
-		return NewNodeRecovered(row.timestamp, row.node), nil
+		return NewNodeRecovered(row.timestamp, row.node.String), nil
 	case nodeDegradedType:
-		return NewNodeDegraded(row.timestamp, row.node), nil
+		return NewNodeDegraded(row.timestamp, row.node.String), nil
 	case probeSucceededType:
-		return NewProbeSucceeded(row.timestamp, row.node, row.probe), nil
+		return NewProbeSucceeded(row.timestamp, row.node.String, row.probe.String), nil
 	case probeFailedType:
-		return NewProbeFailed(row.timestamp, row.node, row.probe), nil
+		return NewProbeFailed(row.timestamp, row.node.String, row.probe.String), nil
 	default:
 		return nil, trace.NotFound("unknown event type %v", row.eventType)
 	}

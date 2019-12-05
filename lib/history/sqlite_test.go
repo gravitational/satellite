@@ -60,7 +60,6 @@ func (s *SQLiteSuite) TearDownTest(c *C) {
 }
 
 func (s *SQLiteSuite) TestRecordStatus(c *C) {
-
 	err := s.timeline.RecordStatus(context.TODO(), NewClusterStatus(&pb.SystemStatus{Status: pb.SystemStatus_Running}))
 	c.Assert(err, IsNil)
 
@@ -74,17 +73,16 @@ func (s *SQLiteSuite) TestRecordStatus(c *C) {
 func (s *SQLiteSuite) TestFIFOEviction(c *C) {
 	old := NewClusterStatus(&pb.SystemStatus{Status: pb.SystemStatus_Running})
 	new := NewClusterStatus(&pb.SystemStatus{Status: pb.SystemStatus_Degraded})
-	timeline := NewMemTimeline(s.timeline.clock, 1)
 
-	err := timeline.RecordStatus(context.TODO(), old)
+	err := s.timeline.RecordStatus(context.TODO(), old)
 	c.Assert(err, IsNil)
 
-	err = timeline.RecordStatus(context.TODO(), new)
+	err = s.timeline.RecordStatus(context.TODO(), new)
 	c.Assert(err, IsNil)
 
-	actual, err := timeline.GetEvents()
+	actual, err := s.timeline.GetEvents()
 	c.Assert(err, IsNil)
 
-	expected := []Event{NewClusterDegraded(timeline.clock.Now())}
+	expected := []Event{NewClusterDegraded(s.timeline.clock.Now())}
 	c.Assert(actual, DeepEquals, expected, Commentf("Test FIFO eviction"))
 }

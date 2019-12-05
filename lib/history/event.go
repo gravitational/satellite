@@ -28,6 +28,8 @@ type Event interface {
 	ToProto() *pb.TimelineEvent
 	// ToArgs returns the event as a list of arguments.
 	ToArgs() []interface{}
+	// PrepareInsert returns a SQL insert statement and list of arguments.
+	PrepareInsert() (statement string, args []interface{})
 }
 
 // newTimelineEvent constructs a new TimelineEvent with the provided timestamp.
@@ -73,6 +75,16 @@ func (e ClusterRecovered) ToArgs() (args []interface{}) {
 	}
 }
 
+// PrepareInsert returns a SQL insert statement and a list of arguments.
+func (e ClusterRecovered) PrepareInsert() (statement string, args []interface{}) {
+	statement = `INSERT INTO events (timestamp, type) VALUES (?,?)`
+	args = []interface{}{
+		e.event.GetTimestamp().ToTime(),
+		clusterRecoveredType,
+	}
+	return
+}
+
 // ClusterDegraded defines an event that caused the cluster's status to
 // degrade.
 type ClusterDegraded struct {
@@ -106,6 +118,16 @@ func (e ClusterDegraded) ToArgs() (args []interface{}) {
 	}
 }
 
+// PrepareInsert returns a SQL insert statement and a list of arguments.
+func (e ClusterDegraded) PrepareInsert() (statement string, args []interface{}) {
+	statement = `INSERT INTO events (timestamp, type) VALUES (?,?)`
+	args = []interface{}{
+		e.event.GetTimestamp().ToTime(),
+		clusterDegradedType,
+	}
+	return
+}
+
 // NodeAdded defines a cluster resize event.
 type NodeAdded struct {
 	event *pb.TimelineEvent
@@ -135,6 +157,17 @@ func (e NodeAdded) ToArgs() (args []interface{}) {
 		"", // no old value
 		"", // no new value
 	}
+}
+
+// PrepareInsert returns a SQL insert statement and a list of arguments.
+func (e NodeAdded) PrepareInsert() (statement string, args []interface{}) {
+	statement = `INSERT INTO events (timestamp, type, node) VALUES (?,?,?)`
+	args = []interface{}{
+		e.event.GetTimestamp().ToTime(),
+		nodeAddedType,
+		e.event.GetNodeAdded().GetNode(),
+	}
+	return
 }
 
 // NodeRemoved defines a cluster resize event.
@@ -168,6 +201,17 @@ func (e NodeRemoved) ToArgs() (args []interface{}) {
 	}
 }
 
+// PrepareInsert returns a SQL insert statement and a list of arguments.
+func (e NodeRemoved) PrepareInsert() (statement string, args []interface{}) {
+	statement = `INSERT INTO events (timestamp, type, node) VALUES (?,?,?)`
+	args = []interface{}{
+		e.event.GetTimestamp().ToTime(),
+		nodeRemovedType,
+		e.event.GetNodeRemoved().GetNode(),
+	}
+	return
+}
+
 // NodeRecovered defines an event that caused a node's status to recover.
 type NodeRecovered struct {
 	event *pb.TimelineEvent
@@ -199,6 +243,17 @@ func (e NodeRecovered) ToArgs() (args []interface{}) {
 	}
 }
 
+// PrepareInsert returns a SQL insert statement and a list of arguments.
+func (e NodeRecovered) PrepareInsert() (statement string, args []interface{}) {
+	statement = `INSERT INTO events (timestamp, type, node) VALUES (?,?,?)`
+	args = []interface{}{
+		e.event.GetTimestamp().ToTime(),
+		nodeRecoveredType,
+		e.event.GetNodeRecovered().GetNode(),
+	}
+	return
+}
+
 // NodeDegraded defines an event that caused the node's status to degrade.
 type NodeDegraded struct {
 	event *pb.TimelineEvent
@@ -228,6 +283,17 @@ func (e NodeDegraded) ToArgs() (args []interface{}) {
 		"", // no old value
 		"", // no new value
 	}
+}
+
+// PrepareInsert returns a SQL insert statement and a list of arguments.
+func (e NodeDegraded) PrepareInsert() (statement string, args []interface{}) {
+	statement = `INSERT INTO events (timestamp, type, node) VALUES (?,?,?)`
+	args = []interface{}{
+		e.event.GetTimestamp().ToTime(),
+		nodeDegradedType,
+		e.event.GetNodeDegraded().GetNode(),
+	}
+	return
 }
 
 // ProbeSucceeded defines an event that caused the probe's status to be
@@ -267,6 +333,18 @@ func (e ProbeSucceeded) ToArgs() (args []interface{}) {
 	}
 }
 
+// PrepareInsert returns a SQL insert statement and a list of arguments.
+func (e ProbeSucceeded) PrepareInsert() (statement string, args []interface{}) {
+	statement = `INSERT INTO events (timestamp, type, node, probe) VALUES (?,?,?,?)`
+	args = []interface{}{
+		e.event.GetTimestamp().ToTime(),
+		probeSucceededType,
+		e.event.GetProbeSucceeded().GetNode(),
+		e.event.GetProbeSucceeded().GetProbe(),
+	}
+	return
+}
+
 // ProbeFailed defines an event that caused the probe's status to be failing.
 type ProbeFailed struct {
 	event *pb.TimelineEvent
@@ -299,6 +377,18 @@ func (e ProbeFailed) ToArgs() (args []interface{}) {
 		"", // no old value
 		"", // no new value
 	}
+}
+
+// PrepareInsert returns a SQL insert statement and a list of arguments.
+func (e ProbeFailed) PrepareInsert() (statement string, args []interface{}) {
+	statement = `INSERT INTO events (timestamp, type, node, probe) VALUES (?,?,?,?)`
+	args = []interface{}{
+		e.event.GetTimestamp().ToTime(),
+		probeFailedType,
+		e.event.GetProbeFailed().GetNode(),
+		e.event.GetProbeFailed().GetProbe(),
+	}
+	return
 }
 
 // These types are used to specify the type of an event when storing event
