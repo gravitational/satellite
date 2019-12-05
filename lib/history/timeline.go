@@ -18,6 +18,8 @@ limitations under the License.
 package history
 
 import (
+	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+
 	"github.com/jonboulle/clockwork"
 )
 
@@ -26,7 +28,7 @@ import (
 type Timeline interface {
 	// RecordStatus records any changes that have occurred since the previous
 	// recorded status. Timestamps will be recorded from the provided clock.
-	RecordStatus(clock clockwork.Clock, status ClusterStatus)
+	RecordStatus(clock clockwork.Clock, status *pb.SystemStatus)
 	// GetEvents returns the currently stored list of events.
-	GetEvents() []Event
+	GetEvents() []*pb.TimelineEvent
 }

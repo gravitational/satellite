@@ -19,6 +19,7 @@ package history
 import (
 	"sync"
 
+	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/jonboulle/clockwork"
 )
 
@@ -31,9 +32,9 @@ type MemTimeline struct {
 	// capacity specifies the max number of events stored in the timeline.
 	capacity int
 	// events holds the latest status events.
-	events []Event
+	events []*pb.TimelineEvent
 	// lastStatus holds the last recorded cluster status.
-	lastStatus ClusterStatus
+	lastStatus *pb.SystemStatus
 	// mu locks timeline access
 	mu sync.Mutex
 }
@@ -43,16 +44,16 @@ type MemTimeline struct {
 func NewMemTimeline(capacity int) *MemTimeline {
 	return &MemTimeline{
 		capacity:   capacity,
-		events:     make([]Event, 0, capacity),
-		lastStatus: NewClusterStatus(nil),
+		events:     make([]*pb.TimelineEvent, 0, capacity),
+		lastStatus: nil,
 	}
 }
 
 // RecordStatus records differences of the previous status to the provided
 // status into the Timeline. Timestamps will be recorded from the provided
 // clock.
-func (t *MemTimeline) RecordStatus(clock clockwork.Clock, status ClusterStatus) {
-	events := t.lastStatus.diffCluster(clock, status)
+func (t *MemTimeline) RecordStatus(clock clockwork.Clock, status *pb.SystemStatus) {
+	events := diffCluster(clock, t.lastStatus, status)
 	if len(events) == 0 {
 		return
 	}
@@ -67,14 +68,19 @@ func (t *MemTimeline) RecordStatus(clock clockwork.Clock, status ClusterStatus) 
 }
 
 // GetEvents returns the current timeline.
-func (t *MemTimeline) GetEvents() []Event {
+func (t *MemTimeline) GetEvents() (events []*pb.TimelineEvent) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return t.events
+
+	for _, event := range t.events {
+		events = append(events, event)
+	}
+
+	return events
 }
 
 // addEvent appends the provided event to the timeline.
-func (t *MemTimeline) addEvent(event Event) {
+func (t *MemTimeline) addEvent(event *pb.TimelineEvent) {
 	if len(t.events) >= t.capacity {
 		t.events = t.events[1:]
 	}

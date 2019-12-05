@@ -22,21 +22,11 @@ import (
 	"github.com/jonboulle/clockwork"
 )
 
-// ClusterStatus represents the overall status of a cluster.
-type ClusterStatus struct {
-	*pb.SystemStatus
-}
-
-// NewClusterStatus constructs a new ClusterStatus.
-func NewClusterStatus(status *pb.SystemStatus) ClusterStatus {
-	return ClusterStatus{SystemStatus: status}
-}
-
 // diffCluster calculates the differences between a previous cluster status and
 // a new cluster status. The differences are returned as a list of Events.
-func (s ClusterStatus) diffCluster(clock clockwork.Clock, other ClusterStatus) (events []Event) {
-	oldNodes := s.nodeMap()
-	newNodes := other.nodeMap()
+func diffCluster(clock clockwork.Clock, old, new *pb.SystemStatus) (events []*pb.TimelineEvent) {
+	oldNodes := nodeMap(old)
+	newNodes := nodeMap(new)
 
 	// Keep track of removed nodes
 	removed := map[string]bool{}
@@ -47,7 +37,7 @@ func (s ClusterStatus) diffCluster(clock clockwork.Clock, other ClusterStatus) (
 	for name, newNode := range newNodes {
 		// Nodes modified
 		if oldNode, ok := oldNodes[name]; ok {
-			events = append(events, oldNode.diffNode(clock, newNode)...)
+			events = append(events, diffNode(clock, oldNode, newNode)...)
 			delete(removed, name)
 			continue
 		}
@@ -55,7 +45,7 @@ func (s ClusterStatus) diffCluster(clock clockwork.Clock, other ClusterStatus) (
 		// Nodes added to the cluster
 		event := NewNodeAdded(clock.Now(), name)
 		events = append(events, event)
-		events = append(events, NewNodeStatus(nil).diffNode(clock, newNode)...)
+		events = append(events, diffNode(clock, nil, newNode)...)
 	}
 
 	// Nodes removed from the cluster
@@ -65,11 +55,11 @@ func (s ClusterStatus) diffCluster(clock clockwork.Clock, other ClusterStatus) (
 	}
 
 	// Compare cluster status
-	if s.GetStatus() == other.GetStatus() {
+	if old.GetStatus() == new.GetStatus() {
 		return events
 	}
 
-	if other.isRunning() {
+	if new.GetStatus() == pb.SystemStatus_Running {
 		events = append(events, NewClusterRecovered(clock.Now()))
 		return events
 	}
@@ -80,94 +70,59 @@ func (s ClusterStatus) diffCluster(clock clockwork.Clock, other ClusterStatus) (
 
 // nodeMap returns the cluster's list of nodes as a map with each node mapped
 // to its name.
-func (s ClusterStatus) nodeMap() map[string]NodeStatus {
-	nodes := make(map[string]NodeStatus, len(s.GetNodes()))
-	for _, node := range s.GetNodes() {
-		nodes[node.GetName()] = NewNodeStatus(node)
+func nodeMap(status *pb.SystemStatus) map[string]*pb.NodeStatus {
+	nodes := make(map[string]*pb.NodeStatus, len(status.GetNodes()))
+	for _, node := range status.GetNodes() {
+		nodes[node.GetName()] = node
 	}
 	return nodes
 }
 
-// isRunning returns true if the cluster has a running status.
-func (s ClusterStatus) isRunning() bool {
-	return s.GetStatus() == pb.SystemStatus_Running
-}
-
-// NodeStatus represents the status of a node.
-type NodeStatus struct {
-	*pb.NodeStatus
-}
-
-// NewNodeStatus constructs a new NodeStatus.
-func NewNodeStatus(status *pb.NodeStatus) NodeStatus {
-	return NodeStatus{NodeStatus: status}
-}
-
 // diffNode calculates the differences between a previous node status and a new
 // node status. The differences are returned as a list of Events.
-func (s NodeStatus) diffNode(clock clockwork.Clock, other NodeStatus) (events []Event) {
-	oldProbes := s.probeMap()
-	newProbes := other.probeMap()
+func diffNode(clock clockwork.Clock, old, new *pb.NodeStatus) (events []*pb.TimelineEvent) {
+	oldProbes := probeMap(old)
+	newProbes := probeMap(new)
 
 	for name, newProbe := range newProbes {
 		if oldProbe, ok := oldProbes[name]; ok {
-			events = append(events, oldProbe.diffProbe(clock, other.GetName(), newProbe)...)
+			events = append(events, diffProbe(clock, new.GetName(), oldProbe, newProbe)...)
 		}
 	}
 
 	// Compare node status
-	if s.GetStatus() == other.GetStatus() {
+	if old.GetStatus() == new.GetStatus() {
 		return events
 	}
 
-	if other.isRunning() {
-		return append(events, NewNodeRecovered(clock.Now(), other.GetName()))
+	if new.GetStatus() == pb.NodeStatus_Running {
+		return append(events, NewNodeRecovered(clock.Now(), new.GetName()))
 	}
 
-	return append(events, NewNodeDegraded(clock.Now(), other.GetName()))
+	return append(events, NewNodeDegraded(clock.Now(), new.GetName()))
 }
 
 // probeMap returns the node's list of probes as a map with each probe mapped
 // to its name.
-func (s NodeStatus) probeMap() map[string]ProbeStatus {
-	probes := make(map[string]ProbeStatus, len(s.GetProbes()))
-	for _, probe := range s.GetProbes() {
-		probes[probe.GetChecker()] = NewProbeStatus(probe)
+func probeMap(status *pb.NodeStatus) map[string]*pb.Probe {
+	probes := make(map[string]*pb.Probe, len(status.GetProbes()))
+	for _, probe := range status.GetProbes() {
+		probes[probe.GetChecker()] = probe
 	}
 	return probes
-}
-
-// isRunning returns true if the node has a running status.
-func (s NodeStatus) isRunning() bool {
-	return s.GetStatus() == pb.NodeStatus_Running
-}
-
-// ProbeStatus represents the result of a probe.
-type ProbeStatus struct {
-	*pb.Probe
-}
-
-// NewProbeStatus constructs a new ProbeStatus.
-func NewProbeStatus(status *pb.Probe) ProbeStatus {
-	return ProbeStatus{Probe: status}
 }
 
 // diffProbe calculates the differences between a previous probe and a new
 // probe. The differences are returned as a list of Events. The provided
 // nodeName is used to specify which node the probes belong to.
-func (s ProbeStatus) diffProbe(clock clockwork.Clock, nodeName string, other ProbeStatus) (events []Event) {
-	if s.GetStatus() == other.GetStatus() {
+func diffProbe(clock clockwork.Clock, nodeName string, old, new *pb.Probe) (events []*pb.TimelineEvent) {
+	if old.GetStatus() == new.GetStatus() {
 		return events
 	}
 
-	if other.isSuccessful() {
-		return append(events, NewProbeSucceeded(clock.Now(), nodeName, other.GetChecker()))
+	if new.GetStatus() == pb.Probe_Running {
+		return append(events, NewProbeSucceeded(clock.Now(), nodeName, new.GetChecker()))
 	}
 
-	return append(events, NewProbeFailed(clock.Now(), nodeName, other.GetChecker()))
-}
-
-// isSuccessful returns true if the probe has a running status.
-func (s ProbeStatus) isSuccessful() bool {
-	return s.GetStatus() == pb.Probe_Running
+	return append(events, NewProbeFailed(clock.Now(), nodeName, new.GetChecker()))
 }

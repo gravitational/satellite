@@ -34,25 +34,28 @@ func (s *InMemorySuite) SetUpSuite(c *C) {
 }
 
 func (s *InMemorySuite) TestRecordStatus(c *C) {
-	timeline := NewMemTimeline(1)
-	timeline.RecordStatus(s.clock, NewClusterStatus(&pb.SystemStatus{Status: pb.SystemStatus_Running}))
+	var timeline Timeline
+	timeline = NewMemTimeline(1)
+	timeline.RecordStatus(s.clock, &pb.SystemStatus{Status: pb.SystemStatus_Running})
 
 	actual := timeline.GetEvents()
-	expected := []Event{NewClusterRecovered(s.clock.Now())}
+	expected := []*pb.TimelineEvent{NewClusterRecovered(s.clock.Now())}
 
 	c.Assert(actual, DeepEquals, expected, Commentf("Test record status"))
 }
 
 func (s *InMemorySuite) TestFIFOEviction(c *C) {
-	old := NewClusterStatus(&pb.SystemStatus{Status: pb.SystemStatus_Running})
-	new := NewClusterStatus(&pb.SystemStatus{Status: pb.SystemStatus_Degraded})
+	var timeline Timeline
+	timeline = NewMemTimeline(1)
 
-	timeline := NewMemTimeline(1)
+	old := &pb.SystemStatus{Status: pb.SystemStatus_Running}
+	new := &pb.SystemStatus{Status: pb.SystemStatus_Degraded}
+
 	timeline.RecordStatus(s.clock, old)
 	timeline.RecordStatus(s.clock, new)
 
 	actual := timeline.GetEvents()
-	expected := []Event{NewClusterDegraded(s.clock.Now())}
+	expected := []*pb.TimelineEvent{NewClusterDegraded(s.clock.Now())}
 
 	c.Assert(actual, DeepEquals, expected, Commentf("Test FIFO eviction"))
 }
