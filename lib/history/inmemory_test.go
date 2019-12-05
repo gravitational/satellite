@@ -34,7 +34,9 @@ type InMemorySuite struct{}
 var _ = Suite(&InMemorySuite{})
 
 func (s *InMemorySuite) TestRecordStatus(c *C) {
-	timeline := NewMemTimeline(1)
+	var timeline Timeline
+	timeline = NewMemTimeline(1)
+
 	err := timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: pb.SystemStatus_Running})
 	c.Assert(err, IsNil)
 
@@ -50,10 +52,12 @@ func (s *InMemorySuite) TestRecordStatus(c *C) {
 }
 
 func (s *InMemorySuite) TestFIFOEviction(c *C) {
+	var timeline Timeline
+	timeline = NewMemTimeline(1)
+
 	old := pb.SystemStatus_Running
 	new := pb.SystemStatus_Degraded
 
-	timeline := NewMemTimeline(1)
 	err := timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: old})
 	c.Assert(err, IsNil)
 

@@ -32,7 +32,7 @@ import (
 func TestSQLite(t *testing.T) { TestingT(t) }
 
 type SQLiteSuite struct {
-	timeline *SQLiteTimeline
+	timeline Timeline
 }
 
 var _ = Suite(&SQLiteSuite{})
