@@ -85,13 +85,9 @@ func (r *server) Time(ctx context.Context, req *pb.TimeRequest) (*pb.TimeRespons
 
 // Timeline sends the current status timeline
 func (r *server) Timeline(ctx context.Context, req *pb.TimelineRequest) (*pb.TimelineResponse, error) {
-	timelineEvents := r.agent.Timeline.GetEvents()
-	events := make([]*pb.TimelineEvent, 0, len(timelineEvents))
-	for _, event := range timelineEvents {
-		events = append(events, event.ToProto())
-	}
+	// TODO: Collect timeline events
 	return &pb.TimelineResponse{
-		Events: events,
+		Events: []*pb.TimelineEvent{},
 	}, nil
 }
 
