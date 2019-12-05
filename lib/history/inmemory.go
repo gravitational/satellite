@@ -18,6 +18,8 @@ package history
 
 import (
 	"sync"
+
+	"github.com/jonboulle/clockwork"
 )
 
 // MemTimeline represents a timeline of cluster status events. The Timeline
@@ -26,30 +28,31 @@ import (
 //
 // Implements Timeline
 type MemTimeline struct {
-	// size specifies the max size of the timeline.
-	size int
+	// capacity specifies the max number of events stored in the timeline.
+	capacity int
 	// events holds the latest status events.
 	events []Event
 	// lastStatus holds the last recorded cluster status.
-	lastStatus *ClusterStatus
+	lastStatus ClusterStatus
 	// mu locks timeline access
 	mu sync.Mutex
 }
 
 // NewMemTimeline initializes and returns a new MemTimeline with the specified
 // size.
-func NewMemTimeline(size int) *MemTimeline {
+func NewMemTimeline(capacity int) *MemTimeline {
 	return &MemTimeline{
-		size:       size,
-		events:     make([]Event, 0, size),
-		lastStatus: &ClusterStatus{},
+		capacity:   capacity,
+		events:     make([]Event, 0, capacity),
+		lastStatus: NewClusterStatus(nil),
 	}
 }
 
 // RecordStatus records differences of the previous status to the provided
-// status into the Timeline.
-func (t *MemTimeline) RecordStatus(status *ClusterStatus) {
-	events := t.lastStatus.diffCluster(status)
+// status into the Timeline. Timestamps will be recorded from the provided
+// clock.
+func (t *MemTimeline) RecordStatus(clock clockwork.Clock, status ClusterStatus) {
+	events := t.lastStatus.diffCluster(clock, status)
 	if len(events) == 0 {
 		return
 	}
@@ -72,7 +75,7 @@ func (t *MemTimeline) GetEvents() []Event {
 
 // addEvent appends the provided event to the timeline.
 func (t *MemTimeline) addEvent(event Event) {
-	if len(t.events) >= t.size {
+	if len(t.events) >= t.capacity {
 		t.events = t.events[1:]
 	}
 	t.events = append(t.events, event)

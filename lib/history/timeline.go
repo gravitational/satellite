@@ -14,15 +14,19 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package history provides interfaces for keeping track of cluster status timeline.
+// Package history provides interfaces for keeping track of cluster status history.
 package history
+
+import (
+	"github.com/jonboulle/clockwork"
+)
 
 // Timeline can be used to record changes in the system status and retrieve them
 // as a list of Events.
 type Timeline interface {
 	// RecordStatus records any changes that have occurred since the previous
-	// recorded status.
-	RecordStatus(status *ClusterStatus)
+	// recorded status. Timestamps will be recorded from the provided clock.
+	RecordStatus(clock clockwork.Clock, status ClusterStatus)
 	// GetEvents returns the currently stored list of events.
 	GetEvents() []Event
 }

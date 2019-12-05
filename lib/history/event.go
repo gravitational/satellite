@@ -31,8 +31,8 @@ type Event interface {
 }
 
 // newTimelineEvent constructs a new TimelineEvent with the provided timestamp.
-func newTimelineEvent(timestamp time.Time) pb.TimelineEvent {
-	return pb.TimelineEvent{
+func newTimelineEvent(timestamp time.Time) *pb.TimelineEvent {
+	return &pb.TimelineEvent{
 		Timestamp: &pb.Timestamp{
 			Seconds:     timestamp.Unix(),
 			Nanoseconds: int32(timestamp.Nanosecond()),
@@ -40,161 +40,198 @@ func newTimelineEvent(timestamp time.Time) pb.TimelineEvent {
 	}
 }
 
+// ClusterRecovered defines an event that caused the cluster's status to
+// recover.
 type ClusterRecovered struct {
-	pb.TimelineEvent
+	event *pb.TimelineEvent
 }
 
-func NewClusterRecovered(timestamp time.Time) *ClusterRecovered {
+// NewClusterRecovered constructs a new ClusterRecovered event with the
+// provided data.
+func NewClusterRecovered(timestamp time.Time) ClusterRecovered {
 	event := newTimelineEvent(timestamp)
 	event.Data = &pb.TimelineEvent_ClusterRecovered{
 		ClusterRecovered: &pb.ClusterRecovered{},
 	}
-	return &ClusterRecovered{event}
+	return ClusterRecovered{event: event}
 }
 
-func (e *ClusterRecovered) ToProto() *pb.TimelineEvent {
-	return &e.TimelineEvent
+// ToProto returns the event as a protobuf TimelineEvent message.
+func (e ClusterRecovered) ToProto() *pb.TimelineEvent {
+	return e.event
 }
 
-func (e *ClusterRecovered) ToArgs() (args []interface{}) {
+// ToArgs returns the event as a list of arguments.
+func (e ClusterRecovered) ToArgs() (args []interface{}) {
 	// TODO
 	return args
 }
 
+// ClusterDegraded defines an event that caused the cluster's status to
+// degrade.
 type ClusterDegraded struct {
-	pb.TimelineEvent
+	event *pb.TimelineEvent
 }
 
-func NewClusterDegraded(timestamp time.Time) *ClusterDegraded {
+// NewClusterDegraded constructs a new ClusterDegraded event with the provided
+// data.
+func NewClusterDegraded(timestamp time.Time) ClusterDegraded {
 	event := newTimelineEvent(timestamp)
 	event.Data = &pb.TimelineEvent_ClusterDegraded{
 		ClusterDegraded: &pb.ClusterDegraded{},
 	}
-	return &ClusterDegraded{event}
+	return ClusterDegraded{event: event}
 }
 
-func (e *ClusterDegraded) ToProto() *pb.TimelineEvent {
-	return &e.TimelineEvent
+// ToProto returns the event as a protobuf TimelineEvent message.
+func (e ClusterDegraded) ToProto() *pb.TimelineEvent {
+	return e.event
 }
 
-func (e *ClusterDegraded) ToArgs() (args []interface{}) {
+// ToArgs returns the event as a list of arguments.
+func (e ClusterDegraded) ToArgs() (args []interface{}) {
 	// TODO
 	return args
 }
 
+// NodeAdded defines a cluster resize event.
 type NodeAdded struct {
-	pb.TimelineEvent
+	event *pb.TimelineEvent
 }
 
-func NewNodeAdded(timestamp time.Time, node string) *NodeAdded {
+// NewNodeAdded constructs a new NodeAdded event with the provided data.
+func NewNodeAdded(timestamp time.Time, node string) NodeAdded {
 	event := newTimelineEvent(timestamp)
 	event.Data = &pb.TimelineEvent_NodeAdded{
 		NodeAdded: &pb.NodeAdded{Node: node},
 	}
-	return &NodeAdded{event}
+	return NodeAdded{event: event}
 }
 
-func (e *NodeAdded) ToProto() *pb.TimelineEvent {
-	return &e.TimelineEvent
+// ToProto returns the event as a protobuf TimelineEvent message.
+func (e NodeAdded) ToProto() *pb.TimelineEvent {
+	return e.event
 }
 
-func (e *NodeAdded) ToArgs() (args []interface{}) {
+// ToArgs returns the event as a list of arguments.
+func (e NodeAdded) ToArgs() (args []interface{}) {
 	// TODO
 	return args
 }
 
+// NodeRemoved defines a cluster resize event.
 type NodeRemoved struct {
-	pb.TimelineEvent
+	event *pb.TimelineEvent
 }
 
-func NewNodeRemoved(timestamp time.Time, node string) *NodeRemoved {
+// NewNodeRemoved constructs a new NodeRemoved event with the provided data.
+func NewNodeRemoved(timestamp time.Time, node string) NodeRemoved {
 	event := newTimelineEvent(timestamp)
 	event.Data = &pb.TimelineEvent_NodeRemoved{
 		NodeRemoved: &pb.NodeRemoved{Node: node},
 	}
-	return &NodeRemoved{event}
+	return NodeRemoved{event: event}
 }
 
-func (e *NodeRemoved) ToProto() *pb.TimelineEvent {
-	return &e.TimelineEvent
+// ToProto returns the event as a protobuf TimelineEvent message.
+func (e NodeRemoved) ToProto() *pb.TimelineEvent {
+	return e.event
 }
 
-func (e *NodeRemoved) ToArgs() (args []interface{}) {
+// ToArgs returns the event as a list of arguments.
+func (e NodeRemoved) ToArgs() (args []interface{}) {
 	// TODO
 	return args
 }
 
+// NodeRecovered defines an event that caused a node's status to recover.
 type NodeRecovered struct {
-	pb.TimelineEvent
+	event *pb.TimelineEvent
 }
 
-func NewNodeRecovered(timestamp time.Time, node string) *NodeRecovered {
+// NewNodeRecovered constructs a new NodeRecovered event with the provided data.
+func NewNodeRecovered(timestamp time.Time, node string) NodeRecovered {
 	event := newTimelineEvent(timestamp)
 	event.Data = &pb.TimelineEvent_NodeRecovered{
 		NodeRecovered: &pb.NodeRecovered{Node: node},
 	}
-	return &NodeRecovered{event}
+	return NodeRecovered{event: event}
 }
 
-func (e *NodeRecovered) ToProto() *pb.TimelineEvent {
-	return &e.TimelineEvent
+// ToProto returns the event as a protobuf TimlineEvent message.
+func (e NodeRecovered) ToProto() *pb.TimelineEvent {
+	return e.event
 }
 
-func (e *NodeRecovered) ToArgs() (args []interface{}) {
+// ToArgs returns the event as a list of arguments.
+func (e NodeRecovered) ToArgs() (args []interface{}) {
 	// TODO
 	return args
 }
 
+// NodeDegraded defines an event that caused the node's status to degrade.
 type NodeDegraded struct {
-	pb.TimelineEvent
+	event *pb.TimelineEvent
 }
 
-func NewNodeDegraded(timestamp time.Time, node string) *NodeDegraded {
+// NewNodeDegraded constructs a new NodeDegraded event with the provided data.
+func NewNodeDegraded(timestamp time.Time, node string) NodeDegraded {
 	event := newTimelineEvent(timestamp)
 	event.Data = &pb.TimelineEvent_NodeDegraded{
 		NodeDegraded: &pb.NodeDegraded{Node: node},
 	}
-	return &NodeDegraded{event}
+	return NodeDegraded{event: event}
 }
 
-func (e *NodeDegraded) ToProto() *pb.TimelineEvent {
-	return &e.TimelineEvent
+// ToProto returns the event as a protobuf TimelineEvent message.
+func (e NodeDegraded) ToProto() *pb.TimelineEvent {
+	return e.event
 }
 
-func (e *NodeDegraded) ToArgs() (args []interface{}) {
+// ToArgs returns the event as a list of arguments.
+func (e NodeDegraded) ToArgs() (args []interface{}) {
 	// TODO
 	return args
 }
 
-type ProbePassed struct {
-	pb.TimelineEvent
+// ProbeSucceeded defines an event that caused the probe's status to be
+// succeeding.
+type ProbeSucceeded struct {
+	event *pb.TimelineEvent
 }
 
-func NewProbePassed(timestamp time.Time, node, probe string) *ProbePassed {
+// NewProbeSucceeded constructs a new ProbeSucceeded event with the provided
+// data.
+func NewProbeSucceeded(timestamp time.Time, node, probe string) ProbeSucceeded {
 	event := newTimelineEvent(timestamp)
-	event.Data = &pb.TimelineEvent_ProbePassed{
-		ProbePassed: &pb.ProbePassed{
+	event.Data = &pb.TimelineEvent_ProbeSucceeded{
+		ProbeSucceeded: &pb.ProbeSucceeded{
 			Node:  node,
 			Probe: probe,
 		},
 	}
-	return &ProbePassed{event}
+	return ProbeSucceeded{event: event}
+
 }
 
-func (e *ProbePassed) ToProto() *pb.TimelineEvent {
-	return &e.TimelineEvent
+// ToProto returns the event as a protobuf TimelineEvent message.
+func (e ProbeSucceeded) ToProto() *pb.TimelineEvent {
+	return e.event
 }
 
-func (e *ProbePassed) ToArgs() (args []interface{}) {
+// ToArgs returns the event as a list of arguments.
+func (e ProbeSucceeded) ToArgs() (args []interface{}) {
 	// TODO
 	return args
 }
 
+// ProbeFailed defines an event that caused the probe's status to be failing.
 type ProbeFailed struct {
-	pb.TimelineEvent
+	event *pb.TimelineEvent
 }
 
-func NewProbeFailed(timestamp time.Time, node, probe string) *ProbeFailed {
+// NewProbeFailed constructs a new ProbeFailed event with the provided data.
+func NewProbeFailed(timestamp time.Time, node, probe string) ProbeFailed {
 	event := newTimelineEvent(timestamp)
 	event.Data = &pb.TimelineEvent_ProbeFailed{
 		ProbeFailed: &pb.ProbeFailed{
@@ -202,14 +239,16 @@ func NewProbeFailed(timestamp time.Time, node, probe string) *ProbeFailed {
 			Probe: probe,
 		},
 	}
-	return &ProbeFailed{event}
+	return ProbeFailed{event: event}
 }
 
-func (e *ProbeFailed) ToProto() *pb.TimelineEvent {
-	return &e.TimelineEvent
+// ToProto returns the event as a protobuf TimelineEvent message.
+func (e ProbeFailed) ToProto() *pb.TimelineEvent {
+	return e.event
 }
 
-func (e *ProbeFailed) ToArgs() (args []interface{}) {
+// ToArgs returns the event as a list of arguments.
+func (e ProbeFailed) ToArgs() (args []interface{}) {
 	// TODO
 	return args
 }
@@ -223,7 +262,7 @@ const (
 	nodeRemovedType      = "NodeRemoved"
 	nodeRecoveredType    = "NodeRecovered"
 	nodeDegradedType     = "NodeDegraded"
-	probePassedType      = "ProbePassed"
+	probeSucceededType   = "ProbeSucceeded"
 	probeFailedType      = "ProbeFailed"
 	unknownType          = "Unknown"
 )
