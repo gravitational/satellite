@@ -19,10 +19,10 @@ package history
 import (
 	"context"
 	"database/sql"
-	"fmt"
-	"strings"
 	"sync"
 	"time"
+
+	"github.com/jonboulle/clockwork"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
@@ -37,6 +37,8 @@ import (
 //
 // Implements Timeline
 type SQLiteTimeline struct {
+	// clock is used to record event timestamps.
+	clock clockwork.Clock
 	// capacity specifies the max number of events that can be stored in the timeline.
 	capacity int
 	// size specifies the current number of events stored in the timeline.
@@ -44,7 +46,7 @@ type SQLiteTimeline struct {
 	// database points to underlying sqlite database.
 	database *sql.DB
 	// lastStatus holds the last recorded cluster status.
-	lastStatus *Cluster
+	lastStatus *pb.SystemStatus
 	// mu locks timeline access.
 	mu sync.Mutex
 }
@@ -55,6 +57,8 @@ type SQLiteTimelineConfig struct {
 	DBPath string
 	// Capacity specifies the max number of events that can be stored in the timeline.
 	Capacity int
+	// Clock will be used to record event timestamps.
+	Clock clockwork.Clock
 }
 
 // NewSQLiteTimeline initializes and returns a new SQLiteTimeline with the
@@ -66,11 +70,12 @@ func NewSQLiteTimeline(config SQLiteTimelineConfig) (*SQLiteTimeline, error) {
 	}
 
 	return &SQLiteTimeline{
+		clock:    config.Clock,
 		capacity: config.Capacity,
 		size:     0,
 		database: database,
 		// TODO: store and recover lastStatus in case satellite agent restarts.
-		lastStatus: &Cluster{Status: pb.SystemStatus_Unknown.String()},
+		lastStatus: nil,
 	}, nil
 }
 
@@ -78,6 +83,7 @@ func NewSQLiteTimeline(config SQLiteTimelineConfig) (*SQLiteTimeline, error) {
 // initializes `events` table.
 func initSQLite(dbPath string) (*sql.DB, error) {
 	database, _ := sql.Open("sqlite3", dbPath)
+	// TODO add context
 	if _, err := database.Exec(createTableEvents); err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -87,8 +93,7 @@ func initSQLite(dbPath string) (*sql.DB, error) {
 // RecordStatus records the differences between the previously stored status and
 // the provided status.
 func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status *pb.SystemStatus) (err error) {
-	cluster := parseSystemStatus(status)
-	events := t.lastStatus.diffCluster(cluster)
+	events := diffCluster(t.clock, t.lastStatus, status)
 	if len(events) == 0 {
 		return nil
 	}
@@ -130,12 +135,12 @@ func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status *pb.SystemStat
 		t.size = t.capacity
 	}
 
-	t.lastStatus = cluster
+	t.lastStatus = status
 	return nil
 }
 
 // GetEvents returns the current timeline.
-func (t *SQLiteTimeline) GetEvents(ctx context.Context) (events []*Event, err error) {
+func (t *SQLiteTimeline) GetEvents(ctx context.Context) (events []*pb.TimelineEvent, err error) {
 	rows, err := t.database.QueryContext(ctx, selectAllFromEvents)
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -150,7 +155,7 @@ func (t *SQLiteTimeline) GetEvents(ctx context.Context) (events []*Event, err er
 	var (
 		id        int
 		timestamp time.Time
-		eventType EventType
+		eventType string
 		node      string
 		probe     string
 		old       string
@@ -162,29 +167,26 @@ func (t *SQLiteTimeline) GetEvents(ctx context.Context) (events []*Event, err er
 			return nil, trace.Wrap(err)
 		}
 
-		var event *Event
 		switch eventType {
-		case ClusterRecovered:
-			event = NewClusterRecoveredEvent(timestamp, old, new)
-		case ClusterDegraded:
-			event = NewClusterDegradedEvent(timestamp, old, new)
-		case NodeAdded:
-			event = NewNodeAddedEvent(timestamp, node)
-		case NodeRemoved:
-			event = NewNodeRemovedEvent(timestamp, node)
-		case NodeRecovered:
-			event = NewNodeRecoveredEvent(timestamp, node, old, new)
-		case NodeDegraded:
-			event = NewNodeDegradedEvent(timestamp, node, old, new)
-		case ProbePassed:
-			event = NewProbePassedEvent(timestamp, node, probe, old, new)
-		case ProbeFailed:
-			event = NewProbeFailedEvent(timestamp, node, probe, old, new)
+		case clusterRecoveredType:
+			events = append(events, NewClusterRecovered(timestamp))
+		case clusterDegradedType:
+			events = append(events, NewClusterDegraded(timestamp))
+		case nodeAddedType:
+			events = append(events, NewNodeAdded(timestamp, node))
+		case nodeRemovedType:
+			events = append(events, NewNodeRemoved(timestamp, node))
+		case nodeRecoveredType:
+			events = append(events, NewNodeRecovered(timestamp, node))
+		case nodeDegradedType:
+			events = append(events, NewNodeDegraded(timestamp, node))
+		case probeSucceededType:
+			events = append(events, NewProbeSucceeded(timestamp, node, probe))
+		case probeFailedType:
+			events = append(events, NewProbeFailed(timestamp, node, probe))
 		default:
-			event = NewUnknownEvent(timestamp)
+			return nil, trace.NotFound("unknown event type %v", eventType)
 		}
-
-		events = append(events, event)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -195,28 +197,9 @@ func (t *SQLiteTimeline) GetEvents(ctx context.Context) (events []*Event, err er
 }
 
 // insertEvents inserts the provided events into the timeline.
-func (t *SQLiteTimeline) insertEvents(ctx context.Context, tx *sql.Tx, events []*Event) error {
-	insertEvents, valueArgs := prepareBulkInsert(events)
-	if _, err := tx.ExecContext(ctx, insertEvents, valueArgs...); err != nil {
-		return trace.Wrap(err)
-	}
+func (t *SQLiteTimeline) insertEvents(ctx context.Context, tx *sql.Tx, events []*pb.TimelineEvent) error {
+	// TODO
 	return nil
-}
-
-// prepareBulkInsert prepares bulk insert events statement and value arguments.
-func prepareBulkInsert(events []*Event) (insertEvents string, valueArgs []interface{}) {
-	// eventValueString specifies the insert value string for an Event.
-	// It should be consistent with the number of fields in an event.
-	const eventValueString = "(?, ?, ?, ?, ?, ?)"
-
-	// prepare bulk insert statement
-	valueStrings := make([]string, 0, len(events))
-	for _, event := range events {
-		valueStrings = append(valueStrings, eventValueString)
-		valueArgs = append(valueArgs, event.ToArgs()...)
-	}
-	insertEvents = fmt.Sprintf(insertIntoEvents, strings.Join(valueStrings, ","))
-	return insertEvents, valueArgs
 }
 
 // evictEvents deletes oldest events if the timeline is larger than its max
@@ -227,6 +210,20 @@ func (t *SQLiteTimeline) evictEvents(ctx context.Context, tx *sql.Tx) error {
 	}
 	return nil
 }
+
+// These types are used to specify the type of an event when storing event
+// into a database.
+const (
+	clusterRecoveredType = "ClusterRecovered"
+	clusterDegradedType  = "ClusterDegraded"
+	nodeAddedType        = "NodeAdded"
+	nodeRemovedType      = "NodeRemoved"
+	nodeRecoveredType    = "NodeRecovered"
+	nodeDegradedType     = "NodeDegraded"
+	probeSucceededType   = "ProbeSucceeded"
+	probeFailedType      = "ProbeFailed"
+	unknownType          = "Unknown"
+)
 
 // createTableEvents is sql statement to create an `events` table.
 const createTableEvents = `

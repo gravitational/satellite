@@ -463,7 +463,7 @@ func (r *agent) statusUpdateLoop() {
 					if err = r.cache.UpdateStatus(status); err != nil {
 						log.Warnf("Error updating system status in cache: %v", err)
 					}
-					// TODO: Record status
+					// TODO: Record status history
 				}
 				select {
 				case <-r.done:

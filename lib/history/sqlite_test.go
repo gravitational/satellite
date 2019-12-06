@@ -19,8 +19,8 @@ package history
 import (
 	"context"
 	"os"
-	"testing"
-	"time"
+
+	"github.com/jonboulle/clockwork"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
@@ -28,10 +28,8 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-// Hook up gocheck into the "go test" runner.
-func TestSQLite(t *testing.T) { TestingT(t) }
-
 type SQLiteSuite struct {
+	clock    clockwork.FakeClock
 	timeline Timeline
 }
 
@@ -42,9 +40,16 @@ const TestDBPath = "/tmp/test.db"
 
 // SetupTest initializes test database.
 func (s *SQLiteSuite) SetUpTest(c *C) {
-	timeline, err := NewSQLiteTimeline(SQLiteTimelineConfig{DBPath: TestDBPath, Capacity: 1})
+	clock := clockwork.NewFakeClock()
+	config := SQLiteTimelineConfig{
+		DBPath:   TestDBPath,
+		Capacity: 1,
+		Clock:    clock,
+	}
+	timeline, err := NewSQLiteTimeline(config)
 	c.Assert(err, IsNil)
 
+	s.clock = clock
 	s.timeline = timeline
 }
 
@@ -60,29 +65,23 @@ func (s *SQLiteSuite) TestRecordStatus(c *C) {
 	actual, err := s.timeline.GetEvents(context.TODO())
 	c.Assert(err, IsNil)
 
-	expected := []*Event{
-		NewClusterRecoveredEvent(time.Time{}, pb.SystemStatus_Unknown.String(), pb.SystemStatus_Running.String()),
-	}
-
-	removeTimestamps(actual)
+	expected := []*pb.TimelineEvent{NewClusterRecovered(s.clock.Now())}
 	c.Assert(actual, DeepEquals, expected, Commentf("Test record status"))
 }
 
 func (s *SQLiteSuite) TestFIFOEviction(c *C) {
-	old := pb.SystemStatus_Running
-	new := pb.SystemStatus_Degraded
+	old := &pb.SystemStatus{Status: pb.SystemStatus_Running}
+	new := &pb.SystemStatus{Status: pb.SystemStatus_Degraded}
 
-	err := s.timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: old})
+	err := s.timeline.RecordStatus(context.TODO(), old)
 	c.Assert(err, IsNil)
 
-	err = s.timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: new})
+	err = s.timeline.RecordStatus(context.TODO(), new)
 	c.Assert(err, IsNil)
 
 	actual, err := s.timeline.GetEvents(context.TODO())
 	c.Assert(err, IsNil)
 
-	expected := []*Event{NewClusterDegradedEvent(time.Time{}, old.String(), new.String())}
-
-	removeTimestamps(actual)
+	expected := []*pb.TimelineEvent{NewClusterDegraded(s.clock.Now())}
 	c.Assert(actual, DeepEquals, expected, Commentf("Test FIFO eviction"))
 }
