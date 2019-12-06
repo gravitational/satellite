@@ -27,6 +27,7 @@ import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
 	"github.com/gravitational/trace"
+	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3" // initialize sqlite3
 	log "github.com/sirupsen/logrus"
 )
@@ -44,7 +45,7 @@ type SQLiteTimeline struct {
 	// size specifies the current number of events stored in the timeline.
 	size int
 	// database points to underlying sqlite database.
-	database *sql.DB
+	database *sqlx.DB
 	// lastStatus holds the last recorded cluster status.
 	lastStatus *pb.SystemStatus
 	// mu locks timeline access.
@@ -81,12 +82,20 @@ func NewSQLiteTimeline(config SQLiteTimelineConfig) (*SQLiteTimeline, error) {
 
 // initSQLite initializes connection to database provided by dbPath and
 // initializes `events` table.
-func initSQLite(dbPath string) (*sql.DB, error) {
-	database, _ := sql.Open("sqlite3", dbPath)
-	// TODO add context
-	if _, err := database.Exec(createTableEvents); err != nil {
+func initSQLite(dbPath string) (*sqlx.DB, error) {
+	// TODO: Store sql db connection timeout as const
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	database, err := sqlx.ConnectContext(ctx, "sqlite3", dbPath)
+	if err != nil {
 		return nil, trace.Wrap(err)
 	}
+
+	if _, err := database.ExecContext(ctx, createTableEvents); err != nil {
+		return nil, trace.Wrap(err)
+	}
+
 	return database, nil
 }
 
@@ -141,7 +150,7 @@ func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status *pb.SystemStat
 
 // GetEvents returns the current timeline.
 func (t *SQLiteTimeline) GetEvents(ctx context.Context) (events []*pb.TimelineEvent, err error) {
-	rows, err := t.database.QueryContext(ctx, selectAllFromEvents)
+	rows, err := t.database.QueryxContext(ctx, selectAllFromEvents)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -152,41 +161,18 @@ func (t *SQLiteTimeline) GetEvents(ctx context.Context) (events []*pb.TimelineEv
 		}
 	}()
 
-	var (
-		id        int
-		timestamp time.Time
-		eventType string
-		node      string
-		probe     string
-		old       string
-		new       string
-	)
-
 	for rows.Next() {
-		if err := rows.Scan(&id, &timestamp, &eventType, &node, &probe, &old, &new); err != nil {
+		var row sqlEvent
+		if err = rows.StructScan(&row); err != nil {
 			return nil, trace.Wrap(err)
 		}
 
-		switch eventType {
-		case clusterRecoveredType:
-			events = append(events, NewClusterRecovered(timestamp))
-		case clusterDegradedType:
-			events = append(events, NewClusterDegraded(timestamp))
-		case nodeAddedType:
-			events = append(events, NewNodeAdded(timestamp, node))
-		case nodeRemovedType:
-			events = append(events, NewNodeRemoved(timestamp, node))
-		case nodeRecoveredType:
-			events = append(events, NewNodeRecovered(timestamp, node))
-		case nodeDegradedType:
-			events = append(events, NewNodeDegraded(timestamp, node))
-		case probeSucceededType:
-			events = append(events, NewProbeSucceeded(timestamp, node, probe))
-		case probeFailedType:
-			events = append(events, NewProbeFailed(timestamp, node, probe))
-		default:
-			return nil, trace.NotFound("unknown event type %v", eventType)
+		event, err := row.toProto()
+		if err != nil {
+			return nil, trace.Wrap(err)
 		}
+
+		events = append(events, event)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -198,7 +184,25 @@ func (t *SQLiteTimeline) GetEvents(ctx context.Context) (events []*pb.TimelineEv
 
 // insertEvents inserts the provided events into the timeline.
 func (t *SQLiteTimeline) insertEvents(ctx context.Context, tx *sql.Tx, events []*pb.TimelineEvent) error {
-	// TODO
+	for _, event := range events {
+		row, err := newSQLEvent(event)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+
+		args := []interface{}{
+			row.Timestamp,
+			row.EventType,
+			row.Node.String,
+			row.Probe.String,
+			row.Old.String,
+			row.New.String,
+		}
+
+		if _, err := tx.ExecContext(ctx, insertIntoEvents, args...); err != nil {
+			return trace.Wrap(err)
+		}
+	}
 	return nil
 }
 
@@ -209,6 +213,92 @@ func (t *SQLiteTimeline) evictEvents(ctx context.Context, tx *sql.Tx) error {
 		return trace.Wrap(err)
 	}
 	return nil
+}
+
+// sqlEvent defines an sql event row.
+type sqlEvent struct {
+	ID        int            `db:"id"`
+	Timestamp time.Time      `db:"timestamp"`
+	EventType string         `db:"type"`
+	Node      sql.NullString `db:"node"`
+	Probe     sql.NullString `db:"probe"`
+	Old       sql.NullString `db:"oldState"`
+	New       sql.NullString `db:"newState"`
+}
+
+// newSQLEvent constructs a new sqlEvent from the provided TimelineEvent.
+func newSQLEvent(event *pb.TimelineEvent) (row sqlEvent, err error) {
+	row = sqlEvent{Timestamp: event.GetTimestamp().ToTime()}
+	switch t := event.GetData().(type) {
+	case *pb.TimelineEvent_ClusterRecovered:
+		row.EventType = clusterRecoveredType
+	case *pb.TimelineEvent_ClusterDegraded:
+		row.EventType = clusterDegradedType
+	case *pb.TimelineEvent_NodeAdded:
+		e := event.GetNodeAdded()
+		row.EventType = nodeAddedType
+		row.Node = sql.NullString{String: e.GetNode(), Valid: true}
+	case *pb.TimelineEvent_NodeRemoved:
+		e := event.GetNodeRemoved()
+		row.EventType = nodeRemovedType
+		row.Node = sql.NullString{String: e.GetNode(), Valid: true}
+	case *pb.TimelineEvent_NodeRecovered:
+		e := event.GetNodeRecovered()
+		row.EventType = nodeRecoveredType
+		row.Node = sql.NullString{String: e.GetNode(), Valid: true}
+	case *pb.TimelineEvent_NodeDegraded:
+		e := event.GetNodeDegraded()
+		row.EventType = nodeDegradedType
+		row.Node = sql.NullString{String: e.GetNode(), Valid: true}
+	case *pb.TimelineEvent_ProbeSucceeded:
+		e := event.GetProbeSucceeded()
+		row.EventType = probeSucceededType
+		row.Node = sql.NullString{String: e.GetNode(), Valid: true}
+		row.Probe = sql.NullString{String: e.GetProbe(), Valid: true}
+	case *pb.TimelineEvent_ProbeFailed:
+		e := event.GetProbeFailed()
+		row.EventType = probeFailedType
+		row.Node = sql.NullString{String: e.GetNode(), Valid: true}
+		row.Probe = sql.NullString{String: e.GetProbe(), Valid: true}
+	default:
+		return row, trace.NotFound("unknown event type %v", t)
+	}
+	return row, nil
+}
+
+func (e *sqlEvent) toArgs() (args []interface{}) {
+	return []interface{}{
+		e.Timestamp,
+		e.EventType,
+		e.Node,
+		e.Probe,
+		e.New,
+		e.Old,
+	}
+}
+
+// toProto returns sqlEvent as a protobuf TimelineEvent.
+func (e *sqlEvent) toProto() (*pb.TimelineEvent, error) {
+	switch e.EventType {
+	case clusterRecoveredType:
+		return NewClusterRecovered(e.Timestamp), nil
+	case clusterDegradedType:
+		return NewClusterDegraded(e.Timestamp), nil
+	case nodeAddedType:
+		return NewNodeAdded(e.Timestamp, e.Node.String), nil
+	case nodeRemovedType:
+		return NewNodeRemoved(e.Timestamp, e.Node.String), nil
+	case nodeRecoveredType:
+		return NewNodeRecovered(e.Timestamp, e.Node.String), nil
+	case nodeDegradedType:
+		return NewNodeDegraded(e.Timestamp, e.Node.String), nil
+	case probeSucceededType:
+		return NewProbeSucceeded(e.Timestamp, e.Node.String, e.Probe.String), nil
+	case probeFailedType:
+		return NewProbeFailed(e.Timestamp, e.Node.String, e.Probe.String), nil
+	default:
+		return nil, trace.NotFound("unknown event type %v", e.EventType)
+	}
 }
 
 // These types are used to specify the type of an event when storing event
@@ -250,7 +340,7 @@ INSERT INTO events (
 	probe,
 	oldState,
 	newState
-) VALUES %s
+) VALUES (?,?,?,?,?,?)
 `
 
 // selectAllFromEvents is sql query to select all entries from `events` table.
