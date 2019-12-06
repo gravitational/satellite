@@ -128,7 +128,10 @@ message TimeResponse {
   Timestamp timestamp = 1;
 }
 
-message TimelineRequest {}
+message TimelineRequest {
+  // Params will be used to filter the timeline response.
+  map<string, string> params = 1;
+}
 
 message TimelineResponse {
   // Events contains a list of timeline events that occurred.

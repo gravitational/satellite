@@ -73,12 +73,12 @@ func (t *MemTimeline) RecordStatus(ctx context.Context, status *pb.SystemStatus)
 	return nil
 }
 
-// GetEvents returns the current timeline.
+// GetEvents returns a filtered list of events based on the provided params.
 // The ctx is unused for MemTimeline.
-func (t *MemTimeline) GetEvents(ctx context.Context) (events []*pb.TimelineEvent, err error) {
+func (t *MemTimeline) GetEvents(ctx context.Context, params map[string]string) (events []*pb.TimelineEvent, err error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return t.events, nil
+	return t.getFilteredEvents(params), nil
 }
 
 // addEvent appends the provided event to the timeline.
@@ -87,4 +87,10 @@ func (t *MemTimeline) addEvent(event *pb.TimelineEvent) {
 		t.events = t.events[1:]
 	}
 	t.events = append(t.events, event)
+}
+
+// getFilteredEvents returns a filtered list of events based on the provided params.
+func (t *MemTimeline) getFilteredEvents(params map[string]string) (events []*pb.TimelineEvent) {
+	// TODO
+	return t.events
 }

@@ -19,6 +19,8 @@ package history
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -148,9 +150,10 @@ func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status *pb.SystemStat
 	return nil
 }
 
-// GetEvents returns the current timeline.
-func (t *SQLiteTimeline) GetEvents(ctx context.Context) (events []*pb.TimelineEvent, err error) {
-	rows, err := t.database.QueryxContext(ctx, selectAllFromEvents)
+// GetEvents returns a filtered list of events based on the provided params.
+func (t *SQLiteTimeline) GetEvents(ctx context.Context, params map[string]string) (events []*pb.TimelineEvent, err error) {
+	query, args := prepareQuery(params)
+	rows, err := t.database.QueryxContext(ctx, query, args...)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -213,6 +216,32 @@ func (t *SQLiteTimeline) evictEvents(ctx context.Context, tx *sql.Tx) error {
 		return trace.Wrap(err)
 	}
 	return nil
+}
+
+// prepareQuery prepares a query string and a list of arguments constructed from
+// the provided params.
+func prepareQuery(params map[string]string) (query string, args []interface{}) {
+	var fields = []string{"type", "node", "probe", "old", "new"}
+	var sb strings.Builder
+	index := 0
+
+	sb.WriteString("SELECT * FROM EVENTS ")
+	if len(params) == 0 {
+		return sb.String(), args
+	}
+	sb.WriteString("WHERE ")
+
+	for _, key := range fields {
+		if val, ok := params[key]; ok {
+			sb.WriteString(fmt.Sprintf("%s = ?", key))
+			args = append(args, val)
+		}
+		if index < len(params)-1 {
+			sb.WriteString("AND ")
+		}
+		index++
+	}
+	return sb.String(), args
 }
 
 // sqlEvent defines an sql event row.
