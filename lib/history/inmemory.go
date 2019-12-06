@@ -17,9 +17,11 @@ limitations under the License.
 package history
 
 import (
+	"context"
 	"sync"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+
 	"github.com/jonboulle/clockwork"
 )
 
@@ -29,6 +31,8 @@ import (
 //
 // Implements Timeline
 type MemTimeline struct {
+	// clock is used to record event timestamps.
+	clock clockwork.Clock
 	// capacity specifies the max number of events stored in the timeline.
 	capacity int
 	// events holds the latest status events.
@@ -41,21 +45,22 @@ type MemTimeline struct {
 
 // NewMemTimeline initializes and returns a new MemTimeline with the specified
 // size.
-func NewMemTimeline(capacity int) *MemTimeline {
+func NewMemTimeline(clock clockwork.Clock, capacity int) *MemTimeline {
 	return &MemTimeline{
+		clock:      clock,
 		capacity:   capacity,
 		events:     make([]*pb.TimelineEvent, 0, capacity),
 		lastStatus: nil,
 	}
 }
 
-// RecordStatus records differences of the previous status to the provided
-// status into the Timeline. Timestamps will be recorded from the provided
-// clock.
-func (t *MemTimeline) RecordStatus(clock clockwork.Clock, status *pb.SystemStatus) {
-	events := diffCluster(clock, t.lastStatus, status)
+// RecordStatus records the differences between the previously stored status
+// and the newly provided status into the timeline.
+// The ctx is unused for MemTimeline.
+func (t *MemTimeline) RecordStatus(ctx context.Context, status *pb.SystemStatus) error {
+	events := diffCluster(t.clock, t.lastStatus, status)
 	if len(events) == 0 {
-		return
+		return nil
 	}
 
 	t.mu.Lock()
@@ -65,18 +70,15 @@ func (t *MemTimeline) RecordStatus(clock clockwork.Clock, status *pb.SystemStatu
 		t.addEvent(event)
 	}
 	t.lastStatus = status
+	return nil
 }
 
 // GetEvents returns the current timeline.
-func (t *MemTimeline) GetEvents() (events []*pb.TimelineEvent) {
+// The ctx is unused for MemTimeline.
+func (t *MemTimeline) GetEvents(ctx context.Context) (events []*pb.TimelineEvent, err error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-
-	for _, event := range t.events {
-		events = append(events, event)
-	}
-
-	return events
+	return t.events, nil
 }
 
 // addEvent appends the provided event to the timeline.

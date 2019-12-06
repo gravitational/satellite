@@ -18,17 +18,17 @@ limitations under the License.
 package history
 
 import (
-	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"context"
 
-	"github.com/jonboulle/clockwork"
+	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 )
 
 // Timeline can be used to record changes in the system status and retrieve them
 // as a list of Events.
 type Timeline interface {
 	// RecordStatus records any changes that have occurred since the previous
-	// recorded status. Timestamps will be recorded from the provided clock.
-	RecordStatus(clock clockwork.Clock, status *pb.SystemStatus)
+	// recorded status.
+	RecordStatus(ctx context.Context, status *pb.SystemStatus) error
 	// GetEvents returns the currently stored list of events.
-	GetEvents() []*pb.TimelineEvent
+	GetEvents(ctx context.Context) ([]*pb.TimelineEvent, error)
 }
