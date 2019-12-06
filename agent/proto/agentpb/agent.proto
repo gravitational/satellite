@@ -17,6 +17,8 @@ syntax = "proto3";
 
 package agentpb;
 
+import "event.proto";
+
 message StatusRequest {
 }
 
@@ -128,33 +130,33 @@ message TimeResponse {
 
 message TimelineRequest {}
 
+message TimelineResponse {
+  // Events contains a list of timeline events that occurred.
+  repeated TimelineEvent events = 1;
+}
+
 message TimelineEvent {
   // Timestamp is the node's local timestamp in UTC.
   Timestamp timestamp = 1;
   
-  // Type defines the possible event types.
-  enum Type {
-    ClusterRecovered = 0;
-    ClusterDegraded = 1;
-    NodeAdded = 2;
-    NodeRemoved = 3;
-    NodeRecovered = 4;
-    NodeDegraded = 5;
-    ProbePassed = 6;
-    ProbeFailed = 7;
-    Unknown = 8;
-  }
-  
-  // Type specifies the event type.
-  Type type = 2; 
-  
-  // Metadata contains the event-specific metadata.
-  map<string, string> metadata = 3;
-}
+  // Data contains event specific data.
+  oneof data {
+    ClusterRecovered clusterRecovered = 2;
+    ClusterDegraded clusterDegraded = 3;
 
-message TimelineResponse {
-  // Events contains a list of timeline events that occurred.
-  repeated TimelineEvent events = 1;
+    ClusterUpgrade clusterUpgrade = 4;
+
+    NodeAdded nodeAdded = 5;
+    NodeRemoved nodeRemoved = 6;
+    
+    NodeRecovered nodeRecovered = 7;
+    NodeDegraded nodeDegraded = 8;
+    
+    ProbeSucceeded probeSucceeded = 9;
+    ProbeFailed probeFailed = 10;
+
+    // TODO: Additional events
+  }
 }
 
 // Agent describes the API provided by GRPC agents

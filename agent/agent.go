@@ -145,8 +145,9 @@ func New(config *Config) (Agent, error) {
 		recycleClock:    clock,
 		localStatus:     emptyNodeStatus(config.Name),
 		metricsListener: metricsListener,
-		Timeline:        history.NewMemTimeline(config.MaxHistory),
-		done:            make(chan struct{}),
+		// TODO: initialize timeline
+		Timeline: nil,
+		done:     make(chan struct{}),
 	}
 
 	agent.rpc, err = newRPCServer(agent, config.CAFile, config.CertFile, config.KeyFile, config.RPCAddrs)
@@ -462,7 +463,7 @@ func (r *agent) statusUpdateLoop() {
 					if err = r.cache.UpdateStatus(status); err != nil {
 						log.Warnf("Error updating system status in cache: %v", err)
 					}
-					r.Timeline.RecordStatus(status)
+					// TODO: Record status history
 				}
 				select {
 				case <-r.done:
