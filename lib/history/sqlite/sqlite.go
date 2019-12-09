@@ -115,33 +115,14 @@ func (t *Timeline) RecordStatus(ctx context.Context, status *pb.SystemStatus) (e
 
 	t.mu.Unlock()
 
-	tx, err := t.database.BeginTx(ctx, nil)
-	if err != nil {
-		return trace.Wrap(err)
-	}
-
-	defer func() {
-		// The rollback will be ignored if the tx has already been committed.
-		if err == nil {
-			return
-		}
-		if err := tx.Rollback(); err != nil {
-			log.WithError(err).Error("Failed to rollback sql transaction.")
-		}
-	}()
-
-	if err = t.insertEvents(ctx, tx, events); err != nil {
+	if err = t.insertEvents(ctx, events); err != nil {
 		return trace.Wrap(err, "failed to insert events")
 	}
 
-	if t.size+len(events) > t.Config.Capacity {
-		if err = t.evictEvents(ctx, tx); err != nil {
+	if t.size == t.Config.Capacity {
+		if err = t.evictEvents(ctx); err != nil {
 			return trace.Wrap(err, "failed to evict old events")
 		}
-	}
-
-	if err = tx.Commit(); err != nil {
-		return trace.Wrap(err)
 	}
 
 	return nil
@@ -183,7 +164,24 @@ func (t *Timeline) GetEvents(ctx context.Context, params map[string]string) (eve
 }
 
 // insertEvents inserts the provided events into the timeline.
-func (t *Timeline) insertEvents(ctx context.Context, tx *sql.Tx, events []*pb.TimelineEvent) error {
+// TODO: Batch inserts. Not expected to handle a large number of inserts, so
+// optimization here is not a high priority.
+func (t *Timeline) insertEvents(ctx context.Context, events []*pb.TimelineEvent) (err error) {
+	tx, err := t.database.BeginTx(ctx, nil)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	defer func() {
+		// The rollback will be ignored if the tx has already been committed.
+		if err == nil {
+			return
+		}
+		if err := tx.Rollback(); err != nil {
+			log.WithError(err).Error("Failed to rollback sql transaction.")
+		}
+	}()
+
 	for _, event := range events {
 		row, err := newSQLEvent(event)
 		if err != nil {
@@ -203,13 +201,36 @@ func (t *Timeline) insertEvents(ctx context.Context, tx *sql.Tx, events []*pb.Ti
 			return trace.Wrap(err)
 		}
 	}
+
+	if err = tx.Commit(); err != nil {
+		return trace.Wrap(err)
+	}
 	return nil
 }
 
 // evictEvents deletes oldest events if the timeline is larger than its max
 // capacity.
-func (t *Timeline) evictEvents(ctx context.Context, tx *sql.Tx) error {
+func (t *Timeline) evictEvents(ctx context.Context) (err error) {
+	tx, err := t.database.BeginTx(ctx, nil)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	defer func() {
+		// The rollback will be ignored if the tx has already been committed.
+		if err == nil {
+			return
+		}
+		if err := tx.Rollback(); err != nil {
+			log.WithError(err).Error("Failed to rollback sql transaction.")
+		}
+	}()
+
 	if _, err := tx.ExecContext(ctx, deleteOldFromEvents, t.Config.Capacity); err != nil {
+		return trace.Wrap(err)
+	}
+
+	if err = tx.Commit(); err != nil {
 		return trace.Wrap(err)
 	}
 	return nil
@@ -218,27 +239,40 @@ func (t *Timeline) evictEvents(ctx context.Context, tx *sql.Tx) error {
 // prepareQuery prepares a query string and a list of arguments constructed from
 // the provided params.
 func prepareQuery(params map[string]string) (query string, args []interface{}) {
-	var fields = []string{"type", "node", "probe", "old", "new"}
 	var sb strings.Builder
 	index := 0
 
-	sb.WriteString("SELECT * FROM EVENTS ")
+	// Need to filter params beforehand to check if WHERE clause is needed.
+	filterParams(params)
+
+	sb.WriteString("SELECT * FROM events ")
 	if len(params) == 0 {
 		return sb.String(), args
 	}
 	sb.WriteString("WHERE ")
 
-	for _, key := range fields {
-		if val, ok := params[key]; ok {
-			sb.WriteString(fmt.Sprintf("%s = ?", key))
-			args = append(args, val)
-		}
+	for key, val := range params {
+		sb.WriteString(fmt.Sprintf("%s = ? ", key))
+		args = append(args, val)
 		if index < len(params)-1 {
 			sb.WriteString("AND ")
 		}
 		index++
 	}
+
 	return sb.String(), args
+}
+
+// filterParams will filter out unknown query parameters.
+func filterParams(params map[string]string) (filtered map[string]string) {
+	filtered = make(map[string]string)
+	var fields = []string{"type", "node", "probe", "old", "new"}
+	for _, key := range fields {
+		if val, ok := params[key]; ok {
+			filtered[key] = val
+		}
+	}
+	return filtered
 }
 
 // sqlEvent defines an sql event row.
@@ -287,7 +321,7 @@ func newSQLEvent(event *pb.TimelineEvent) (row sqlEvent, err error) {
 		row.Node = sql.NullString{String: e.GetNode(), Valid: true}
 		row.Probe = sql.NullString{String: e.GetProbe(), Valid: true}
 	default:
-		return row, trace.NotFound("unknown event type %v", t)
+		return row, trace.BadParameter("unknown event type %T", t)
 	}
 	return row, nil
 }
