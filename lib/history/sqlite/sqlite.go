@@ -71,10 +71,15 @@ func NewTimeline(ctx context.Context, config Config) (*Timeline, error) {
 		return nil, trace.Wrap(err)
 	}
 
+	size, err := getSize(ctx, database)
+	if err != nil {
+		database.Close()
+		return nil, trace.Wrap(err)
+	}
+
 	return &Timeline{
-		Config: config,
-		// TODO: reinitialize size from database.
-		size:     0,
+		Config:   config,
+		size:     size,
 		database: database,
 		// TODO: store and recover lastStatus in case satellite agent restarts.
 		lastStatus: nil,
@@ -94,6 +99,15 @@ func initSQLite(ctx context.Context, dbPath string) (*sqlx.DB, error) {
 	}
 
 	return database, nil
+}
+
+// getSize returns the current number of rows stored in the provided database.
+func getSize(ctx context.Context, database *sqlx.DB) (size int, err error) {
+	row := database.QueryRowContext(ctx, "SELECT COUNT(*) FROM events")
+	if err := row.Scan(&size); err != nil {
+		return -1, trace.Wrap(err)
+	}
+	return size, nil
 }
 
 // RecordStatus records the differences between the previously stored status and
