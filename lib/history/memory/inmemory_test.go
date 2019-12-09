@@ -17,6 +17,7 @@ limitations under the License.
 package memory
 
 import (
+	"context"
 	"testing"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
@@ -42,10 +43,10 @@ func (s *InMemorySuite) SetUpSuite(c *C) {
 func (s *InMemorySuite) TestRecordStatus(c *C) {
 	var timeline history.Timeline
 	timeline = NewTimeline(s.clock, 1)
-	err := timeline.RecordStatus(&pb.SystemStatus{Status: pb.SystemStatus_Running})
+	err := timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: pb.SystemStatus_Running})
 	c.Assert(err, IsNil)
 
-	actual, err := timeline.GetEvents(nil)
+	actual, err := timeline.GetEvents(context.TODO(), nil)
 	c.Assert(err, IsNil)
 
 	expected := []*pb.TimelineEvent{history.NewClusterRecovered(s.clock.Now())}
@@ -59,13 +60,13 @@ func (s *InMemorySuite) TestFIFOEviction(c *C) {
 	old := &pb.SystemStatus{Status: pb.SystemStatus_Running}
 	new := &pb.SystemStatus{Status: pb.SystemStatus_Degraded}
 
-	err := timeline.RecordStatus(old)
+	err := timeline.RecordStatus(context.TODO(), old)
 	c.Assert(err, IsNil)
 
-	err = timeline.RecordStatus(new)
+	err = timeline.RecordStatus(context.TODO(), new)
 	c.Assert(err, IsNil)
 
-	actual, err := timeline.GetEvents(nil)
+	actual, err := timeline.GetEvents(context.TODO(), nil)
 	c.Assert(err, IsNil)
 
 	expected := []*pb.TimelineEvent{history.NewClusterDegraded(s.clock.Now())}

@@ -14,9 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package memory provide Timeline implementation stored in memory.
 package memory
 
 import (
+	"context"
 	"sync"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
@@ -56,7 +58,8 @@ func NewTimeline(clock clockwork.Clock, capacity int) *Timeline {
 
 // RecordStatus records the differences between the previously stored status
 // and the newly provided status into the timeline.
-func (t *Timeline) RecordStatus(status *pb.SystemStatus) error {
+// Context unused for memory Timeline.
+func (t *Timeline) RecordStatus(ctx context.Context, status *pb.SystemStatus) error {
 	events := history.DiffCluster(t.clock, t.lastStatus, status)
 	if len(events) == 0 {
 		return nil
@@ -73,7 +76,8 @@ func (t *Timeline) RecordStatus(status *pb.SystemStatus) error {
 }
 
 // GetEvents returns a filtered list of events based on the provided params.
-func (t *Timeline) GetEvents(params map[string]string) (events []*pb.TimelineEvent, err error) {
+// Context unused for memory Timeline.
+func (t *Timeline) GetEvents(ctx context.Context, params map[string]string) (events []*pb.TimelineEvent, err error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.getFilteredEvents(params), nil

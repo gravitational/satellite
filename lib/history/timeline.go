@@ -18,6 +18,8 @@ limitations under the License.
 package history
 
 import (
+	"context"
+
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 )
 
@@ -26,7 +28,7 @@ import (
 type Timeline interface {
 	// RecordStatus records any changes that have occurred since the previous
 	// recorded status.
-	RecordStatus(status *pb.SystemStatus) error
+	RecordStatus(context context.Context, status *pb.SystemStatus) error
 	// GetEvents returns a filtered list of events based on the provided params.
-	GetEvents(params map[string]string) ([]*pb.TimelineEvent, error)
+	GetEvents(context context.Context, params map[string]string) ([]*pb.TimelineEvent, error)
 }
