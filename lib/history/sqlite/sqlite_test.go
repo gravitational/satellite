@@ -14,23 +14,27 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package history
+package sqlite
 
 import (
 	"context"
 	"os"
-
-	"github.com/jonboulle/clockwork"
+	"testing"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/lib/history"
 
+	"github.com/jonboulle/clockwork"
 	_ "github.com/mattn/go-sqlite3" // initialize sqlite3
 	. "gopkg.in/check.v1"
 )
 
+// Hook up gocheck into the "go test" runner.
+func TestSQLite(t *testing.T) { TestingT(t) }
+
 type SQLiteSuite struct {
 	clock    clockwork.FakeClock
-	timeline Timeline
+	timeline history.Timeline
 }
 
 var _ = Suite(&SQLiteSuite{})
@@ -41,12 +45,12 @@ const TestDBPath = "/tmp/test.db"
 // SetupTest initializes test database.
 func (s *SQLiteSuite) SetUpTest(c *C) {
 	clock := clockwork.NewFakeClock()
-	config := SQLiteTimelineConfig{
+	config := TimelineConfig{
 		DBPath:   TestDBPath,
 		Capacity: 1,
 		Clock:    clock,
 	}
-	timeline, err := NewSQLiteTimeline(config)
+	timeline, err := NewTimeline(config)
 	c.Assert(err, IsNil)
 
 	s.clock = clock
@@ -65,7 +69,7 @@ func (s *SQLiteSuite) TestRecordStatus(c *C) {
 	actual, err := s.timeline.GetEvents(context.TODO(), nil)
 	c.Assert(err, IsNil)
 
-	expected := []*pb.TimelineEvent{NewClusterRecovered(s.clock.Now())}
+	expected := []*pb.TimelineEvent{history.NewClusterRecovered(s.clock.Now())}
 	c.Assert(actual, DeepEquals, expected, Commentf("Test record status"))
 }
 
@@ -82,7 +86,7 @@ func (s *SQLiteSuite) TestFIFOEviction(c *C) {
 	actual, err := s.timeline.GetEvents(context.TODO(), nil)
 	c.Assert(err, IsNil)
 
-	expected := []*pb.TimelineEvent{NewClusterDegraded(s.clock.Now())}
+	expected := []*pb.TimelineEvent{history.NewClusterDegraded(s.clock.Now())}
 	c.Assert(actual, DeepEquals, expected, Commentf("Test FIFO eviction"))
 }
 
@@ -94,7 +98,7 @@ func (s *SQLiteSuite) TestFilterEvents(c *C) {
 	actual, err := s.timeline.GetEvents(context.TODO(), params)
 	c.Assert(err, IsNil)
 
-	expected := []*pb.TimelineEvent{NewClusterRecovered(s.clock.Now())}
+	expected := []*pb.TimelineEvent{history.NewClusterRecovered(s.clock.Now())}
 	c.Assert(actual, DeepEquals, expected, Commentf("Test filter events - one match"))
 
 	params = map[string]string{"type": clusterDegradedType}

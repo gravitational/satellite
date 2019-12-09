@@ -14,16 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package history
+package memory
 
 import (
 	"context"
+	"testing"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/lib/history"
 
 	"github.com/jonboulle/clockwork"
 	. "gopkg.in/check.v1"
 )
+
+// Hook up gocheck into the "go test" runner.
+func TestInMemory(t *testing.T) { TestingT(t) }
 
 type InMemorySuite struct {
 	clock clockwork.FakeClock
@@ -36,21 +41,21 @@ func (s *InMemorySuite) SetUpSuite(c *C) {
 }
 
 func (s *InMemorySuite) TestRecordStatus(c *C) {
-	var timeline Timeline
-	timeline = NewMemTimeline(s.clock, 1)
+	var timeline history.Timeline
+	timeline = NewTimeline(s.clock, 1)
 	err := timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: pb.SystemStatus_Running})
 	c.Assert(err, IsNil)
 
 	actual, err := timeline.GetEvents(context.TODO(), nil)
 	c.Assert(err, IsNil)
 
-	expected := []*pb.TimelineEvent{NewClusterRecovered(s.clock.Now())}
+	expected := []*pb.TimelineEvent{history.NewClusterRecovered(s.clock.Now())}
 	c.Assert(actual, DeepEquals, expected, Commentf("Test record status"))
 }
 
 func (s *InMemorySuite) TestFIFOEviction(c *C) {
-	var timeline Timeline
-	timeline = NewMemTimeline(s.clock, 1)
+	var timeline history.Timeline
+	timeline = NewTimeline(s.clock, 1)
 
 	old := &pb.SystemStatus{Status: pb.SystemStatus_Running}
 	new := &pb.SystemStatus{Status: pb.SystemStatus_Degraded}
@@ -64,6 +69,6 @@ func (s *InMemorySuite) TestFIFOEviction(c *C) {
 	actual, err := timeline.GetEvents(context.TODO(), nil)
 	c.Assert(err, IsNil)
 
-	expected := []*pb.TimelineEvent{NewClusterDegraded(s.clock.Now())}
+	expected := []*pb.TimelineEvent{history.NewClusterDegraded(s.clock.Now())}
 	c.Assert(actual, DeepEquals, expected, Commentf("Test FIFO eviction"))
 }

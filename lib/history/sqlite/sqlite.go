@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package history
+package sqlite
 
 import (
 	"context"
@@ -24,22 +24,22 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jonboulle/clockwork"
-
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/lib/history"
 
 	"github.com/gravitational/trace"
 	"github.com/jmoiron/sqlx"
+	"github.com/jonboulle/clockwork"
 	_ "github.com/mattn/go-sqlite3" // initialize sqlite3
 	log "github.com/sirupsen/logrus"
 )
 
-// SQLiteTimeline represents a timeline of cluster status events. The timeline
+// Timeline represents a timeline of cluster status events. The timeline
 // can hold a specified amount of events and uses a FIFO eviction policy.
 // Timeline events are stored in a local sqlite database.
 //
 // Implements Timeline
-type SQLiteTimeline struct {
+type Timeline struct {
 	// clock is used to record event timestamps.
 	clock clockwork.Clock
 	// capacity specifies the max number of events that can be stored in the timeline.
@@ -54,8 +54,8 @@ type SQLiteTimeline struct {
 	mu sync.Mutex
 }
 
-// SQLiteTimelineConfig defines SQLiteTimeline configuration.
-type SQLiteTimelineConfig struct {
+// TimelineConfig defines Timeline configuration.
+type TimelineConfig struct {
 	// DBPath specifies the database location.
 	DBPath string
 	// Capacity specifies the max number of events that can be stored in the timeline.
@@ -64,15 +64,15 @@ type SQLiteTimelineConfig struct {
 	Clock clockwork.Clock
 }
 
-// NewSQLiteTimeline initializes and returns a new SQLiteTimeline with the
+// NewTimeline initializes and returns a new Timeline with the
 // specified configuration.
-func NewSQLiteTimeline(config SQLiteTimelineConfig) (*SQLiteTimeline, error) {
+func NewTimeline(config TimelineConfig) (*Timeline, error) {
 	database, err := initSQLite(config.DBPath)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
 
-	return &SQLiteTimeline{
+	return &Timeline{
 		clock:    config.Clock,
 		capacity: config.Capacity,
 		size:     0,
@@ -103,8 +103,8 @@ func initSQLite(dbPath string) (*sqlx.DB, error) {
 
 // RecordStatus records the differences between the previously stored status and
 // the provided status.
-func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status *pb.SystemStatus) (err error) {
-	events := diffCluster(t.clock, t.lastStatus, status)
+func (t *Timeline) RecordStatus(ctx context.Context, status *pb.SystemStatus) (err error) {
+	events := history.DiffCluster(t.clock, t.lastStatus, status)
 	if len(events) == 0 {
 		return nil
 	}
@@ -151,7 +151,7 @@ func (t *SQLiteTimeline) RecordStatus(ctx context.Context, status *pb.SystemStat
 }
 
 // GetEvents returns a filtered list of events based on the provided params.
-func (t *SQLiteTimeline) GetEvents(ctx context.Context, params map[string]string) (events []*pb.TimelineEvent, err error) {
+func (t *Timeline) GetEvents(ctx context.Context, params map[string]string) (events []*pb.TimelineEvent, err error) {
 	query, args := prepareQuery(params)
 	rows, err := t.database.QueryxContext(ctx, query, args...)
 	if err != nil {
@@ -186,7 +186,7 @@ func (t *SQLiteTimeline) GetEvents(ctx context.Context, params map[string]string
 }
 
 // insertEvents inserts the provided events into the timeline.
-func (t *SQLiteTimeline) insertEvents(ctx context.Context, tx *sql.Tx, events []*pb.TimelineEvent) error {
+func (t *Timeline) insertEvents(ctx context.Context, tx *sql.Tx, events []*pb.TimelineEvent) error {
 	for _, event := range events {
 		row, err := newSQLEvent(event)
 		if err != nil {
@@ -211,7 +211,7 @@ func (t *SQLiteTimeline) insertEvents(ctx context.Context, tx *sql.Tx, events []
 
 // evictEvents deletes oldest events if the timeline is larger than its max
 // capacity.
-func (t *SQLiteTimeline) evictEvents(ctx context.Context, tx *sql.Tx) error {
+func (t *Timeline) evictEvents(ctx context.Context, tx *sql.Tx) error {
 	if _, err := tx.ExecContext(ctx, deleteOldFromEvents, t.capacity); err != nil {
 		return trace.Wrap(err)
 	}
@@ -310,21 +310,21 @@ func (e *sqlEvent) toArgs() (args []interface{}) {
 func (e *sqlEvent) toProto() (*pb.TimelineEvent, error) {
 	switch e.EventType {
 	case clusterRecoveredType:
-		return NewClusterRecovered(e.Timestamp), nil
+		return history.NewClusterRecovered(e.Timestamp), nil
 	case clusterDegradedType:
-		return NewClusterDegraded(e.Timestamp), nil
+		return history.NewClusterDegraded(e.Timestamp), nil
 	case nodeAddedType:
-		return NewNodeAdded(e.Timestamp, e.Node.String), nil
+		return history.NewNodeAdded(e.Timestamp, e.Node.String), nil
 	case nodeRemovedType:
-		return NewNodeRemoved(e.Timestamp, e.Node.String), nil
+		return history.NewNodeRemoved(e.Timestamp, e.Node.String), nil
 	case nodeRecoveredType:
-		return NewNodeRecovered(e.Timestamp, e.Node.String), nil
+		return history.NewNodeRecovered(e.Timestamp, e.Node.String), nil
 	case nodeDegradedType:
-		return NewNodeDegraded(e.Timestamp, e.Node.String), nil
+		return history.NewNodeDegraded(e.Timestamp, e.Node.String), nil
 	case probeSucceededType:
-		return NewProbeSucceeded(e.Timestamp, e.Node.String, e.Probe.String), nil
+		return history.NewProbeSucceeded(e.Timestamp, e.Node.String, e.Probe.String), nil
 	case probeFailedType:
-		return NewProbeFailed(e.Timestamp, e.Node.String, e.Probe.String), nil
+		return history.NewProbeFailed(e.Timestamp, e.Node.String, e.Probe.String), nil
 	default:
 		return nil, trace.NotFound("unknown event type %v", e.EventType)
 	}

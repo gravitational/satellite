@@ -55,7 +55,7 @@ func (s *StatusSuite) TestClusterStatusDiff(c *C) {
 	}
 
 	for _, event := range clusterEvents {
-		actual := diffCluster(s.clock, event.oldCluster, event.newCluster)
+		actual := DiffCluster(s.clock, event.oldCluster, event.newCluster)
 		c.Assert(actual, DeepEquals, event.diff, Commentf(event.comment))
 	}
 }
@@ -87,7 +87,7 @@ func (s *StatusSuite) TestAddOrRemoveNode(c *C) {
 	}
 
 	for _, event := range clusterEvents {
-		actual := diffCluster(s.clock, event.oldCluster, event.newCluster)
+		actual := DiffCluster(s.clock, event.oldCluster, event.newCluster)
 		c.Assert(actual, DeepEquals, event.diff, Commentf(event.comment))
 	}
 }
@@ -114,7 +114,7 @@ func (s *StatusSuite) TestNodeStatusDiff(c *C) {
 	}
 
 	for _, event := range nodeEvents {
-		actual := diffNode(s.clock, event.oldNode, event.newNode)
+		actual := DiffNode(s.clock, event.oldNode, event.newNode)
 		c.Assert(actual, DeepEquals, event.diff, Commentf(event.comment))
 	}
 }
@@ -144,7 +144,7 @@ func (s *StatusSuite) TestProbeDiff(c *C) {
 	}
 
 	for _, event := range probeEvents {
-		actual := diffProbe(s.clock, event.nodeName, event.oldProbe, event.newProbe)
+		actual := DiffProbe(s.clock, event.nodeName, event.oldProbe, event.newProbe)
 		c.Assert(actual, DeepEquals, event.diff, Commentf(event.comment))
 	}
 }

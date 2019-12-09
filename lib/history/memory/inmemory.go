@@ -14,23 +14,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package history
+package memory
 
 import (
 	"context"
 	"sync"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/lib/history"
 
 	"github.com/jonboulle/clockwork"
 )
 
-// MemTimeline represents a timeline of cluster status events. The Timeline
+// Timeline represents a timeline of cluster status events. The Timeline
 // can hold a specified amount of events and uses a FIFO eviction policy.
 // Timeline events are only stored in memory.
 //
 // Implements Timeline
-type MemTimeline struct {
+type Timeline struct {
 	// clock is used to record event timestamps.
 	clock clockwork.Clock
 	// capacity specifies the max number of events stored in the timeline.
@@ -43,10 +44,10 @@ type MemTimeline struct {
 	mu sync.Mutex
 }
 
-// NewMemTimeline initializes and returns a new MemTimeline with the specified
+// NewTimeline initializes and returns a new Timeline with the specified
 // capacity. The provided clock will be used to record event timestamps.
-func NewMemTimeline(clock clockwork.Clock, capacity int) *MemTimeline {
-	return &MemTimeline{
+func NewTimeline(clock clockwork.Clock, capacity int) *Timeline {
+	return &Timeline{
 		clock:      clock,
 		capacity:   capacity,
 		events:     make([]*pb.TimelineEvent, 0, capacity),
@@ -56,9 +57,9 @@ func NewMemTimeline(clock clockwork.Clock, capacity int) *MemTimeline {
 
 // RecordStatus records the differences between the previously stored status
 // and the newly provided status into the timeline.
-// The ctx is unused for MemTimeline.
-func (t *MemTimeline) RecordStatus(ctx context.Context, status *pb.SystemStatus) error {
-	events := diffCluster(t.clock, t.lastStatus, status)
+// The ctx is unused for the in memory Timeline.
+func (t *Timeline) RecordStatus(ctx context.Context, status *pb.SystemStatus) error {
+	events := history.DiffCluster(t.clock, t.lastStatus, status)
 	if len(events) == 0 {
 		return nil
 	}
@@ -74,15 +75,15 @@ func (t *MemTimeline) RecordStatus(ctx context.Context, status *pb.SystemStatus)
 }
 
 // GetEvents returns a filtered list of events based on the provided params.
-// The ctx is unused for MemTimeline.
-func (t *MemTimeline) GetEvents(ctx context.Context, params map[string]string) (events []*pb.TimelineEvent, err error) {
+// The ctx is unused for the in memory Timeline.
+func (t *Timeline) GetEvents(ctx context.Context, params map[string]string) (events []*pb.TimelineEvent, err error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.getFilteredEvents(params), nil
 }
 
 // addEvent appends the provided event to the timeline.
-func (t *MemTimeline) addEvent(event *pb.TimelineEvent) {
+func (t *Timeline) addEvent(event *pb.TimelineEvent) {
 	if len(t.events) >= t.capacity {
 		t.events = t.events[1:]
 	}
@@ -90,7 +91,7 @@ func (t *MemTimeline) addEvent(event *pb.TimelineEvent) {
 }
 
 // getFilteredEvents returns a filtered list of events based on the provided params.
-func (t *MemTimeline) getFilteredEvents(params map[string]string) (events []*pb.TimelineEvent) {
+func (t *Timeline) getFilteredEvents(params map[string]string) (events []*pb.TimelineEvent) {
 	// TODO
 	return t.events
 }
