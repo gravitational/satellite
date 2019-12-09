@@ -28,7 +28,7 @@ import (
 type Timeline interface {
 	// RecordStatus records any changes that have occurred since the previous
 	// recorded status.
-	RecordStatus(ctx context.Context, status *pb.SystemStatus) error
-	// GetEvents returns the currently stored list of events.
-	GetEvents(ctx context.Context) ([]*pb.TimelineEvent, error)
+	RecordStatus(context context.Context, status *pb.SystemStatus) error
+	// GetEvents returns a filtered list of events based on the provided params.
+	GetEvents(context context.Context, params map[string]string) ([]*pb.TimelineEvent, error)
 }

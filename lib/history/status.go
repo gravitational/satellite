@@ -22,9 +22,9 @@ import (
 	"github.com/jonboulle/clockwork"
 )
 
-// diffCluster calculates the differences between a previous cluster status and
+// DiffCluster calculates the differences between a previous cluster status and
 // a new cluster status. The differences are returned as a list of Events.
-func diffCluster(clock clockwork.Clock, old, new *pb.SystemStatus) (events []*pb.TimelineEvent) {
+func DiffCluster(clock clockwork.Clock, old, new *pb.SystemStatus) (events []*pb.TimelineEvent) {
 	oldNodes := nodeMap(old)
 	newNodes := nodeMap(new)
 
@@ -37,7 +37,7 @@ func diffCluster(clock clockwork.Clock, old, new *pb.SystemStatus) (events []*pb
 	for name, newNode := range newNodes {
 		// Nodes modified
 		if oldNode, ok := oldNodes[name]; ok {
-			events = append(events, diffNode(clock, oldNode, newNode)...)
+			events = append(events, DiffNode(clock, oldNode, newNode)...)
 			delete(removed, name)
 			continue
 		}
@@ -45,7 +45,7 @@ func diffCluster(clock clockwork.Clock, old, new *pb.SystemStatus) (events []*pb
 		// Nodes added to the cluster
 		event := NewNodeAdded(clock.Now(), name)
 		events = append(events, event)
-		events = append(events, diffNode(clock, nil, newNode)...)
+		events = append(events, DiffNode(clock, nil, newNode)...)
 	}
 
 	// Nodes removed from the cluster
@@ -78,15 +78,15 @@ func nodeMap(status *pb.SystemStatus) map[string]*pb.NodeStatus {
 	return nodes
 }
 
-// diffNode calculates the differences between a previous node status and a new
+// DiffNode calculates the differences between a previous node status and a new
 // node status. The differences are returned as a list of Events.
-func diffNode(clock clockwork.Clock, old, new *pb.NodeStatus) (events []*pb.TimelineEvent) {
+func DiffNode(clock clockwork.Clock, old, new *pb.NodeStatus) (events []*pb.TimelineEvent) {
 	oldProbes := probeMap(old)
 	newProbes := probeMap(new)
 
 	for name, newProbe := range newProbes {
 		if oldProbe, ok := oldProbes[name]; ok {
-			events = append(events, diffProbe(clock, new.GetName(), oldProbe, newProbe)...)
+			events = append(events, DiffProbe(clock, new.GetName(), oldProbe, newProbe)...)
 		}
 	}
 
@@ -112,10 +112,10 @@ func probeMap(status *pb.NodeStatus) map[string]*pb.Probe {
 	return probes
 }
 
-// diffProbe calculates the differences between a previous probe and a new
+// DiffProbe calculates the differences between a previous probe and a new
 // probe. The differences are returned as a list of Events. The provided
 // nodeName is used to specify which node the probes belong to.
-func diffProbe(clock clockwork.Clock, nodeName string, old, new *pb.Probe) (events []*pb.TimelineEvent) {
+func DiffProbe(clock clockwork.Clock, nodeName string, old, new *pb.Probe) (events []*pb.TimelineEvent) {
 	if old.GetStatus() == new.GetStatus() {
 		return events
 	}
