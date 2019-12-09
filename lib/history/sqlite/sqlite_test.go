@@ -20,6 +20,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/history"
@@ -45,10 +46,13 @@ const TestDBPath = "/tmp/test.db"
 // SetupTest initializes test database.
 func (s *SQLiteSuite) SetUpTest(c *C) {
 	clock := clockwork.NewFakeClock()
-	config := TimelineConfig{
-		DBPath:   TestDBPath,
-		Capacity: 1,
-		Clock:    clock,
+	config := Config{
+		Context:       context.TODO(),
+		DBPath:        TestDBPath,
+		DBConnTimeout: 5 * time.Second,
+		DBTimeout:     5 * time.Second,
+		Capacity:      1,
+		Clock:         clock,
 	}
 	timeline, err := NewTimeline(config)
 	c.Assert(err, IsNil)
@@ -63,10 +67,10 @@ func (s *SQLiteSuite) TearDownTest(c *C) {
 }
 
 func (s *SQLiteSuite) TestRecordStatus(c *C) {
-	err := s.timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: pb.SystemStatus_Running})
+	err := s.timeline.RecordStatus(&pb.SystemStatus{Status: pb.SystemStatus_Running})
 	c.Assert(err, IsNil)
 
-	actual, err := s.timeline.GetEvents(context.TODO(), nil)
+	actual, err := s.timeline.GetEvents(nil)
 	c.Assert(err, IsNil)
 
 	expected := []*pb.TimelineEvent{history.NewClusterRecovered(s.clock.Now())}
@@ -77,13 +81,13 @@ func (s *SQLiteSuite) TestFIFOEviction(c *C) {
 	old := &pb.SystemStatus{Status: pb.SystemStatus_Running}
 	new := &pb.SystemStatus{Status: pb.SystemStatus_Degraded}
 
-	err := s.timeline.RecordStatus(context.TODO(), old)
+	err := s.timeline.RecordStatus(old)
 	c.Assert(err, IsNil)
 
-	err = s.timeline.RecordStatus(context.TODO(), new)
+	err = s.timeline.RecordStatus(new)
 	c.Assert(err, IsNil)
 
-	actual, err := s.timeline.GetEvents(context.TODO(), nil)
+	actual, err := s.timeline.GetEvents(nil)
 	c.Assert(err, IsNil)
 
 	expected := []*pb.TimelineEvent{history.NewClusterDegraded(s.clock.Now())}
@@ -91,18 +95,18 @@ func (s *SQLiteSuite) TestFIFOEviction(c *C) {
 }
 
 func (s *SQLiteSuite) TestFilterEvents(c *C) {
-	err := s.timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: pb.SystemStatus_Running})
+	err := s.timeline.RecordStatus(&pb.SystemStatus{Status: pb.SystemStatus_Running})
 	c.Assert(err, IsNil)
 
 	params := map[string]string{"type": clusterRecoveredType}
-	actual, err := s.timeline.GetEvents(context.TODO(), params)
+	actual, err := s.timeline.GetEvents(params)
 	c.Assert(err, IsNil)
 
 	expected := []*pb.TimelineEvent{history.NewClusterRecovered(s.clock.Now())}
 	c.Assert(actual, DeepEquals, expected, Commentf("Test filter events - one match"))
 
 	params = map[string]string{"type": clusterDegradedType}
-	actual, err = s.timeline.GetEvents(context.TODO(), params)
+	actual, err = s.timeline.GetEvents(params)
 	c.Assert(err, IsNil)
 
 	expected = nil

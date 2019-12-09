@@ -38,12 +38,10 @@ import (
 // can hold a specified amount of events and uses a FIFO eviction policy.
 // Timeline events are stored in a local sqlite database.
 //
-// Implements Timeline
+// Implements history.Timeline
 type Timeline struct {
-	// clock is used to record event timestamps.
-	clock clockwork.Clock
-	// capacity specifies the max number of events that can be stored in the timeline.
-	capacity int
+	// Config contains timeline configuration.
+	Config Config
 	// size specifies the current number of events stored in the timeline.
 	size int
 	// database points to underlying sqlite database.
@@ -54,10 +52,16 @@ type Timeline struct {
 	mu sync.Mutex
 }
 
-// TimelineConfig defines Timeline configuration.
-type TimelineConfig struct {
+// Config defines Timeline configuration.
+type Config struct {
+	// Context specifies parent context to be used within the timeline.
+	Context context.Context
 	// DBPath specifies the database location.
 	DBPath string
+	// DBConnTimeout specifies the duration to wait for db connection before timeout.
+	DBConnTimeout time.Duration
+	// DBTimeout specifies the duration to wait for db operations.
+	DBTimeout time.Duration
 	// Capacity specifies the max number of events that can be stored in the timeline.
 	Capacity int
 	// Clock will be used to record event timestamps.
@@ -66,15 +70,18 @@ type TimelineConfig struct {
 
 // NewTimeline initializes and returns a new Timeline with the
 // specified configuration.
-func NewTimeline(config TimelineConfig) (*Timeline, error) {
-	database, err := initSQLite(config.DBPath)
+func NewTimeline(config Config) (*Timeline, error) {
+	ctx, cancel := context.WithTimeout(config.Context, config.DBConnTimeout)
+	defer cancel()
+
+	database, err := initSQLite(ctx, config.DBPath)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
 
 	return &Timeline{
-		clock:    config.Clock,
-		capacity: config.Capacity,
+		Config: config,
+		// TODO: reinitialize size from database.
 		size:     0,
 		database: database,
 		// TODO: store and recover lastStatus in case satellite agent restarts.
@@ -84,11 +91,7 @@ func NewTimeline(config TimelineConfig) (*Timeline, error) {
 
 // initSQLite initializes connection to database provided by dbPath and
 // initializes `events` table.
-func initSQLite(dbPath string) (*sqlx.DB, error) {
-	// TODO: Store sql db connection timeout as const
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	defer cancel()
-
+func initSQLite(ctx context.Context, dbPath string) (*sqlx.DB, error) {
 	database, err := sqlx.ConnectContext(ctx, "sqlite3", dbPath)
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -103,8 +106,11 @@ func initSQLite(dbPath string) (*sqlx.DB, error) {
 
 // RecordStatus records the differences between the previously stored status and
 // the provided status.
-func (t *Timeline) RecordStatus(ctx context.Context, status *pb.SystemStatus) (err error) {
-	events := history.DiffCluster(t.clock, t.lastStatus, status)
+func (t *Timeline) RecordStatus(status *pb.SystemStatus) (err error) {
+	ctx, cancel := context.WithTimeout(t.Config.Context, t.Config.DBTimeout)
+	defer cancel()
+
+	events := history.DiffCluster(t.Config.Clock, t.lastStatus, status)
 	if len(events) == 0 {
 		return nil
 	}
@@ -131,7 +137,7 @@ func (t *Timeline) RecordStatus(ctx context.Context, status *pb.SystemStatus) (e
 		return trace.Wrap(err, "failed to insert events")
 	}
 
-	if t.size+len(events) > t.capacity {
+	if t.size+len(events) > t.Config.Capacity {
 		if err = t.evictEvents(ctx, tx); err != nil {
 			return trace.Wrap(err, "failed to evict old events")
 		}
@@ -142,8 +148,8 @@ func (t *Timeline) RecordStatus(ctx context.Context, status *pb.SystemStatus) (e
 	}
 
 	t.size = t.size + len(events)
-	if t.size > t.capacity {
-		t.size = t.capacity
+	if t.size > t.Config.Capacity {
+		t.size = t.Config.Capacity
 	}
 
 	t.lastStatus = status
@@ -151,7 +157,10 @@ func (t *Timeline) RecordStatus(ctx context.Context, status *pb.SystemStatus) (e
 }
 
 // GetEvents returns a filtered list of events based on the provided params.
-func (t *Timeline) GetEvents(ctx context.Context, params map[string]string) (events []*pb.TimelineEvent, err error) {
+func (t *Timeline) GetEvents(params map[string]string) (events []*pb.TimelineEvent, err error) {
+	ctx, cancel := context.WithTimeout(t.Config.Context, t.Config.DBTimeout)
+	defer cancel()
+
 	query, args := prepareQuery(params)
 	rows, err := t.database.QueryxContext(ctx, query, args...)
 	if err != nil {
@@ -212,7 +221,7 @@ func (t *Timeline) insertEvents(ctx context.Context, tx *sql.Tx, events []*pb.Ti
 // evictEvents deletes oldest events if the timeline is larger than its max
 // capacity.
 func (t *Timeline) evictEvents(ctx context.Context, tx *sql.Tx) error {
-	if _, err := tx.ExecContext(ctx, deleteOldFromEvents, t.capacity); err != nil {
+	if _, err := tx.ExecContext(ctx, deleteOldFromEvents, t.Config.Capacity); err != nil {
 		return trace.Wrap(err)
 	}
 	return nil

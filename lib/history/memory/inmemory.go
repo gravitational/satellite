@@ -17,7 +17,6 @@ limitations under the License.
 package memory
 
 import (
-	"context"
 	"sync"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
@@ -30,7 +29,7 @@ import (
 // can hold a specified amount of events and uses a FIFO eviction policy.
 // Timeline events are only stored in memory.
 //
-// Implements Timeline
+// Implements history.Timeline
 type Timeline struct {
 	// clock is used to record event timestamps.
 	clock clockwork.Clock
@@ -57,8 +56,7 @@ func NewTimeline(clock clockwork.Clock, capacity int) *Timeline {
 
 // RecordStatus records the differences between the previously stored status
 // and the newly provided status into the timeline.
-// The ctx is unused for the in memory Timeline.
-func (t *Timeline) RecordStatus(ctx context.Context, status *pb.SystemStatus) error {
+func (t *Timeline) RecordStatus(status *pb.SystemStatus) error {
 	events := history.DiffCluster(t.clock, t.lastStatus, status)
 	if len(events) == 0 {
 		return nil
@@ -75,8 +73,7 @@ func (t *Timeline) RecordStatus(ctx context.Context, status *pb.SystemStatus) er
 }
 
 // GetEvents returns a filtered list of events based on the provided params.
-// The ctx is unused for the in memory Timeline.
-func (t *Timeline) GetEvents(ctx context.Context, params map[string]string) (events []*pb.TimelineEvent, err error) {
+func (t *Timeline) GetEvents(params map[string]string) (events []*pb.TimelineEvent, err error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.getFilteredEvents(params), nil
