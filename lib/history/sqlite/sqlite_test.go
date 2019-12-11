@@ -123,3 +123,14 @@ func (s *SQLiteSuite) TestFilterEvents(c *C) {
 	expected = nil
 	c.Assert(actual, DeepEquals, expected, Commentf("Test filter events - no match"))
 }
+
+func (s *SQLiteSuite) TestMergeEvents(c *C) {
+	events := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), "test-node")}
+	err := s.timeline.RecordTimeline(context.TODO(), events)
+	c.Assert(err, IsNil)
+
+	actual, err := s.timeline.GetEvents(context.TODO(), nil)
+	c.Assert(err, IsNil)
+
+	c.Assert(actual, DeepEquals, events, Commentf("Test merge events"))
+}

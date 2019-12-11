@@ -24,6 +24,7 @@ import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/history"
 
+	"github.com/gravitational/trace"
 	"github.com/jonboulle/clockwork"
 )
 
@@ -73,6 +74,12 @@ func (t *Timeline) RecordStatus(ctx context.Context, status *pb.NodeStatus) erro
 	}
 	t.lastStatus = status
 	return nil
+}
+
+// RecordTimeline merges the provided events into the current timeline.
+// Duplicate events will be ignored.
+func (t *Timeline) RecordTimeline(ctx context.Context, events []*pb.TimelineEvent) error {
+	return trace.NotImplemented("not implemented")
 }
 
 // GetEvents returns a filtered list of events based on the provided params.

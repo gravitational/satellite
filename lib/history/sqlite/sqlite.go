@@ -31,7 +31,7 @@ import (
 	"github.com/gravitational/trace"
 	"github.com/jmoiron/sqlx"
 	"github.com/jonboulle/clockwork"
-	_ "github.com/mattn/go-sqlite3" // initialize sqlite3
+	"github.com/mattn/go-sqlite3" // initialize sqlite3
 	log "github.com/sirupsen/logrus"
 )
 
@@ -133,6 +133,39 @@ func (t *Timeline) RecordStatus(ctx context.Context, status *pb.NodeStatus) (err
 		return trace.Wrap(err, "failed to insert events")
 	}
 
+	// TODO: cannot update use an eviction policy based on size of timeline if
+	// timeline needs to be a CRDT. Will replace eviction policy with a time
+	// based policy.
+	if t.size == t.Config.Capacity {
+		if err = t.evictEvents(ctx); err != nil {
+			return trace.Wrap(err, "failed to evict old events")
+		}
+	}
+
+	return nil
+}
+
+// RecordTimeline merges the provided events into the current timeline.
+// Duplicate events will be ignored.
+func (t *Timeline) RecordTimeline(ctx context.Context, events []*pb.TimelineEvent) (err error) {
+	if len(events) == 0 {
+		return nil
+	}
+
+	t.mu.Lock()
+	t.size = t.size + len(events)
+	if t.size > t.Config.Capacity {
+		t.size = t.Config.Capacity
+	}
+	t.mu.Unlock()
+
+	if err = t.insertEvents(ctx, events); err != nil {
+		return trace.Wrap(err, "failed to insert events")
+	}
+
+	// TODO: cannot use an eviction policy based on size of timeline if
+	// timeline needs to be a CRDT. Will replace eviction policy with a time
+	// based policy.
 	if t.size == t.Config.Capacity {
 		if err = t.evictEvents(ctx); err != nil {
 			return trace.Wrap(err, "failed to evict old events")
@@ -212,6 +245,13 @@ func (t *Timeline) insertEvents(ctx context.Context, events []*pb.TimelineEvent)
 		}
 
 		if _, err := tx.ExecContext(ctx, insertIntoEvents, args...); err != nil {
+			// Unique constraint error indicates duplicate row.
+			// Just ignore duplicates and continue.
+			if sqliteErr, ok := err.(sqlite3.Error); ok {
+				if sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
+					continue
+				}
+			}
 			return trace.Wrap(err)
 		}
 	}
@@ -261,6 +301,7 @@ func prepareQuery(params map[string]string) (query string, args []interface{}) {
 
 	sb.WriteString("SELECT * FROM events ")
 	if len(params) == 0 {
+		sb.WriteString("ORDER BY timestamp DESC ")
 		return sb.String(), args
 	}
 	sb.WriteString("WHERE ")
@@ -274,6 +315,7 @@ func prepareQuery(params map[string]string) (query string, args []interface{}) {
 		index++
 	}
 
+	sb.WriteString("ORDER BY timestamp DESC ")
 	return sb.String(), args
 }
 
@@ -390,6 +432,8 @@ const (
 )
 
 // createTableEvents is sql statement to create an `events` table.
+// Rows must be unique, excluding id.
+// TODO: might not need oldState/newState.
 const createTableEvents = `
 CREATE TABLE IF NOT EXISTS events (
 	id INTEGER PRIMARY KEY,
@@ -398,7 +442,8 @@ CREATE TABLE IF NOT EXISTS events (
 	node TEXT,
 	probe TEXT,
 	oldState TEXT,
-	newState TEXT
+	newState TEXT,
+	UNIQUE(timestamp, type, node, probe, oldState, newState)
 )
 `
 
