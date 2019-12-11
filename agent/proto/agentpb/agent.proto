@@ -128,6 +128,16 @@ message TimeResponse {
   Timestamp timestamp = 1;
 }
 
+// UpdateRequest requests a new event be added to the timeline.
+message UpdateRequest {
+  // Event specifies the event to be added to the timeline.
+  TimelineEvent event = 1;
+}
+
+// UpdateResponse indicates a successful update.
+message UpdateResponse {}
+
+
 message TimelineRequest {
   // Params will be used to filter the timeline response.
   map<string, string> params = 1;
@@ -172,4 +182,7 @@ service Agent {
   rpc Time(TimeRequest) returns (TimeResponse) {}
   // Timeline collects the status timeline
   rpc Timeline(TimelineRequest) returns (TimelineResponse) {}
+  // UpdateTimeline requests a new event be added to the timeline.
+  // This RPC is idempotent. Repeated calls will have no effect.
+  rpc UpdateTimeline(UpdateRequest) returns (UpdateResponse) {}
 }
