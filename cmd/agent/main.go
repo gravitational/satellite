@@ -18,6 +18,7 @@ package main
 
 import (
 	"os"
+	"time"
 
 	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/agent/backend"
@@ -139,6 +140,12 @@ func run() error {
 			}
 			backends = append(backends, influxdb)
 		}
+
+		// Use retention duration of 1 week if no duration is provided
+		if *cagentRetention == time.Duration(0) {
+			*cagentRetention = time.Hour * 24 * 7
+		}
+
 		agentConfig := &agent.Config{
 			Name:              *cagentName,
 			RPCAddrs:          *cagentRPCAddrs,
