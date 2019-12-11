@@ -133,7 +133,7 @@ func (t *Timeline) RecordStatus(ctx context.Context, status *pb.NodeStatus) (err
 		return trace.Wrap(err, "failed to insert events")
 	}
 
-	// TODO: cannot update use an eviction policy based on size of timeline if
+	// TODO: cannot use an eviction policy based on size of timeline if
 	// timeline needs to be a CRDT. Will replace eviction policy with a time
 	// based policy.
 	if t.size == t.Config.Capacity {

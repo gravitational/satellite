@@ -29,7 +29,7 @@ type Timeline interface {
 	// RecordStatus records any changes that have occurred since the previous
 	// recorded status.
 	RecordStatus(ctx context.Context, status *pb.NodeStatus) error
-	// RecordTimeline merge the provided events into the current timeline.
+	// RecordTimeline merges the provided events into the current timeline.
 	// Duplicate events will be ignored.
 	RecordTimeline(ctx context.Context, events []*pb.TimelineEvent) error
 	// GetEvents returns a filtered list of events based on the provided params.

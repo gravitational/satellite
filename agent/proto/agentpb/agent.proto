@@ -137,7 +137,6 @@ message UpdateRequest {
 // UpdateResponse indicates a successful update.
 message UpdateResponse {}
 
-
 message TimelineRequest {
   // Params will be used to filter the timeline response.
   map<string, string> params = 1;
