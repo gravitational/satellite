@@ -74,9 +74,13 @@ func run() error {
 		cagentCAFile         = cagent.Flag("ca-file", "SSL CA certificate for verifying server certificates").ExistingFile()
 		cagentCertFile       = cagent.Flag("cert-file", "SSL certificate for server RPC").ExistingFile()
 		cagentKeyFile        = cagent.Flag("key-file", "SSL certificate key for server RPC").ExistingFile()
+		// sqlite config
+		cagentDBPath    = cagent.Flag("db-path", "SQLite database location").Default("/tmp/timeline.db").String()
+		cagentRetention = cagent.Flag("retention", "Timeline retention duration").Duration()
 
 		// `status` command
 		cstatus            = app.Command("status", "Query cluster status")
+		cstatusHistory     = cstatus.Flag("history", "Query the status history").Bool()
 		cstatusRPCPort     = cstatus.Flag("rpc-port", "Local agent RPC port").Default("7575").Int()
 		cstatusPrettyPrint = cstatus.Flag("pretty", "Pretty-print the output").Bool()
 		cstatusLocal       = cstatus.Flag("local", "Query the status of the local node").Bool()
@@ -136,15 +140,17 @@ func run() error {
 			backends = append(backends, influxdb)
 		}
 		agentConfig := &agent.Config{
-			Name:        *cagentName,
-			RPCAddrs:    *cagentRPCAddrs,
-			SerfRPCAddr: *cagentSerfRPCAddr,
-			MetricsAddr: *cagentMetricsAddr,
-			Tags:        *cagentTags,
-			Cache:       multiplex.New(cache, backends...),
-			CAFile:      *cagentCAFile,
-			CertFile:    *cagentCertFile,
-			KeyFile:     *cagentKeyFile,
+			Name:              *cagentName,
+			RPCAddrs:          *cagentRPCAddrs,
+			SerfRPCAddr:       *cagentSerfRPCAddr,
+			MetricsAddr:       *cagentMetricsAddr,
+			Tags:              *cagentTags,
+			Cache:             multiplex.New(cache, backends...),
+			CAFile:            *cagentCAFile,
+			CertFile:          *cagentCertFile,
+			KeyFile:           *cagentKeyFile,
+			DBPath:            *cagentDBPath,
+			RetentionDuration: *cagentRetention,
 		}
 		monitoringConfig := &config{
 			role:                 agent.Role(agentRole),
@@ -164,7 +170,7 @@ func run() error {
 		}
 		err = runAgent(agentConfig, monitoringConfig, toAddrList(*cagentInitialCluster))
 	case cstatus.FullCommand():
-		_, err = status(*cstatusRPCPort, *cstatusLocal, *cstatusPrettyPrint, *cstatusCAFile, *cstatusCertFile, *cstatusKeyFile)
+		_, err = status(*cstatusRPCPort, *cstatusHistory, *cstatusLocal, *cstatusPrettyPrint, *cstatusCAFile, *cstatusCertFile, *cstatusKeyFile)
 	case cchecks.FullCommand():
 		err = localChecks()
 	case cversion.FullCommand():

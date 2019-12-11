@@ -38,7 +38,7 @@ const statusTimeout = 5 * time.Second
 // the status of the cluster.
 // Returns true if the status query was successful, false - otherwise.
 // The output is prettified if prettyPrint is true.
-func status(RPCPort int, local, prettyPrint bool, caFile, certFile, keyFile string) (ok bool, err error) {
+func status(RPCPort int, history, local, prettyPrint bool, caFile, certFile, keyFile string) (ok bool, err error) {
 	RPCAddr := fmt.Sprintf("127.0.0.1:%d", RPCPort)
 
 	ctx, cancel := context.WithTimeout(context.Background(), statusTimeout)
@@ -48,6 +48,19 @@ func status(RPCPort int, local, prettyPrint bool, caFile, certFile, keyFile stri
 	if err != nil {
 		return false, trace.Wrap(err)
 	}
+
+	if history {
+		timeline, err := client.Timeline(ctx)
+		if err != nil {
+			return false, trace.Wrap(err)
+		}
+		events := timeline.GetEvents()
+		for _, event := range events {
+			printEvent(event)
+		}
+		return true, nil
+	}
+
 	var statusJson []byte
 	var statusBlob interface{}
 	if local {
@@ -78,3 +91,35 @@ func status(RPCPort int, local, prettyPrint bool, caFile, certFile, keyFile stri
 	}
 	return ok, nil
 }
+
+func printEvent(event *pb.TimelineEvent) {
+	timestamp := event.GetTimestamp().ToTime()
+	fmt.Printf("Timestamp[%s] ", timestamp.Format(Stamp))
+
+	switch event.GetData().(type) {
+	case *pb.TimelineEvent_ClusterDegraded:
+		fmt.Printf("Cluster Degraded\n")
+	case *pb.TimelineEvent_ClusterRecovered:
+		fmt.Printf("Cluster Recovered\n")
+	case *pb.TimelineEvent_NodeAdded:
+		fmt.Printf("Node Added [%s]\n", event.GetNodeAdded().GetNode())
+	case *pb.TimelineEvent_NodeRemoved:
+		fmt.Printf("Node Removed [%s]\n", event.GetNodeRemoved().GetNode())
+	case *pb.TimelineEvent_NodeDegraded:
+		fmt.Printf("Node Degraded [%s]\n", event.GetNodeDegraded().GetNode())
+	case *pb.TimelineEvent_NodeRecovered:
+		fmt.Printf("Node Recovered [%s]\n", event.GetNodeRecovered().GetNode())
+	case *pb.TimelineEvent_ProbeFailed:
+		e := event.GetProbeFailed()
+		fmt.Printf("Probe Failed [%s] [%s]\n", e.GetNode(), e.GetProbe())
+	case *pb.TimelineEvent_ProbeSucceeded:
+		e := event.GetProbeSucceeded()
+		fmt.Printf("Probe Succeeded [%s] [%s]\n", e.GetNode(), e.GetProbe())
+	default:
+		fmt.Printf("Unknown Event\n")
+	}
+
+}
+
+// Stamp defines default timestamp format.
+const Stamp = "Jan _2 15:04:05 UTC"
