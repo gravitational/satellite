@@ -37,6 +37,10 @@ type Client interface {
 	LocalStatus(context.Context) (*pb.NodeStatus, error)
 	// Time returns the current time on the target node.
 	Time(context.Context, *pb.TimeRequest) (*pb.TimeResponse, error)
+	// Timeline returns the current status timeline.
+	Timeline(context.Context) (*pb.TimelineResponse, error)
+	// UpdateTimeline request the update the timeline with a new event.
+	UpdateTimeline(context.Context, *pb.UpdateRequest) (*pb.UpdateResponse, error)
 }
 
 type client struct {
@@ -143,7 +147,7 @@ func (r *client) Timeline(ctx context.Context) (timeline *pb.TimelineResponse, e
 	return resp, nil
 }
 
-//UpdateTimeline request the update the timeline with a new event.
+// UpdateTimeline request the update the timeline with a new event.
 func (r *client) UpdateTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateResponse, error) {
 	resp, err := r.AgentClient.UpdateTimeline(ctx, req, defaultRPCOptions...)
 	if err != nil {

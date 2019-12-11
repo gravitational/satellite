@@ -567,16 +567,17 @@ func (r *AgentSuite) newAgent(node string, rpcPort int, members []serf.Member,
 		recycleClock = clockwork.NewFakeClock()
 	}
 	return &agent{
-		name:         node,
-		SerfClient:   &MockSerfClient{members: members},
-		dialRPC:      testDialRPC(rpcPort, r.certFile, r.keyFile),
-		cache:        &testCache{c: c, SystemStatus: &pb.SystemStatus{Status: pb.SystemStatus_Unknown}},
-		Checkers:     checkers,
-		statusClock:  statusClock,
-		recycleClock: recycleClock,
-		localStatus:  emptyNodeStatus(node),
-		Timeline:     nil,
-		done:         make(chan struct{}),
+		name:          node,
+		SerfClient:    &MockSerfClient{members: members},
+		dialRPC:       testDialRPC(rpcPort, r.certFile, r.keyFile),
+		cache:         &testCache{c: c, SystemStatus: &pb.SystemStatus{Status: pb.SystemStatus_Unknown}},
+		Checkers:      checkers,
+		statusClock:   statusClock,
+		recycleClock:  recycleClock,
+		timelineClock: clockwork.NewFakeClock(),
+		localStatus:   emptyNodeStatus(node),
+		Timeline:      nil,
+		done:          make(chan struct{}),
 	}
 }
 

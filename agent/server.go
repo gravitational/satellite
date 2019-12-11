@@ -86,14 +86,22 @@ func (r *server) Time(ctx context.Context, req *pb.TimeRequest) (*pb.TimeRespons
 
 // Timeline sends the current status timeline
 func (r *server) Timeline(ctx context.Context, req *pb.TimelineRequest) (*pb.TimelineResponse, error) {
-	// TODO: Collect timeline events
+	events, err := r.agent.Timeline.GetEvents(ctx, req.GetParams())
+	if err != nil {
+		return nil, err
+	}
+
 	return &pb.TimelineResponse{
-		Events: []*pb.TimelineEvent{},
+		Events: events,
 	}, nil
 }
 
+// UpdateTimeline updates the timeline with a new event.
+// Duplicate requests will have no effect.
 func (r *server) UpdateTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateResponse, error) {
-	// TODO: Update timeline
+	if err := r.agent.Timeline.RecordTimeline(ctx, []*pb.TimelineEvent{req.GetEvent()}); err != nil {
+		return nil, err
+	}
 	return &pb.UpdateResponse{}, nil
 }
 
