@@ -35,16 +35,14 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// Timeline represents a timeline of cluster status events. The timeline
-// can hold a specified amount of events and uses a FIFO eviction policy.
+// Timeline represents a timeline of status events.
 // Timeline events are stored in a local sqlite database.
+// The timeline will retain events for a specified duration and then deleted.
 //
 // Implements history.Timeline
 type Timeline struct {
 	// Config contains timeline configuration.
-	Config Config
-	// size specifies the current number of events stored in the timeline.
-	size int
+	config Config
 	// database points to underlying sqlite database.
 	database *sqlx.DB
 	// lastStatus holds the last recorded status.
@@ -57,8 +55,8 @@ type Timeline struct {
 type Config struct {
 	// DBPath specifies the database location.
 	DBPath string
-	// Capacity specifies the max number of events that can be stored in the timeline.
-	Capacity int
+	// RetentionDuration specifies the duration to store events.
+	RetentionDuration time.Duration
 	// Clock will be used to record event timestamps.
 	Clock clockwork.Clock
 }
@@ -71,19 +69,19 @@ func NewTimeline(ctx context.Context, config Config) (*Timeline, error) {
 		return nil, trace.Wrap(err)
 	}
 
-	size, err := getSize(ctx, database)
-	if err != nil {
-		database.Close()
-		return nil, trace.Wrap(err)
-	}
-
-	return &Timeline{
-		Config:   config,
-		size:     size,
+	timeline := &Timeline{
+		config:   config,
 		database: database,
 		// TODO: store and recover lastStatus in case satellite agent restarts.
 		lastStatus: nil,
-	}, nil
+	}
+
+	// TODO: should this be called in constructor method?
+	// Let caller run event eviction loop?
+	// Create separate init function?
+	go timeline.eventEvictionLoop()
+
+	return timeline, nil
 }
 
 // initSQLite initializes connection to database provided by dbPath and
@@ -101,13 +99,26 @@ func initSQLite(ctx context.Context, dbPath string) (*sqlx.DB, error) {
 	return database, nil
 }
 
-// getSize returns the current number of rows stored in the provided database.
-func getSize(ctx context.Context, database *sqlx.DB) (size int, err error) {
-	row := database.QueryRowContext(ctx, "SELECT COUNT(*) FROM events")
-	if err := row.Scan(&size); err != nil {
-		return -1, trace.Wrap(err)
+// eventEvictionLoop periodically evicts old events to free up storage.
+func (t *Timeline) eventEvictionLoop() {
+	var timer <-chan time.Time
+	for {
+		// TODO: eviction frequency
+		timer = t.config.Clock.After(time.Hour)
+		<-timer
+
+		// TODO: eviction timeout
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+
+		// All events before this time will be deleted.
+		retentionCutOff := t.config.Clock.Now().Add(-(t.config.RetentionDuration))
+
+		if err := t.evictEvents(ctx, retentionCutOff); err != nil {
+			cancel()
+			log.WithError(err).Warnf("Error evicting old events.")
+		}
+		cancel()
 	}
-	return size, nil
 }
 
 // RecordStatus records the differences between the previously stored status and
@@ -115,15 +126,10 @@ func getSize(ctx context.Context, database *sqlx.DB) (size int, err error) {
 func (t *Timeline) RecordStatus(ctx context.Context, status *pb.NodeStatus) (err error) {
 	t.mu.Lock()
 
-	events := history.DiffNode(t.Config.Clock, t.lastStatus, status)
+	events := history.DiffNode(t.config.Clock, t.lastStatus, status)
 	if len(events) == 0 {
 		t.mu.Unlock()
 		return nil
-	}
-
-	t.size = t.size + len(events)
-	if t.size > t.Config.Capacity {
-		t.size = t.Config.Capacity
 	}
 	t.lastStatus = status
 
@@ -131,15 +137,6 @@ func (t *Timeline) RecordStatus(ctx context.Context, status *pb.NodeStatus) (err
 
 	if err = t.insertEvents(ctx, events); err != nil {
 		return trace.Wrap(err, "failed to insert events")
-	}
-
-	// TODO: cannot use an eviction policy based on size of timeline if
-	// timeline needs to be a CRDT. Will replace eviction policy with a time
-	// based policy.
-	if t.size == t.Config.Capacity {
-		if err = t.evictEvents(ctx); err != nil {
-			return trace.Wrap(err, "failed to evict old events")
-		}
 	}
 
 	return nil
@@ -152,24 +149,8 @@ func (t *Timeline) RecordTimeline(ctx context.Context, events []*pb.TimelineEven
 		return nil
 	}
 
-	t.mu.Lock()
-	t.size = t.size + len(events)
-	if t.size > t.Config.Capacity {
-		t.size = t.Config.Capacity
-	}
-	t.mu.Unlock()
-
 	if err = t.insertEvents(ctx, events); err != nil {
 		return trace.Wrap(err, "failed to insert events")
-	}
-
-	// TODO: cannot use an eviction policy based on size of timeline if
-	// timeline needs to be a CRDT. Will replace eviction policy with a time
-	// based policy.
-	if t.size == t.Config.Capacity {
-		if err = t.evictEvents(ctx); err != nil {
-			return trace.Wrap(err, "failed to evict old events")
-		}
 	}
 
 	return nil
@@ -262,9 +243,9 @@ func (t *Timeline) insertEvents(ctx context.Context, events []*pb.TimelineEvent)
 	return nil
 }
 
-// evictEvents deletes oldest events if the timeline is larger than its max
-// capacity.
-func (t *Timeline) evictEvents(ctx context.Context) (err error) {
+// evictEvents deletes events that have outlived the timeline retention
+// duration. All events before this cut off time will be deleted.
+func (t *Timeline) evictEvents(ctx context.Context, retentionCutOff time.Time) (err error) {
 	tx, err := t.database.BeginTx(ctx, nil)
 	if err != nil {
 		return trace.Wrap(err)
@@ -280,7 +261,7 @@ func (t *Timeline) evictEvents(ctx context.Context) (err error) {
 		}
 	}()
 
-	if _, err := tx.ExecContext(ctx, deleteOldFromEvents, t.Config.Capacity); err != nil {
+	if _, err := tx.ExecContext(ctx, deleteOldFromEvents, retentionCutOff); err != nil {
 		return trace.Wrap(err)
 	}
 
@@ -462,8 +443,5 @@ INSERT INTO events (
 ) VALUES (?,?,?,?,?,?)
 `
 
-// selectAllFromEvents is sql query to select all entries from `events` table.
-const selectAllFromEvents = `SELECT * FROM events`
-
-// deleteOldFromEvents is sql statement to delete entries from `events` table when full.
-const deleteOldFromEvents = `DELETE FROM events WHERE id IN (SELECT id FROM events ORDER BY id DESC LIMIT -1 OFFSET ?);`
+// deleteOldFromEvents is sql statement to delete entries from `events` table.
+const deleteOldFromEvents = `DELETE FROM events WHERE id IN (SELECT id FROM events WHERE timestamp < ?)`

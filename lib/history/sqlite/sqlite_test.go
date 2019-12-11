@@ -18,8 +18,10 @@ package sqlite
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/history"
@@ -34,7 +36,7 @@ func TestSQLite(t *testing.T) { TestingT(t) }
 
 type SQLiteSuite struct {
 	clock    clockwork.FakeClock
-	timeline history.Timeline
+	timeline *Timeline
 }
 
 var _ = Suite(&SQLiteSuite{})
@@ -46,9 +48,9 @@ const TestDBPath = "/tmp/test.db"
 func (s *SQLiteSuite) SetUpTest(c *C) {
 	clock := clockwork.NewFakeClock()
 	config := Config{
-		DBPath:   TestDBPath,
-		Capacity: 1,
-		Clock:    clock,
+		DBPath:            TestDBPath,
+		RetentionDuration: time.Hour,
+		Clock:             clock,
 	}
 	timeline, err := NewTimeline(context.TODO(), config)
 	c.Assert(err, IsNil)
@@ -64,60 +66,54 @@ func (s *SQLiteSuite) TearDownTest(c *C) {
 
 func (s *SQLiteSuite) TestRecordStatus(c *C) {
 	node := "test-node"
-	old := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
-	new := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Degraded}
+	status := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
 
-	var err error
-	err = s.timeline.RecordStatus(context.TODO(), old)
-	c.Assert(err, IsNil)
-	err = s.timeline.RecordStatus(context.TODO(), new)
-	c.Assert(err, IsNil)
-
-	actual, err := s.timeline.GetEvents(context.TODO(), nil)
-	c.Assert(err, IsNil)
-
-	expected := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), node)}
-	c.Assert(actual, DeepEquals, expected, Commentf("Test record status"))
-}
-
-func (s *SQLiteSuite) TestFIFOEviction(c *C) {
-	node := "test-node"
-	old := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
-	new := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Degraded}
-
-	var err error
-	err = s.timeline.RecordStatus(context.TODO(), old)
-	c.Assert(err, IsNil)
-	err = s.timeline.RecordStatus(context.TODO(), new)
-	c.Assert(err, IsNil)
-	err = s.timeline.RecordStatus(context.TODO(), old)
+	err := s.timeline.RecordStatus(context.TODO(), status)
 	c.Assert(err, IsNil)
 
 	actual, err := s.timeline.GetEvents(context.TODO(), nil)
 	c.Assert(err, IsNil)
 
 	expected := []*pb.TimelineEvent{history.NewNodeRecovered(s.clock.Now(), node)}
-	c.Assert(actual, DeepEquals, expected, Commentf("Test FIFO eviction"))
+	c.Assert(actual, DeepEquals, expected, Commentf("Test record status"))
+}
+
+func (s *SQLiteSuite) TestEviction(c *C) {
+	node := "test-node"
+	status := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
+
+	err := s.timeline.RecordStatus(context.TODO(), status)
+	c.Assert(err, IsNil)
+
+	s.clock.Advance(time.Second)
+	err = s.timeline.evictEvents(context.TODO(), s.clock.Now())
+	c.Assert(err, IsNil)
+
+	actual, err := s.timeline.GetEvents(context.TODO(), nil)
+	c.Assert(err, IsNil)
+
+	for _, event := range actual {
+		fmt.Println(event)
+	}
+
+	var expected []*pb.TimelineEvent
+	c.Assert(actual, DeepEquals, expected, Commentf("Test eviction policy"))
 }
 
 func (s *SQLiteSuite) TestFilterEvents(c *C) {
 	node := "test-node"
-	old := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
-	new := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Degraded}
+	status := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
 
-	var err error
-	err = s.timeline.RecordStatus(context.TODO(), old)
-	c.Assert(err, IsNil)
-	err = s.timeline.RecordStatus(context.TODO(), new)
+	err := s.timeline.RecordStatus(context.TODO(), status)
 	c.Assert(err, IsNil)
 
-	params := map[string]string{"type": nodeDegradedType, "node": node}
+	params := map[string]string{"type": nodeRecoveredType, "node": node}
 	actual, err := s.timeline.GetEvents(context.TODO(), params)
 	c.Assert(err, IsNil)
-	expected := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), node)}
+	expected := []*pb.TimelineEvent{history.NewNodeRecovered(s.clock.Now(), node)}
 	c.Assert(actual, DeepEquals, expected, Commentf("Test filter events - one match"))
 
-	params = map[string]string{"type": nodeRecoveredType, "node": node}
+	params = map[string]string{"type": nodeDegradedType, "node": node}
 	actual, err = s.timeline.GetEvents(context.TODO(), params)
 	c.Assert(err, IsNil)
 	expected = nil
