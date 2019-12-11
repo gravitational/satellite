@@ -39,8 +39,8 @@ type Timeline struct {
 	capacity int
 	// events holds the latest status events.
 	events []*pb.TimelineEvent
-	// lastStatus holds the last recorded cluster status.
-	lastStatus *pb.SystemStatus
+	// lastStatus holds the last recorded status.
+	lastStatus *pb.NodeStatus
 	// mu locks timeline access
 	mu sync.Mutex
 }
@@ -59,8 +59,8 @@ func NewTimeline(clock clockwork.Clock, capacity int) *Timeline {
 // RecordStatus records the differences between the previously stored status
 // and the newly provided status into the timeline.
 // Context unused for memory Timeline.
-func (t *Timeline) RecordStatus(ctx context.Context, status *pb.SystemStatus) error {
-	events := history.DiffCluster(t.clock, t.lastStatus, status)
+func (t *Timeline) RecordStatus(ctx context.Context, status *pb.NodeStatus) error {
+	events := history.DiffNode(t.clock, t.lastStatus, status)
 	if len(events) == 0 {
 		return nil
 	}
@@ -93,6 +93,6 @@ func (t *Timeline) addEvent(event *pb.TimelineEvent) {
 
 // getFilteredEvents returns a filtered list of events based on the provided params.
 func (t *Timeline) getFilteredEvents(params map[string]string) (events []*pb.TimelineEvent) {
-	// TODO
+	// TODO: for now just return the unfiltered events.
 	return t.events
 }

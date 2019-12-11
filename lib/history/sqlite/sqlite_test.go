@@ -63,48 +63,63 @@ func (s *SQLiteSuite) TearDownTest(c *C) {
 }
 
 func (s *SQLiteSuite) TestRecordStatus(c *C) {
-	err := s.timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: pb.SystemStatus_Running})
+	node := "test-node"
+	old := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
+	new := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Degraded}
+
+	var err error
+	err = s.timeline.RecordStatus(context.TODO(), old)
 	c.Assert(err, IsNil)
-
-	actual, err := s.timeline.GetEvents(context.TODO(), nil)
-	c.Assert(err, IsNil)
-
-	expected := []*pb.TimelineEvent{history.NewClusterRecovered(s.clock.Now())}
-	c.Assert(actual, DeepEquals, expected, Commentf("Test record status"))
-}
-
-func (s *SQLiteSuite) TestFIFOEviction(c *C) {
-	old := &pb.SystemStatus{Status: pb.SystemStatus_Running}
-	new := &pb.SystemStatus{Status: pb.SystemStatus_Degraded}
-
-	err := s.timeline.RecordStatus(context.TODO(), old)
-	c.Assert(err, IsNil)
-
 	err = s.timeline.RecordStatus(context.TODO(), new)
 	c.Assert(err, IsNil)
 
 	actual, err := s.timeline.GetEvents(context.TODO(), nil)
 	c.Assert(err, IsNil)
 
-	expected := []*pb.TimelineEvent{history.NewClusterDegraded(s.clock.Now())}
+	expected := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), node)}
+	c.Assert(actual, DeepEquals, expected, Commentf("Test record status"))
+}
+
+func (s *SQLiteSuite) TestFIFOEviction(c *C) {
+	node := "test-node"
+	old := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
+	new := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Degraded}
+
+	var err error
+	err = s.timeline.RecordStatus(context.TODO(), old)
+	c.Assert(err, IsNil)
+	err = s.timeline.RecordStatus(context.TODO(), new)
+	c.Assert(err, IsNil)
+	err = s.timeline.RecordStatus(context.TODO(), old)
+	c.Assert(err, IsNil)
+
+	actual, err := s.timeline.GetEvents(context.TODO(), nil)
+	c.Assert(err, IsNil)
+
+	expected := []*pb.TimelineEvent{history.NewNodeRecovered(s.clock.Now(), node)}
 	c.Assert(actual, DeepEquals, expected, Commentf("Test FIFO eviction"))
 }
 
 func (s *SQLiteSuite) TestFilterEvents(c *C) {
-	err := s.timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: pb.SystemStatus_Running})
+	node := "test-node"
+	old := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
+	new := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Degraded}
+
+	var err error
+	err = s.timeline.RecordStatus(context.TODO(), old)
+	c.Assert(err, IsNil)
+	err = s.timeline.RecordStatus(context.TODO(), new)
 	c.Assert(err, IsNil)
 
-	params := map[string]string{"type": clusterRecoveredType}
+	params := map[string]string{"type": nodeDegradedType, "node": node}
 	actual, err := s.timeline.GetEvents(context.TODO(), params)
 	c.Assert(err, IsNil)
-
-	expected := []*pb.TimelineEvent{history.NewClusterRecovered(s.clock.Now())}
+	expected := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), node)}
 	c.Assert(actual, DeepEquals, expected, Commentf("Test filter events - one match"))
 
-	params = map[string]string{"type": clusterDegradedType}
+	params = map[string]string{"type": nodeRecoveredType, "node": node}
 	actual, err = s.timeline.GetEvents(context.TODO(), params)
 	c.Assert(err, IsNil)
-
 	expected = nil
 	c.Assert(actual, DeepEquals, expected, Commentf("Test filter events - no match"))
 }

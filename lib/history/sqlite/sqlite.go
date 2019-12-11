@@ -47,8 +47,8 @@ type Timeline struct {
 	size int
 	// database points to underlying sqlite database.
 	database *sqlx.DB
-	// lastStatus holds the last recorded cluster status.
-	lastStatus *pb.SystemStatus
+	// lastStatus holds the last recorded status.
+	lastStatus *pb.NodeStatus
 	// mu locks timeline access.
 	mu sync.Mutex
 }
@@ -112,10 +112,10 @@ func getSize(ctx context.Context, database *sqlx.DB) (size int, err error) {
 
 // RecordStatus records the differences between the previously stored status and
 // the provided status.
-func (t *Timeline) RecordStatus(ctx context.Context, status *pb.SystemStatus) (err error) {
+func (t *Timeline) RecordStatus(ctx context.Context, status *pb.NodeStatus) (err error) {
 	t.mu.Lock()
 
-	events := history.DiffCluster(t.Config.Clock, t.lastStatus, status)
+	events := history.DiffNode(t.Config.Clock, t.lastStatus, status)
 	if len(events) == 0 {
 		t.mu.Unlock()
 		return nil

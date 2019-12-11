@@ -43,13 +43,21 @@ func (s *InMemorySuite) SetUpSuite(c *C) {
 func (s *InMemorySuite) TestRecordStatus(c *C) {
 	var timeline history.Timeline
 	timeline = NewTimeline(s.clock, 1)
-	err := timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: pb.SystemStatus_Running})
+
+	node := "test-node"
+	old := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
+	new := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Degraded}
+
+	var err error
+	err = timeline.RecordStatus(context.TODO(), old)
+	c.Assert(err, IsNil)
+	err = timeline.RecordStatus(context.TODO(), new)
 	c.Assert(err, IsNil)
 
 	actual, err := timeline.GetEvents(context.TODO(), nil)
 	c.Assert(err, IsNil)
 
-	expected := []*pb.TimelineEvent{history.NewClusterRecovered(s.clock.Now())}
+	expected := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), node)}
 	c.Assert(actual, DeepEquals, expected, Commentf("Test record status"))
 }
 
@@ -57,18 +65,21 @@ func (s *InMemorySuite) TestFIFOEviction(c *C) {
 	var timeline history.Timeline
 	timeline = NewTimeline(s.clock, 1)
 
-	old := &pb.SystemStatus{Status: pb.SystemStatus_Running}
-	new := &pb.SystemStatus{Status: pb.SystemStatus_Degraded}
+	node := "test-node"
+	old := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
+	new := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Degraded}
 
-	err := timeline.RecordStatus(context.TODO(), old)
+	var err error
+	err = timeline.RecordStatus(context.TODO(), old)
 	c.Assert(err, IsNil)
-
 	err = timeline.RecordStatus(context.TODO(), new)
+	c.Assert(err, IsNil)
+	err = timeline.RecordStatus(context.TODO(), old)
 	c.Assert(err, IsNil)
 
 	actual, err := timeline.GetEvents(context.TODO(), nil)
 	c.Assert(err, IsNil)
 
-	expected := []*pb.TimelineEvent{history.NewClusterDegraded(s.clock.Now())}
+	expected := []*pb.TimelineEvent{history.NewNodeRecovered(s.clock.Now(), node)}
 	c.Assert(actual, DeepEquals, expected, Commentf("Test FIFO eviction"))
 }
