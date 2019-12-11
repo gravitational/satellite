@@ -18,6 +18,7 @@ package agent
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 	"net/http"
 	"runtime/debug"
@@ -28,6 +29,7 @@ import (
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/history"
+	"github.com/gravitational/satellite/lib/history/sqlite"
 
 	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
@@ -99,11 +101,14 @@ type Config struct {
 	// Tags is a trivial means for adding extra semantic information to an agent.
 	Tags map[string]string
 
-	// MaxHistory specifies the max size of the status timeline.
-	MaxHistory int
-
 	// Cache is a short-lived storage used by the agent to persist latest health stats.
 	cache.Cache
+
+	//DBPath specifies the location of the database to be used to store timeline.
+	DBPath string
+
+	// RetentionDuration specifies the duration to store timeline events.
+	RetentionDuration time.Duration
 }
 
 // New creates an instance of an agent based on configuration options given in config.
@@ -134,6 +139,18 @@ func New(config *Config) (Agent, error) {
 		return nil, trace.Wrap(err, "failed to serve prometheus metrics")
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	timeline, err := sqlite.NewTimeline(ctx, sqlite.Config{
+		DBPath:            config.DBPath,
+		RetentionDuration: config.RetentionDuration,
+		Clock:             clockwork.NewRealClock(),
+	})
+	if err != nil {
+		return nil, trace.Wrap(err, "failed to initialize timeline")
+	}
+
 	clock := clockwork.NewRealClock()
 	agent := &agent{
 		Config:          *config,
@@ -143,11 +160,11 @@ func New(config *Config) (Agent, error) {
 		dialRPC:         DefaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
 		statusClock:     clock,
 		recycleClock:    clock,
+		timelineClock:   clock,
 		localStatus:     emptyNodeStatus(config.Name),
 		metricsListener: metricsListener,
-		// TODO: initialize timeline
-		Timeline: nil,
-		done:     make(chan struct{}),
+		Timeline:        timeline,
+		done:            make(chan struct{}),
 	}
 
 	agent.rpc, err = newRPCServer(agent, config.CAFile, config.CertFile, config.KeyFile, config.RPCAddrs)
@@ -210,10 +227,12 @@ type agent struct {
 	// done is a channel used for cleanup.
 	done chan struct{}
 
+	// TODO: do we need separate clocks here?
 	// These clocks abstract away access to the time package to allow
 	// testing.
-	statusClock  clockwork.Clock
-	recycleClock clockwork.Clock
+	statusClock   clockwork.Clock
+	recycleClock  clockwork.Clock
+	timelineClock clockwork.Clock
 
 	mu sync.Mutex
 	// localStatus is the last obtained local node status.
@@ -244,6 +263,7 @@ func (r *agent) Start() error {
 	errChan := make(chan error, 1)
 
 	go r.statusUpdateLoop()
+	go r.timelineUpdateLoop()
 
 	if r.metricsListener != nil {
 		go func() {
@@ -409,33 +429,6 @@ func runChecker(ctx context.Context, checker health.Checker, probeCh chan<- heal
 	}
 }
 
-// statusUpdateTimeout is the amount of time to wait between status update collections.
-const statusUpdateTimeout = 30 * time.Second
-
-// recycleTimeout is the amount of time to wait between recycle attempts.
-// Recycle is a request to clean up / remove stale data that backends can choose to
-// implement.
-const recycleTimeout = 10 * time.Minute
-
-// statusQueryReplyTimeout specifies the amount of time to wait for the cluster
-// status query reply.
-const statusQueryReplyTimeout = 30 * time.Second
-
-// nodeTimeout specifies the amout of time to wait for a node status query reply.
-// The nodeTimeout is smaller than the statusQueryReplyTimeout so that node
-// status collection step can return results before the deadline.
-const nodeTimeout = 25 * time.Second
-
-// checksTimeout specifies the amount of time to wait for a check to complete.
-// The checksTimeout is smaller than the nodeTimeout so that the checks
-// can return results before the deadline.
-const checksTimeout = 20 * time.Second
-
-// probeTimeout specifies the amount of time to wait for a probe to complete.
-// The probeTimeout is smaller than the checksTimeout so that the probe
-// collection step can return results before the deadline.
-const probeTimeout = 15 * time.Second
-
 // statusUpdateLoop is a long running background process that periodically
 // updates the health status of the cluster by querying status of other active
 // cluster members.
@@ -463,7 +456,6 @@ func (r *agent) statusUpdateLoop() {
 					if err = r.cache.UpdateStatus(status); err != nil {
 						log.Warnf("Error updating system status in cache: %v", err)
 					}
-					// TODO: Record status history
 				}
 				select {
 				case <-r.done:
@@ -483,6 +475,61 @@ func (r *agent) statusUpdateLoop() {
 				log.Warningf("error recycling stats: %v", err)
 			}
 			recycleCh = r.recycleClock.After(recycleTimeout)
+		case <-r.done:
+			return
+		}
+	}
+}
+
+func (r *agent) timelineUpdateLoop() {
+	// Note: just using the same timeout durations for timeline update used in status update.
+	timelineUpdateCh := r.timelineClock.After(statusUpdateTimeout)
+	replyTimeout := r.statusQueryReplyTimeout
+	if replyTimeout == 0 {
+		replyTimeout = statusQueryReplyTimeout
+	}
+	// collectCh is a channel that receives updates when the timeline collecting process
+	// has finished collecting
+	collectCh := make(chan struct{})
+	for {
+		select {
+		case <-timelineUpdateCh:
+			// TODO: timeout duration
+			ctx, cancel := context.WithTimeout(context.Background(), replyTimeout)
+			go func() {
+				defer cancel() // close context if collection finishes before the deadline
+
+				// Update local status changes
+				status := r.LocalStatus()
+				if status != nil {
+					if err := r.Timeline.RecordStatus(ctx, status); err != nil {
+						log.WithError(err).Warnf("Error recording timeline.")
+					}
+				}
+
+				// Merge timeline from another cluster member
+				timeline, err := r.collectTimeline(ctx)
+				if err != nil {
+					log.WithError(err).Warnf("Error collecting timeline from another member.")
+				}
+				if timeline != nil {
+					if err := r.Timeline.RecordTimeline(ctx, timeline); err != nil {
+						log.WithError(err).Warnf("Error recording timeline.")
+					}
+				}
+
+				select {
+				case <-r.done:
+				case collectCh <- struct{}{}:
+				}
+			}()
+			select {
+			case <-collectCh:
+				timelineUpdateCh = r.timelineClock.After(statusUpdateTimeout)
+			case <-r.done:
+				cancel()
+				return
+			}
 		case <-r.done:
 			return
 		}
@@ -588,6 +635,36 @@ func (r *agent) getStatusFrom(ctx context.Context, member serf.Member, respc cha
 	}
 }
 
+// collectTimeline collects timeline from a random member.
+func (r *agent) collectTimeline(ctx context.Context) (timeline []*pb.TimelineEvent, err error) {
+	members, err := r.SerfClient.Members()
+	if err != nil {
+		return nil, trace.Wrap(err, "failed to query serf members")
+	}
+	members = filterLeft(members)
+
+	ctxNode, cancelNode := context.WithTimeout(ctx, nodeTimeout)
+	defer cancelNode()
+
+	// Collect timeline from a random member.
+	return r.getTimelineFrom(ctxNode, members[rand.Intn(len(members))])
+}
+
+// getTimelineFrom obtains timeline from the node identified by member.
+func (r *agent) getTimelineFrom(ctx context.Context, member serf.Member) (events []*pb.TimelineEvent, err error) {
+	client, err := r.dialRPC(ctx, &member)
+	if err != nil {
+		return events, trace.Wrap(err)
+	}
+	defer client.Close()
+
+	timeline, err := client.Timeline(ctx)
+	if err != nil {
+		return events, trace.Wrap(err)
+	}
+	return timeline.GetEvents(), nil
+}
+
 // statusResponse describes a status response from a background process that obtains
 // health status on the specified serf node.
 type statusResponse struct {
@@ -673,7 +750,3 @@ func filterLeft(members []serf.Member) (result []serf.Member) {
 	}
 	return result
 }
-
-// maxConcurrentCheckers specifies the maximum number of checkers active at
-// any given time.
-const maxConcurrentCheckers = 10
