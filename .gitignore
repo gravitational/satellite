@@ -2,3 +2,7 @@ build
 *.swp
 *.test
 .*
+
+# ansible
+**/ansible/inventory
+**/ansible/ssh-config
