@@ -19,7 +19,6 @@ package sqlite
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strings"
 	"sync"
@@ -30,8 +29,7 @@ import (
 
 	"github.com/gravitational/trace"
 	"github.com/jmoiron/sqlx"
-	"github.com/jonboulle/clockwork"
-	"github.com/mattn/go-sqlite3" // initialize sqlite3
+	"github.com/jonboulle/clockwork" // initialize sqlite3
 	log "github.com/sirupsen/logrus"
 )
 
@@ -64,17 +62,17 @@ type Config struct {
 // NewTimeline initializes and returns a new Timeline with the
 // specified configuration.
 func NewTimeline(ctx context.Context, config Config) (*Timeline, error) {
-	database, err := initSQLite(ctx, config.DBPath)
-	if err != nil {
-		return nil, trace.Wrap(err)
+	timeline := &Timeline{
+		config: config,
 	}
 
-	timeline := &Timeline{
-		config:   config,
-		database: database,
-		// TODO: store and recover lastStatus in case satellite agent restarts.
-		lastStatus: nil,
+	if err := timeline.initSQLite(ctx); err != nil {
+		return nil, trace.Wrap(err, "failed to init sqlite")
 	}
+
+	// if err := timeline.initPrevStatus(ctx); err != nil {
+	// 	return nil, trace.Wrap(err, "failed to init previous status")
+	// }
 
 	// TODO: should this be called in constructor method?
 	// Let caller run event eviction loop?
@@ -84,38 +82,42 @@ func NewTimeline(ctx context.Context, config Config) (*Timeline, error) {
 	return timeline, nil
 }
 
-// initSQLite initializes connection to database provided by dbPath and
-// initializes `events` table.
-func initSQLite(ctx context.Context, dbPath string) (*sqlx.DB, error) {
-	database, err := sqlx.ConnectContext(ctx, "sqlite3", dbPath)
+// initSQLite initializes connection to database and initializes `events` table.
+func (t *Timeline) initSQLite(ctx context.Context) error {
+	database, err := sqlx.ConnectContext(ctx, "sqlite3", t.config.DBPath)
 	if err != nil {
-		return nil, trace.Wrap(err)
+		return trace.Wrap(err)
 	}
 
 	if _, err := database.ExecContext(ctx, createTableEvents); err != nil {
-		return nil, trace.Wrap(err)
+		return trace.Wrap(err)
 	}
 
-	return database, nil
+	t.database = database
+	return nil
+}
+
+// initPrevStatus initializes the previously record status in case satellite
+// is restarted.
+func (t *Timeline) initPrevStatus(ctx context.Context) error {
+	// TODO
+	return trace.NotImplemented("not implemented")
 }
 
 // eventEvictionLoop periodically evicts old events to free up storage.
 func (t *Timeline) eventEvictionLoop() {
 	var timer <-chan time.Time
 	for {
-		// TODO: eviction frequency
-		timer = t.config.Clock.After(time.Hour)
+		timer = t.config.Clock.After(evictionFrequency)
 		<-timer
-
-		// TODO: eviction timeout
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 
 		// All events before this time will be deleted.
 		retentionCutOff := t.config.Clock.Now().Add(-(t.config.RetentionDuration))
 
+		ctx, cancel := context.WithTimeout(context.Background(), evictionTimeout)
 		if err := t.evictEvents(ctx, retentionCutOff); err != nil {
 			cancel()
-			log.WithError(err).Warnf("Error evicting old events.")
+			log.WithError(err).Warnf("Error evicting expired events.")
 		}
 		cancel()
 	}
@@ -136,7 +138,7 @@ func (t *Timeline) RecordStatus(ctx context.Context, status *pb.NodeStatus) (err
 	t.mu.Unlock()
 
 	if err = t.insertEvents(ctx, events); err != nil {
-		return trace.Wrap(err, "failed to insert events")
+		return trace.Wrap(err)
 	}
 
 	return nil
@@ -149,8 +151,19 @@ func (t *Timeline) RecordTimeline(ctx context.Context, events []*pb.TimelineEven
 		return nil
 	}
 
-	if err = t.insertEvents(ctx, events); err != nil {
-		return trace.Wrap(err, "failed to insert events")
+	// All events before this time will be deleted.
+	retentionCutOff := t.config.Clock.Now().Add(-(t.config.RetentionDuration))
+
+	// Filter out expired events.
+	filtered := []*pb.TimelineEvent{}
+	for _, event := range events {
+		if event.GetTimestamp().ToTime().After(retentionCutOff) {
+			filtered = append(filtered, event)
+		}
+	}
+
+	if err = t.insertEvents(ctx, filtered); err != nil {
+		return trace.Wrap(err)
 	}
 
 	return nil
@@ -170,8 +183,8 @@ func (t *Timeline) GetEvents(ctx context.Context, params map[string]string) (eve
 		}
 	}()
 
+	var row sqlEvent
 	for rows.Next() {
-		var row sqlEvent
 		if err = rows.StructScan(&row); err != nil {
 			return nil, trace.Wrap(err)
 		}
@@ -216,23 +229,13 @@ func (t *Timeline) insertEvents(ctx context.Context, events []*pb.TimelineEvent)
 			return trace.Wrap(err)
 		}
 
-		args := []interface{}{
-			row.Timestamp,
-			row.EventType,
-			row.Node.String,
-			row.Probe.String,
-			row.Old.String,
-			row.New.String,
+		_, err = tx.ExecContext(ctx, insertIntoEvents, row.toArgs()...)
+		// Unique constraint error indicates duplicate row.
+		// Just ignore duplicates and continue.
+		if isErrConstraintUnique(err) {
+			continue
 		}
-
-		if _, err := tx.ExecContext(ctx, insertIntoEvents, args...); err != nil {
-			// Unique constraint error indicates duplicate row.
-			// Just ignore duplicates and continue.
-			if sqliteErr, ok := err.(sqlite3.Error); ok {
-				if sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
-					continue
-				}
-			}
+		if err != nil {
 			return trace.Wrap(err)
 		}
 	}
@@ -280,9 +283,10 @@ func prepareQuery(params map[string]string) (query string, args []interface{}) {
 	// Need to filter params beforehand to check if WHERE clause is needed.
 	filterParams(params)
 
+	// TODO: checkout text/template package for cleaner code
 	sb.WriteString("SELECT * FROM events ")
 	if len(params) == 0 {
-		sb.WriteString("ORDER BY timestamp DESC ")
+		sb.WriteString("ORDER BY timestamp ASC ")
 		return sb.String(), args
 	}
 	sb.WriteString("WHERE ")
@@ -296,7 +300,7 @@ func prepareQuery(params map[string]string) (query string, args []interface{}) {
 		index++
 	}
 
-	sb.WriteString("ORDER BY timestamp DESC ")
+	sb.WriteString("ORDER BY timestamp ASC ")
 	return sb.String(), args
 }
 
@@ -311,137 +315,3 @@ func filterParams(params map[string]string) (filtered map[string]string) {
 	}
 	return filtered
 }
-
-// sqlEvent defines an sql event row.
-type sqlEvent struct {
-	ID        int            `db:"id"`
-	Timestamp time.Time      `db:"timestamp"`
-	EventType string         `db:"type"`
-	Node      sql.NullString `db:"node"`
-	Probe     sql.NullString `db:"probe"`
-	Old       sql.NullString `db:"oldState"`
-	New       sql.NullString `db:"newState"`
-}
-
-// newSQLEvent constructs a new sqlEvent from the provided TimelineEvent.
-func newSQLEvent(event *pb.TimelineEvent) (row sqlEvent, err error) {
-	row = sqlEvent{Timestamp: event.GetTimestamp().ToTime()}
-	switch t := event.GetData().(type) {
-	case *pb.TimelineEvent_ClusterRecovered:
-		row.EventType = clusterRecoveredType
-	case *pb.TimelineEvent_ClusterDegraded:
-		row.EventType = clusterDegradedType
-	case *pb.TimelineEvent_NodeAdded:
-		e := event.GetNodeAdded()
-		row.EventType = nodeAddedType
-		row.Node = sql.NullString{String: e.GetNode(), Valid: true}
-	case *pb.TimelineEvent_NodeRemoved:
-		e := event.GetNodeRemoved()
-		row.EventType = nodeRemovedType
-		row.Node = sql.NullString{String: e.GetNode(), Valid: true}
-	case *pb.TimelineEvent_NodeRecovered:
-		e := event.GetNodeRecovered()
-		row.EventType = nodeRecoveredType
-		row.Node = sql.NullString{String: e.GetNode(), Valid: true}
-	case *pb.TimelineEvent_NodeDegraded:
-		e := event.GetNodeDegraded()
-		row.EventType = nodeDegradedType
-		row.Node = sql.NullString{String: e.GetNode(), Valid: true}
-	case *pb.TimelineEvent_ProbeSucceeded:
-		e := event.GetProbeSucceeded()
-		row.EventType = probeSucceededType
-		row.Node = sql.NullString{String: e.GetNode(), Valid: true}
-		row.Probe = sql.NullString{String: e.GetProbe(), Valid: true}
-	case *pb.TimelineEvent_ProbeFailed:
-		e := event.GetProbeFailed()
-		row.EventType = probeFailedType
-		row.Node = sql.NullString{String: e.GetNode(), Valid: true}
-		row.Probe = sql.NullString{String: e.GetProbe(), Valid: true}
-	default:
-		return row, trace.BadParameter("unknown event type %T", t)
-	}
-	return row, nil
-}
-
-func (e *sqlEvent) toArgs() (args []interface{}) {
-	return []interface{}{
-		e.Timestamp,
-		e.EventType,
-		e.Node,
-		e.Probe,
-		e.New,
-		e.Old,
-	}
-}
-
-// toProto returns sqlEvent as a protobuf TimelineEvent.
-func (e *sqlEvent) toProto() (*pb.TimelineEvent, error) {
-	switch e.EventType {
-	case clusterRecoveredType:
-		return history.NewClusterRecovered(e.Timestamp), nil
-	case clusterDegradedType:
-		return history.NewClusterDegraded(e.Timestamp), nil
-	case nodeAddedType:
-		return history.NewNodeAdded(e.Timestamp, e.Node.String), nil
-	case nodeRemovedType:
-		return history.NewNodeRemoved(e.Timestamp, e.Node.String), nil
-	case nodeRecoveredType:
-		return history.NewNodeRecovered(e.Timestamp, e.Node.String), nil
-	case nodeDegradedType:
-		return history.NewNodeDegraded(e.Timestamp, e.Node.String), nil
-	case probeSucceededType:
-		return history.NewProbeSucceeded(e.Timestamp, e.Node.String, e.Probe.String), nil
-	case probeFailedType:
-		return history.NewProbeFailed(e.Timestamp, e.Node.String, e.Probe.String), nil
-	default:
-		return nil, trace.NotFound("unknown event type %v", e.EventType)
-	}
-}
-
-// These types are used to specify the type of an event when storing event
-// into a database.
-const (
-	clusterRecoveredType = "ClusterRecovered"
-	clusterDegradedType  = "ClusterDegraded"
-	nodeAddedType        = "NodeAdded"
-	nodeRemovedType      = "NodeRemoved"
-	nodeRecoveredType    = "NodeRecovered"
-	nodeDegradedType     = "NodeDegraded"
-	probeSucceededType   = "ProbeSucceeded"
-	probeFailedType      = "ProbeFailed"
-	unknownType          = "Unknown"
-)
-
-// createTableEvents is sql statement to create an `events` table.
-// Rows must be unique, excluding id.
-// TODO: might not need oldState/newState.
-const createTableEvents = `
-CREATE TABLE IF NOT EXISTS events (
-	id INTEGER PRIMARY KEY,
-	timestamp DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	type TEXT NOT NULL,
-	node TEXT,
-	probe TEXT,
-	oldState TEXT,
-	newState TEXT,
-	UNIQUE(timestamp, type, node, probe, oldState, newState)
-)
-`
-
-// TODO: index node/probe fields to improve filtering performance.
-
-// insertIntoEvents is sql statement to insert entry into `events` table. Used for
-// batch insert statement.
-const insertIntoEvents = `
-INSERT INTO events (
-	timestamp,
-	type,
-	node,
-	probe,
-	oldState,
-	newState
-) VALUES (?,?,?,?,?,?)
-`
-
-// deleteOldFromEvents is sql statement to delete entries from `events` table.
-const deleteOldFromEvents = `DELETE FROM events WHERE id IN (SELECT id FROM events WHERE timestamp < ?)`
