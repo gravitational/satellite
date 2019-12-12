@@ -139,7 +139,7 @@ func New(config *Config) (Agent, error) {
 		return nil, trace.Wrap(err, "failed to serve prometheus metrics")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timelineInitTimeout)
 	defer cancel()
 
 	timeline, err := sqlite.NewTimeline(ctx, sqlite.Config{

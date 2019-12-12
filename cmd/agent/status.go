@@ -61,7 +61,7 @@ func status(RPCPort int, history, local, prettyPrint bool, caFile, certFile, key
 		return true, nil
 	}
 
-	var statusJson []byte
+	var statusJSON []byte
 	var statusBlob interface{}
 	if local {
 		status, err := client.LocalStatus(ctx)
@@ -79,14 +79,14 @@ func status(RPCPort int, history, local, prettyPrint bool, caFile, certFile, key
 		statusBlob = status
 	}
 	if prettyPrint {
-		statusJson, err = json.MarshalIndent(statusBlob, "", "   ")
+		statusJSON, err = json.MarshalIndent(statusBlob, "", "   ")
 	} else {
-		statusJson, err = json.Marshal(statusBlob)
+		statusJSON, err = json.Marshal(statusBlob)
 	}
 	if err != nil {
 		return ok, trace.Wrap(err, "failed to marshal status data")
 	}
-	if _, err = os.Stderr.Write(statusJson); err != nil {
+	if _, err = os.Stderr.Write(statusJSON); err != nil {
 		return ok, trace.Wrap(err, "failed to output status")
 	}
 	return ok, nil
@@ -94,7 +94,7 @@ func status(RPCPort int, history, local, prettyPrint bool, caFile, certFile, key
 
 func printEvent(event *pb.TimelineEvent) {
 	timestamp := event.GetTimestamp().ToTime()
-	fmt.Printf("Timestamp[%s] ", timestamp.Format(Stamp))
+	fmt.Printf("[%s] ", timestamp.Format(Stamp))
 
 	switch event.GetData().(type) {
 	case *pb.TimelineEvent_ClusterDegraded:

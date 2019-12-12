@@ -38,6 +38,10 @@ const (
 
 // Timeout values
 const (
+	// timelineInitTimeout specifies the amount of time to wait for the
+	// timeline to initialize.
+	timelineInitTimeout = 5 * time.Second
+
 	// statusUpdateTimeout is the amount of time to wait between status update collections.
 	statusUpdateTimeout = 30 * time.Second
 
@@ -50,7 +54,7 @@ const (
 	// status query reply.
 	statusQueryReplyTimeout = 30 * time.Second
 
-	// nodeTimeout specifies the amout of time to wait for a node status query reply.
+	// nodeTimeout specifies the amount of time to wait for a node status query reply.
 	// The nodeTimeout is smaller than the statusQueryReplyTimeout so that node
 	// status collection step can return results before the deadline.
 	nodeTimeout = 25 * time.Second
