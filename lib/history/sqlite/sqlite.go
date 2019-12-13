@@ -45,8 +45,8 @@ type Timeline struct {
 	database *sqlx.DB
 	// lastStatus holds the last recorded status.
 	lastStatus *pb.NodeStatus
-	// mu locks timeline access.
-	mu sync.Mutex
+	// statusMutex locks access to the lastStatus field.
+	statusMutex sync.Mutex
 }
 
 // Config defines Timeline configuration.
@@ -106,10 +106,9 @@ func (t *Timeline) initPrevStatus(ctx context.Context) error {
 
 // eventEvictionLoop periodically evicts old events to free up storage.
 func (t *Timeline) eventEvictionLoop() {
-	var timer <-chan time.Time
+	ticker := t.config.Clock.NewTicker(evictionFrequency)
 	for {
-		timer = t.config.Clock.After(evictionFrequency)
-		<-timer
+		<-ticker.Chan()
 
 		// All events before this time will be deleted.
 		retentionCutOff := t.config.Clock.Now().Add(-(t.config.RetentionDuration))
@@ -126,16 +125,16 @@ func (t *Timeline) eventEvictionLoop() {
 // RecordStatus records the differences between the previously stored status and
 // the provided status.
 func (t *Timeline) RecordStatus(ctx context.Context, status *pb.NodeStatus) (err error) {
-	t.mu.Lock()
+	t.statusMutex.Lock()
 
 	events := history.DiffNode(t.config.Clock, t.lastStatus, status)
 	if len(events) == 0 {
-		t.mu.Unlock()
+		t.statusMutex.Unlock()
 		return nil
 	}
 	t.lastStatus = status
 
-	t.mu.Unlock()
+	t.statusMutex.Unlock()
 
 	if err = t.insertEvents(ctx, events); err != nil {
 		return trace.Wrap(err)

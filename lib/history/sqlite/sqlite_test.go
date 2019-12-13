@@ -18,7 +18,6 @@ package sqlite
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -52,7 +51,11 @@ func (s *SQLiteSuite) SetUpTest(c *C) {
 		RetentionDuration: time.Hour,
 		Clock:             clock,
 	}
-	timeline, err := NewTimeline(context.TODO(), config)
+
+	ctx, cancel := context.WithTimeout(context.TODO(), timelineInitTimeout)
+	defer cancel()
+
+	timeline, err := NewTimeline(ctx, config)
 	c.Assert(err, IsNil)
 
 	s.clock = clock
@@ -65,13 +68,16 @@ func (s *SQLiteSuite) TearDownTest(c *C) {
 }
 
 func (s *SQLiteSuite) TestRecordStatus(c *C) {
+	ctx, cancel := context.WithTimeout(context.TODO(), testTimeout)
+	defer cancel()
+
 	node := "test-node"
 	status := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
 
-	err := s.timeline.RecordStatus(context.TODO(), status)
+	err := s.timeline.RecordStatus(ctx, status)
 	c.Assert(err, IsNil)
 
-	actual, err := s.timeline.GetEvents(context.TODO(), nil)
+	actual, err := s.timeline.GetEvents(ctx, nil)
 	c.Assert(err, IsNil)
 
 	expected := []*pb.TimelineEvent{history.NewNodeRecovered(s.clock.Now(), node)}
@@ -79,54 +85,65 @@ func (s *SQLiteSuite) TestRecordStatus(c *C) {
 }
 
 func (s *SQLiteSuite) TestEviction(c *C) {
+	ctx, cancel := context.WithTimeout(context.TODO(), testTimeout)
+	defer cancel()
+
 	node := "test-node"
 	status := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
 
-	err := s.timeline.RecordStatus(context.TODO(), status)
+	err := s.timeline.RecordStatus(ctx, status)
 	c.Assert(err, IsNil)
 
 	s.clock.Advance(time.Second)
-	err = s.timeline.evictEvents(context.TODO(), s.clock.Now())
+	err = s.timeline.evictEvents(ctx, s.clock.Now())
 	c.Assert(err, IsNil)
 
-	actual, err := s.timeline.GetEvents(context.TODO(), nil)
+	actual, err := s.timeline.GetEvents(ctx, nil)
 	c.Assert(err, IsNil)
-
-	for _, event := range actual {
-		fmt.Println(event)
-	}
 
 	var expected []*pb.TimelineEvent
 	c.Assert(actual, DeepEquals, expected, Commentf("Test eviction policy"))
 }
 
 func (s *SQLiteSuite) TestFilterEvents(c *C) {
+	ctx, cancel := context.WithTimeout(context.TODO(), testTimeout)
+	defer cancel()
+
 	node := "test-node"
 	status := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
 
-	err := s.timeline.RecordStatus(context.TODO(), status)
+	err := s.timeline.RecordStatus(ctx, status)
 	c.Assert(err, IsNil)
 
 	params := map[string]string{"type": nodeRecoveredType, "node": node}
-	actual, err := s.timeline.GetEvents(context.TODO(), params)
+	actual, err := s.timeline.GetEvents(ctx, params)
 	c.Assert(err, IsNil)
 	expected := []*pb.TimelineEvent{history.NewNodeRecovered(s.clock.Now(), node)}
 	c.Assert(actual, DeepEquals, expected, Commentf("Test filter events - one match"))
 
 	params = map[string]string{"type": nodeDegradedType, "node": node}
-	actual, err = s.timeline.GetEvents(context.TODO(), params)
+	actual, err = s.timeline.GetEvents(ctx, params)
 	c.Assert(err, IsNil)
 	expected = nil
 	c.Assert(actual, DeepEquals, expected, Commentf("Test filter events - no match"))
 }
 
 func (s *SQLiteSuite) TestMergeEvents(c *C) {
+	ctx, cancel := context.WithTimeout(context.TODO(), testTimeout)
+	defer cancel()
+
 	events := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), "test-node")}
-	err := s.timeline.RecordTimeline(context.TODO(), events)
+	err := s.timeline.RecordTimeline(ctx, events)
 	c.Assert(err, IsNil)
 
-	actual, err := s.timeline.GetEvents(context.TODO(), nil)
+	actual, err := s.timeline.GetEvents(ctx, nil)
 	c.Assert(err, IsNil)
 
-	c.Assert(actual, DeepEquals, events, Commentf("Test merge events"))
+	c.Assert(actual, DeepEquals, events, Commentf("Test successfully merge events into timeline"))
 }
+
+// timelineInitTimeout specifies the amount of time given to initialize database.
+const timelineInitTimeout = 5 * time.Second
+
+// testTimeout specifies the overall time limit for a test.
+const testTimeout = 10 * time.Second
