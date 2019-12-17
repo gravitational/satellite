@@ -15,13 +15,11 @@ on each node.
 *   The ansible directory contains a default ansible.cfg file and a few play books
     used to initialize the local satellite cluster.
 
-    -   **credentials.yaml** initializes server & client credentials to be provide
-        authentication by satellite agents.
+    -   **credentials.yaml** initializes server & client credentials used by satellite agents.
 
     -   **k8s.yaml** initializes a kubernetes cluster with 1 master and 2 nodes.
 
-    -   **satellite.yaml** initializes satellite on each node and starts satellite
-        as a service.
+    -   **satellite.yaml** installs satellite on each node as a service.
 
     -   **scripts.yaml** adds a few helpful scripts to run client commands.
 
@@ -72,14 +70,14 @@ Get history:
 $ ./history.sh
 ```
 
-Drop packets from other nodes. To test out network partition:
+Drop packets from other nodes to test the behavior under network partition:
 ```console
 $ ./drop-input.sh
 ```
 
-Accept packets from other nodes. Only works if drop-input.sh was run before:
+Reset iptable rules. No-op if drop-input has not already been invoked:
 ```console
-$ ./accept-input.sh
+$ ./reset-network.sh
 ```
 
 ## Todo
