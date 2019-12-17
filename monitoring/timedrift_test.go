@@ -166,6 +166,15 @@ func (a *mockedTimeAgentClient) Time(ctx context.Context, req *agentpb.TimeReque
 	}, nil
 }
 
+func (a *mockedTimeAgentClient) Timeline(ctx context.Context) (*agentpb.TimelineResponse, error) {
+	return nil, nil
+}
+
+func (a *mockedTimeAgentClient) UpdateTimeline(ctx context.Context,
+	req *agentpb.UpdateRequest) (*agentpb.UpdateResponse, error) {
+	return nil, nil
+}
+
 func newClientsCache(c *check.C, times map[string]time.Time) *ttlmap.TTLMap {
 	clients, err := ttlmap.New(10)
 	c.Assert(err, check.IsNil)
