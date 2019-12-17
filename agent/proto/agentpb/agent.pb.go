@@ -1501,7 +1501,7 @@ type AgentClient interface {
 	// Timeline collects the status timeline
 	Timeline(ctx context.Context, in *TimelineRequest, opts ...grpc.CallOption) (*TimelineResponse, error)
 	// UpdateTimeline requests a new event be added to the timeline.
-	// This RPC is idempotent. Repeated calls will have no effect.
+	// This RPC is idempotent. Repeated calls with the same event will have no effect.
 	UpdateTimeline(ctx context.Context, in *UpdateRequest, opts ...grpc.CallOption) (*UpdateResponse, error)
 }
 
@@ -1569,7 +1569,7 @@ type AgentServer interface {
 	// Timeline collects the status timeline
 	Timeline(context.Context, *TimelineRequest) (*TimelineResponse, error)
 	// UpdateTimeline requests a new event be added to the timeline.
-	// This RPC is idempotent. Repeated calls will have no effect.
+	// This RPC is idempotent. Repeated calls with the same event will have no effect.
 	UpdateTimeline(context.Context, *UpdateRequest) (*UpdateResponse, error)
 }
 

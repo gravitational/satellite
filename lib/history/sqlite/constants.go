@@ -22,7 +22,7 @@ const (
 	// evictionFrequency is the time between eviction loops.
 	evictionFrequency = time.Hour
 
-	// evictionTimeout specifies the amount of time to given to evict events.
+	// evictionTimeout specifies the amount of time given to evict events.
 	evictionTimeout = 10 * time.Second
 )
 
