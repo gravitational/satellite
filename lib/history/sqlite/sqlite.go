@@ -188,12 +188,17 @@ func (t *Timeline) GetEvents(ctx context.Context, params map[string]string) (eve
 			return nil, trace.Wrap(err)
 		}
 
-		event, err := row.toProto()
+		event, err := newProtoBuffer(row)
 		if err != nil {
 			return nil, trace.Wrap(err)
 		}
 
-		events = append(events, event)
+		proto, err := event.ProtoBuf()
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
+
+		events = append(events, proto)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -207,28 +212,14 @@ func (t *Timeline) GetEvents(ctx context.Context, params map[string]string) (eve
 // TODO: Batch inserts. Not expected to handle a large number of inserts, so
 // optimization here is not a high priority.
 func (t *Timeline) insertEvents(ctx context.Context, events []*pb.TimelineEvent) (err error) {
-	tx, err := t.database.BeginTx(ctx, nil)
-	if err != nil {
-		return trace.Wrap(err)
-	}
-
-	defer func() {
-		// The rollback will be ignored if the tx has already been committed.
-		if err == nil {
-			return
-		}
-		if err := tx.Rollback(); err != nil {
-			log.WithError(err).Error("Failed to rollback sql transaction.")
-		}
-	}()
-
+	sqlExecer := newSQLExecer(t.database)
 	for _, event := range events {
-		row, err := newSQLEvent(event)
+		row, err := newDataInserter(event)
 		if err != nil {
 			return trace.Wrap(err)
 		}
 
-		_, err = tx.ExecContext(ctx, insertIntoEvents, row.toArgs()...)
+		err = row.Insert(ctx, sqlExecer)
 		// Unique constraint error indicates duplicate row.
 		// Just ignore duplicates and continue.
 		if isErrConstraintUnique(err) {
@@ -239,35 +230,13 @@ func (t *Timeline) insertEvents(ctx context.Context, events []*pb.TimelineEvent)
 		}
 	}
 
-	if err = tx.Commit(); err != nil {
-		return trace.Wrap(err)
-	}
 	return nil
 }
 
 // evictEvents deletes events that have outlived the timeline retention
 // duration. All events before this cut off time will be deleted.
 func (t *Timeline) evictEvents(ctx context.Context, retentionCutOff time.Time) (err error) {
-	tx, err := t.database.BeginTx(ctx, nil)
-	if err != nil {
-		return trace.Wrap(err)
-	}
-
-	defer func() {
-		// The rollback will be ignored if the tx has already been committed.
-		if err == nil {
-			return
-		}
-		if err := tx.Rollback(); err != nil {
-			log.WithError(err).Error("Failed to rollback sql transaction.")
-		}
-	}()
-
-	if _, err := tx.ExecContext(ctx, deleteOldFromEvents, retentionCutOff); err != nil {
-		return trace.Wrap(err)
-	}
-
-	if err = tx.Commit(); err != nil {
+	if _, err := t.database.ExecContext(ctx, deleteOldFromEvents, retentionCutOff); err != nil {
 		return trace.Wrap(err)
 	}
 	return nil

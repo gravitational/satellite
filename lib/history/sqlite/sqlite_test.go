@@ -81,6 +81,7 @@ func (s *SQLiteSuite) TestRecordStatus(c *C) {
 	c.Assert(err, IsNil)
 
 	expected := []*pb.TimelineEvent{history.NewNodeRecovered(s.clock.Now(), node)}
+
 	c.Assert(actual, DeepEquals, expected, Commentf("Test record status"))
 }
 

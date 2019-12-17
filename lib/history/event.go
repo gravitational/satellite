@@ -17,10 +17,29 @@ limitations under the License.
 package history
 
 import (
+	"context"
 	"time"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 )
+
+// DataInserter can be inserted into storage given an Execer.
+type DataInserter interface {
+	// Insert inserts data into storage using the provided execer.
+	Insert(ctx context.Context, execer Execer) error
+}
+
+// Execer executes storage operations
+type Execer interface {
+	// Exec executes insert operation with provided stmt and args.
+	Exec(ctx context.Context, stmt string, args ...interface{}) error
+}
+
+// ProtoBuffer can be converted into a protobuf TimelineEvent.
+type ProtoBuffer interface {
+	// ProtoBuf returns event as a protobuf message.
+	ProtoBuf() (*pb.TimelineEvent, error)
+}
 
 // newTimelineEvent constructs a new TimelineEvent with the provided timestamp.
 func newTimelineEvent(timestamp time.Time) *pb.TimelineEvent {
