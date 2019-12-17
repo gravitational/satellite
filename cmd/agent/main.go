@@ -77,17 +77,23 @@ func run() error {
 		cagentKeyFile        = cagent.Flag("key-file", "SSL certificate key for server RPC").ExistingFile()
 		// sqlite config
 		cagentDBPath    = cagent.Flag("db-path", "SQLite database location").Default("/tmp/timeline.db").String()
-		cagentRetention = cagent.Flag("retention", "Timeline retention duration").Duration()
+		cagentRetention = cagent.Flag("retention", "Window to retain timeline as a Go duration").Duration()
 
 		// `status` command
 		cstatus            = app.Command("status", "Query cluster status")
-		cstatusHistory     = cstatus.Flag("history", "Query the status history").Bool()
 		cstatusRPCPort     = cstatus.Flag("rpc-port", "Local agent RPC port").Default("7575").Int()
 		cstatusPrettyPrint = cstatus.Flag("pretty", "Pretty-print the output").Bool()
 		cstatusLocal       = cstatus.Flag("local", "Query the status of the local node").Bool()
 		cstatusCAFile      = cstatus.Flag("ca-file", "CA certificate for verifying server certificates").ExistingFile()
 		cstatusCertFile    = cstatus.Flag("client-cert-file", "mTLS client certificate file").ExistingFile()
 		cstatusKeyFile     = cstatus.Flag("client-key-file", "mTLS client key file").ExistingFile()
+
+		// `history` command
+		chistory         = app.Command("history", "Query cluster status history")
+		chistoryRPCPort  = chistory.Flag("rpc-port", "Local agent RPC port").Default("7575").Int()
+		chistoryCAFile   = cstatus.Flag("ca-file", "CA certificate for verifying server certificates").ExistingFile()
+		chistoryCertFile = cstatus.Flag("client-cert-file", "mTLS client certificate file").ExistingFile()
+		chistoryKeyFile  = cstatus.Flag("client-key-file", "mTLS client key file").ExistingFile()
 
 		// checks command
 		cchecks = app.Command("checks", "Run local compatibility checks")
@@ -143,7 +149,7 @@ func run() error {
 
 		// Use retention duration of 1 week if no duration is provided
 		if *cagentRetention == time.Duration(0) {
-			*cagentRetention = time.Hour * 24 * 7
+			*cagentRetention = defaultTimelineRentention
 		}
 
 		agentConfig := &agent.Config{
@@ -177,7 +183,25 @@ func run() error {
 		}
 		err = runAgent(agentConfig, monitoringConfig, toAddrList(*cagentInitialCluster))
 	case cstatus.FullCommand():
-		_, err = status(*cstatusRPCPort, *cstatusHistory, *cstatusLocal, *cstatusPrettyPrint, *cstatusCAFile, *cstatusCertFile, *cstatusKeyFile)
+		config := statusConfig{
+			rpcConfig: rpcConfig{
+				rpcPort:  *cstatusRPCPort,
+				caFile:   *cstatusCAFile,
+				certFile: *cstatusCertFile,
+				keyFile:  *cstatusKeyFile,
+			},
+			local:       *cstatusLocal,
+			prettyPrint: *cstatusPrettyPrint,
+		}
+		_, err = status(config)
+	case chistory.FullCommand():
+		config := rpcConfig{
+			rpcPort:  *chistoryRPCPort,
+			caFile:   *chistoryCAFile,
+			certFile: *chistoryCertFile,
+			keyFile:  *chistoryKeyFile,
+		}
+		_, err = history(config)
 	case cchecks.FullCommand():
 		err = localChecks()
 	case cversion.FullCommand():
@@ -187,6 +211,3 @@ func run() error {
 
 	return trace.Wrap(err)
 }
-
-// monitoringDbFile names the file where agent persists health status history.
-const monitoringDbFile = "monitoring.db"

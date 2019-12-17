@@ -182,6 +182,6 @@ service Agent {
   // Timeline collects the status timeline
   rpc Timeline(TimelineRequest) returns (TimelineResponse) {}
   // UpdateTimeline requests a new event be added to the timeline.
-  // This RPC is idempotent. Repeated calls will have no effect.
+  // This RPC is idempotent. Repeated calls with the same event will have no effect.
   rpc UpdateTimeline(UpdateRequest) returns (UpdateResponse) {}
 }

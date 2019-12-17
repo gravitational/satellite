@@ -54,20 +54,21 @@ const (
 	// status query reply.
 	statusQueryReplyTimeout = 30 * time.Second
 
-	// nodeTimeout specifies the amount of time to wait for a node status query reply.
-	// The nodeTimeout is smaller than the statusQueryReplyTimeout so that node
-	// status collection step can return results before the deadline.
-	nodeTimeout = 25 * time.Second
+	// nodeStatusTimeout specifies the amount of time to wait for a node status
+	// query reply. The timeout is smaller than the statusQueryReplyTimeout so
+	// that the node status collection step can return results before the
+	// deadline.
+	nodeStatusTimeout = statusQueryReplyTimeout - (5 * time.Second)
 
 	// checksTimeout specifies the amount of time to wait for a check to complete.
-	// The checksTimeout is smaller than the nodeTimeout so that the checks
+	// The checksTimeout is smaller than the nodeStatusTimeout so that the checks
 	// can return results before the deadline.
-	checksTimeout = 20 * time.Second
+	checksTimeout = nodeStatusTimeout - (5 * time.Second)
 
 	// probeTimeout specifies the amount of time to wait for a probe to complete.
 	// The probeTimeout is smaller than the checksTimeout so that the probe
 	// collection step can return results before the deadline.
-	probeTimeout = 15 * time.Second
+	probeTimeout = checksTimeout - (5 * time.Second)
 )
 
 // maxConcurrentCheckers specifies the maximum number of checkers active at

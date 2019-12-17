@@ -19,6 +19,7 @@ package memory
 import (
 	"context"
 	"testing"
+	"time"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/history"
@@ -41,6 +42,9 @@ func (s *InMemorySuite) SetUpSuite(c *C) {
 }
 
 func (s *InMemorySuite) TestRecordStatus(c *C) {
+	ctx, cancel := context.WithTimeout(context.TODO(), testTimeout)
+	defer cancel()
+
 	var timeline history.Timeline
 	timeline = NewTimeline(s.clock, 1)
 
@@ -49,12 +53,12 @@ func (s *InMemorySuite) TestRecordStatus(c *C) {
 	new := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Degraded}
 
 	var err error
-	err = timeline.RecordStatus(context.TODO(), old)
+	err = timeline.RecordStatus(ctx, old)
 	c.Assert(err, IsNil)
-	err = timeline.RecordStatus(context.TODO(), new)
+	err = timeline.RecordStatus(ctx, new)
 	c.Assert(err, IsNil)
 
-	actual, err := timeline.GetEvents(context.TODO(), nil)
+	actual, err := timeline.GetEvents(ctx, nil)
 	c.Assert(err, IsNil)
 
 	expected := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), node)}
@@ -62,6 +66,9 @@ func (s *InMemorySuite) TestRecordStatus(c *C) {
 }
 
 func (s *InMemorySuite) TestFIFOEviction(c *C) {
+	ctx, cancel := context.WithTimeout(context.TODO(), testTimeout)
+	defer cancel()
+
 	var timeline history.Timeline
 	timeline = NewTimeline(s.clock, 1)
 
@@ -70,16 +77,19 @@ func (s *InMemorySuite) TestFIFOEviction(c *C) {
 	new := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Degraded}
 
 	var err error
-	err = timeline.RecordStatus(context.TODO(), old)
+	err = timeline.RecordStatus(ctx, old)
 	c.Assert(err, IsNil)
-	err = timeline.RecordStatus(context.TODO(), new)
+	err = timeline.RecordStatus(ctx, new)
 	c.Assert(err, IsNil)
-	err = timeline.RecordStatus(context.TODO(), old)
+	err = timeline.RecordStatus(ctx, old)
 	c.Assert(err, IsNil)
 
-	actual, err := timeline.GetEvents(context.TODO(), nil)
+	actual, err := timeline.GetEvents(ctx, nil)
 	c.Assert(err, IsNil)
 
 	expected := []*pb.TimelineEvent{history.NewNodeRecovered(s.clock.Now(), node)}
 	c.Assert(actual, DeepEquals, expected, Commentf("Test FIFO eviction"))
 }
+
+// testTimeout specifies the overall time limit for a test.
+const testTimeout = 10 * time.Second

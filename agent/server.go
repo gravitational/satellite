@@ -88,7 +88,7 @@ func (r *server) Time(ctx context.Context, req *pb.TimeRequest) (*pb.TimeRespons
 func (r *server) Timeline(ctx context.Context, req *pb.TimelineRequest) (*pb.TimelineResponse, error) {
 	events, err := r.agent.Timeline.GetEvents(ctx, req.GetParams())
 	if err != nil {
-		return nil, err
+		return nil, GRPCError(err)
 	}
 
 	return &pb.TimelineResponse{
@@ -100,7 +100,7 @@ func (r *server) Timeline(ctx context.Context, req *pb.TimelineRequest) (*pb.Tim
 // Duplicate requests will have no effect.
 func (r *server) UpdateTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateResponse, error) {
 	if err := r.agent.Timeline.RecordTimeline(ctx, []*pb.TimelineEvent{req.GetEvent()}); err != nil {
-		return nil, err
+		return nil, GRPCError(err)
 	}
 	return &pb.UpdateResponse{}, nil
 }

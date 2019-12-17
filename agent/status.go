@@ -26,6 +26,56 @@ import (
 	serf "github.com/hashicorp/serf/client"
 )
 
+// toMemberStatus converts the provided status string into a protobuf message.
+func toMemberStatus(status string) pb.MemberStatus_Type {
+	switch MemberStatus(status) {
+	case MemberAlive:
+		return pb.MemberStatus_Alive
+	case MemberLeaving:
+		return pb.MemberStatus_Leaving
+	case MemberLeft:
+		return pb.MemberStatus_Left
+	case MemberFailed:
+		return pb.MemberStatus_Failed
+	}
+	return pb.MemberStatus_None
+}
+
+// unknownNodeStatus creates an `unknown` node status for a node specified with member.
+func unknownNodeStatus(member *serf.Member) *pb.NodeStatus {
+	return &pb.NodeStatus{
+		Name:         member.Name,
+		Status:       pb.NodeStatus_Unknown,
+		MemberStatus: statusFromMember(member),
+	}
+}
+
+// emptyNodeStatus creates an empty node status.
+func emptyNodeStatus(name string) *pb.NodeStatus {
+	return &pb.NodeStatus{
+		Name:         name,
+		Status:       pb.NodeStatus_Unknown,
+		MemberStatus: &pb.MemberStatus{Name: name},
+	}
+}
+
+// emptySystemStatus creates an empty system status.
+func emptySystemStatus() *pb.SystemStatus {
+	return &pb.SystemStatus{
+		Status: pb.SystemStatus_Unknown,
+	}
+}
+
+// statusFromMember returns new member status value for the specified serf member.
+func statusFromMember(member *serf.Member) *pb.MemberStatus {
+	return &pb.MemberStatus{
+		Name:   member.Name,
+		Status: toMemberStatus(member.Status),
+		Tags:   member.Tags,
+		Addr:   fmt.Sprintf("%s:%d", member.Addr.String(), member.Port),
+	}
+}
+
 // setSystemStatus combines the status of individual nodes into the status of the
 // cluster as a whole.
 // It additionally augments the cluster status with human-readable summary.
@@ -60,11 +110,13 @@ func setSystemStatus(status *pb.SystemStatus, members []serf.Member) {
 	}
 }
 
+// isMaster returns true if member has role master.
 func isMaster(member *pb.MemberStatus) bool {
 	value, ok := member.Tags["role"]
 	return ok && value == string(RoleMaster)
 }
 
+// nodeToSystemStatus converts the provided node status into a system status.
 func nodeToSystemStatus(status pb.NodeStatus_Type) pb.SystemStatus_Type {
 	switch status {
 	case pb.NodeStatus_Running:
@@ -76,6 +128,7 @@ func nodeToSystemStatus(status pb.NodeStatus_Type) pb.SystemStatus_Type {
 	}
 }
 
+// isDegraded returns true if the provided system status is degraded.
 func isDegraded(status pb.SystemStatus) bool {
 	switch status.Status {
 	case pb.SystemStatus_Unknown, pb.SystemStatus_Degraded:
@@ -84,6 +137,7 @@ func isDegraded(status pb.SystemStatus) bool {
 	return false
 }
 
+// isNodeDegraded returns true if the provided node status is degraded.
 func isNodeDegraded(status pb.NodeStatus) bool {
 	switch status.Status {
 	case pb.NodeStatus_Unknown, pb.NodeStatus_Degraded:
@@ -92,6 +146,7 @@ func isNodeDegraded(status pb.NodeStatus) bool {
 	return false
 }
 
+// String returns a string representation of the memeber map.
 func (r memberMap) String() string {
 	var buf bytes.Buffer
 	for member := range r {
