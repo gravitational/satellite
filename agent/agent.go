@@ -426,6 +426,7 @@ func runChecker(ctx context.Context, checker health.Checker, probeCh chan<- heal
 			Severity: pb.Probe_Critical,
 			Error:    "checker does not comply with specified context, potential goroutine leak",
 		})
+		probeCh <- probes
 	}
 }
 
