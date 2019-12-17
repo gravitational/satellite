@@ -16,9 +16,12 @@ limitations under the License.
 package agent
 
 import (
+	"context"
+
 	"github.com/gravitational/trace"
 	"google.golang.org/grpc"
 	grpcerrors "google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // ConvertGRPCError maps grpc error to one of trace type classes.
@@ -56,4 +59,17 @@ func IsUnavailableError(err error) bool {
 		return true
 	}
 	return false
+}
+
+// GRPCError converts the provided error into a grpc error.
+// TODO: Define additional errors
+func GRPCError(err error) error {
+	switch trace.Unwrap(err) {
+	case context.Canceled:
+		return status.Error(grpcerrors.Canceled, "rpc canceled")
+	case context.DeadlineExceeded:
+		return status.Error(grpcerrors.DeadlineExceeded, "rpc deadline exceeded")
+	default:
+		return status.Error(grpcerrors.Unknown, "unknown error")
+	}
 }

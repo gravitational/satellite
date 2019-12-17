@@ -39,13 +39,14 @@ type Client interface {
 	Time(context.Context, *pb.TimeRequest) (*pb.TimeResponse, error)
 	// Timeline returns the current status timeline.
 	Timeline(context.Context) (*pb.TimelineResponse, error)
-	// UpdateTimeline request the update the timeline with a new event.
+	// UpdateTimeline requests that the timeline be updated with the specified event.
 	UpdateTimeline(context.Context, *pb.UpdateRequest) (*pb.UpdateResponse, error)
 }
 
 type client struct {
 	pb.AgentClient
-	conn *grpc.ClientConn
+	conn        *grpc.ClientConn
+	callOptions []grpc.CallOption
 }
 
 // NewClientFunc defines a function that returns RPC agent client.
@@ -108,12 +109,18 @@ func NewClientWithCreds(ctx context.Context, addr string, creds credentials.Tran
 	}
 
 	c := pb.NewAgentClient(conn)
-	return &client{AgentClient: c, conn: conn}, nil
+
+	return &client{
+		AgentClient: c,
+		conn:        conn,
+		// TODO: provide option to initialize client with more call options.
+		callOptions: []grpc.CallOption{grpc.FailFast(false)},
+	}, nil
 }
 
 // Status reports the health status of the serf cluster.
 func (r *client) Status(ctx context.Context) (*pb.SystemStatus, error) {
-	resp, err := r.AgentClient.Status(ctx, &pb.StatusRequest{}, defaultRPCOptions...)
+	resp, err := r.AgentClient.Status(ctx, &pb.StatusRequest{}, r.callOptions...)
 	if err != nil {
 		return nil, ConvertGRPCError(err)
 	}
@@ -122,7 +129,7 @@ func (r *client) Status(ctx context.Context) (*pb.SystemStatus, error) {
 
 // LocalStatus reports the health status of the local serf node.
 func (r *client) LocalStatus(ctx context.Context) (*pb.NodeStatus, error) {
-	resp, err := r.AgentClient.LocalStatus(ctx, &pb.LocalStatusRequest{}, defaultRPCOptions...)
+	resp, err := r.AgentClient.LocalStatus(ctx, &pb.LocalStatusRequest{}, r.callOptions...)
 	if err != nil {
 		return nil, ConvertGRPCError(err)
 	}
@@ -131,7 +138,7 @@ func (r *client) LocalStatus(ctx context.Context) (*pb.NodeStatus, error) {
 
 // Time returns the current time on the target node.
 func (r *client) Time(ctx context.Context, req *pb.TimeRequest) (time *pb.TimeResponse, err error) {
-	resp, err := r.AgentClient.Time(ctx, req, defaultRPCOptions...)
+	resp, err := r.AgentClient.Time(ctx, req, r.callOptions...)
 	if err != nil {
 		return nil, ConvertGRPCError(err)
 	}
@@ -140,7 +147,7 @@ func (r *client) Time(ctx context.Context, req *pb.TimeRequest) (time *pb.TimeRe
 
 // Timeline returns the current status timeline.
 func (r *client) Timeline(ctx context.Context) (timeline *pb.TimelineResponse, err error) {
-	resp, err := r.AgentClient.Timeline(ctx, &pb.TimelineRequest{}, defaultRPCOptions...)
+	resp, err := r.AgentClient.Timeline(ctx, &pb.TimelineRequest{}, r.callOptions...)
 	if err != nil {
 		return nil, ConvertGRPCError(err)
 	}
@@ -149,7 +156,7 @@ func (r *client) Timeline(ctx context.Context) (timeline *pb.TimelineResponse, e
 
 // UpdateTimeline request the update the timeline with a new event.
 func (r *client) UpdateTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateResponse, error) {
-	resp, err := r.AgentClient.UpdateTimeline(ctx, req, defaultRPCOptions...)
+	resp, err := r.AgentClient.UpdateTimeline(ctx, req, r.callOptions...)
 	if err != nil {
 		return nil, ConvertGRPCError(err)
 	}
@@ -160,6 +167,3 @@ func (r *client) UpdateTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb
 func (r *client) Close() error {
 	return r.conn.Close()
 }
-
-// defaultRPCOptions defines default RPC options used by this client.
-var defaultRPCOptions = []grpc.CallOption{grpc.FailFast(false)}

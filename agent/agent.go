@@ -17,7 +17,6 @@ limitations under the License.
 package agent
 
 import (
-	"fmt"
 	"math/rand"
 	"net"
 	"net/http"
@@ -104,7 +103,7 @@ type Config struct {
 	// Cache is a short-lived storage used by the agent to persist latest health stats.
 	cache.Cache
 
-	//DBPath specifies the location of the database to be used to store timeline.
+	// DBPath specifies the location of the database to be used to store timeline.
 	DBPath string
 
 	// RetentionDuration specifies the duration to store timeline events.
@@ -153,18 +152,19 @@ func New(config *Config) (Agent, error) {
 
 	clock := clockwork.NewRealClock()
 	agent := &agent{
-		Config:          *config,
-		SerfClient:      client,
-		name:            config.Name,
-		cache:           config.Cache,
-		dialRPC:         DefaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
-		statusClock:     clock,
-		recycleClock:    clock,
-		timelineClock:   clock,
-		localStatus:     emptyNodeStatus(config.Name),
-		metricsListener: metricsListener,
-		Timeline:        timeline,
-		done:            make(chan struct{}),
+		Config:                  *config,
+		SerfClient:              client,
+		Timeline:                timeline,
+		name:                    config.Name,
+		cache:                   config.Cache,
+		dialRPC:                 DefaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
+		statusClock:             clock,
+		recycleClock:            clock,
+		timelineClock:           clock,
+		statusQueryReplyTimeout: statusQueryReplyTimeout,
+		localStatus:             emptyNodeStatus(config.Name),
+		metricsListener:         metricsListener,
+		done:                    make(chan struct{}),
 	}
 
 	agent.rpc, err = newRPCServer(agent, config.CAFile, config.CertFile, config.KeyFile, config.RPCAddrs)
@@ -435,17 +435,14 @@ func runChecker(ctx context.Context, checker health.Checker, probeCh chan<- heal
 func (r *agent) statusUpdateLoop() {
 	statusUpdateCh := r.statusClock.After(statusUpdateTimeout)
 	recycleCh := r.recycleClock.After(recycleTimeout)
-	replyTimeout := r.statusQueryReplyTimeout
-	if replyTimeout == 0 {
-		replyTimeout = statusQueryReplyTimeout
-	}
+
 	// collectCh is a channel that receives updates when the status collecting process
 	// has finished collecting
 	collectCh := make(chan struct{})
 	for {
 		select {
 		case <-statusUpdateCh:
-			ctx, cancel := context.WithTimeout(context.Background(), replyTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), r.statusQueryReplyTimeout)
 			go func() {
 				defer cancel() // close context if collection finishes before the deadline
 				status, err := r.collectStatus(ctx)
@@ -481,61 +478,6 @@ func (r *agent) statusUpdateLoop() {
 	}
 }
 
-func (r *agent) timelineUpdateLoop() {
-	// Note: just using the same timeout durations for timeline update used in status update.
-	timelineUpdateCh := r.timelineClock.After(statusUpdateTimeout)
-	replyTimeout := r.statusQueryReplyTimeout
-	if replyTimeout == 0 {
-		replyTimeout = statusQueryReplyTimeout
-	}
-	// collectCh is a channel that receives updates when the timeline collecting process
-	// has finished collecting
-	collectCh := make(chan struct{})
-	for {
-		select {
-		case <-timelineUpdateCh:
-			// TODO: timeout duration
-			ctx, cancel := context.WithTimeout(context.Background(), replyTimeout)
-			go func() {
-				defer cancel() // close context if collection finishes before the deadline
-
-				// Update local status changes
-				status := r.LocalStatus()
-				if status != nil {
-					if err := r.Timeline.RecordStatus(ctx, status); err != nil {
-						log.WithError(err).Warnf("Error recording timeline.")
-					}
-				}
-
-				// Merge timeline from another cluster member
-				timeline, err := r.collectTimeline(ctx)
-				if err != nil {
-					log.WithError(err).Warnf("Error collecting timeline from another member.")
-				}
-				if timeline != nil {
-					if err := r.Timeline.RecordTimeline(ctx, timeline); err != nil {
-						log.WithError(err).Warnf("Error recording timeline.")
-					}
-				}
-
-				select {
-				case <-r.done:
-				case collectCh <- struct{}{}:
-				}
-			}()
-			select {
-			case <-collectCh:
-				timelineUpdateCh = r.timelineClock.After(statusUpdateTimeout)
-			case <-r.done:
-				cancel()
-				return
-			}
-		case <-r.done:
-			return
-		}
-	}
-}
-
 // collectStatus obtains the cluster status by querying statuses of
 // known cluster members.
 func (r *agent) collectStatus(ctx context.Context) (systemStatus *pb.SystemStatus, err error) {
@@ -553,7 +495,7 @@ func (r *agent) collectStatus(ctx context.Context) (systemStatus *pb.SystemStatu
 
 	log.Debugf("Started collecting statuses from members %v.", members)
 
-	ctxNode, cancelNode := context.WithTimeout(ctx, nodeTimeout)
+	ctxNode, cancelNode := context.WithTimeout(ctx, nodeStatusTimeout)
 	defer cancelNode()
 
 	statusCh := make(chan *statusResponse, len(members))
@@ -635,19 +577,67 @@ func (r *agent) getStatusFrom(ctx context.Context, member serf.Member, respc cha
 	}
 }
 
+// timelineUpdateLoop periodically updates the status timeline by comparing
+// changes in local status and merging a timeline from another member.
+func (r *agent) timelineUpdateLoop() {
+	ticker := r.timelineClock.NewTicker(statusUpdateTimeout)
+	defer ticker.Stop()
+
+	for range ticker.Chan() {
+		if r.isDone() {
+			return
+		}
+
+		if err := r.updateTimeline(); err != nil {
+			log.WithError(err).Warnf("Error updating timeline.")
+		}
+	}
+}
+
+// updateTimeline updates the timeline with any new status changes.
+func (r *agent) updateTimeline() error {
+	ctx, cancel := context.WithTimeout(context.Background(), r.statusQueryReplyTimeout)
+	defer cancel()
+
+	// Update local status changes
+	if status := r.LocalStatus(); status != nil {
+		if err := r.Timeline.RecordStatus(ctx, status); err != nil {
+			return trace.Wrap(err)
+		}
+	}
+
+	// Collect timeline from another cluster member
+	timeline, err := r.collectTimeline(ctx)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	// Merge timelines
+	if timeline != nil {
+		if err := r.Timeline.RecordTimeline(ctx, timeline); err != nil {
+			return trace.Wrap(err)
+		}
+	}
+
+	return nil
+}
+
 // collectTimeline collects timeline from a random member.
 func (r *agent) collectTimeline(ctx context.Context) (timeline []*pb.TimelineEvent, err error) {
 	members, err := r.SerfClient.Members()
 	if err != nil {
-		return nil, trace.Wrap(err, "failed to query serf members")
+		return timeline, trace.Wrap(err, "failed to query serf members")
 	}
 	members = filterLeft(members)
+	members = filterMember(members, r.name)
 
-	ctxNode, cancelNode := context.WithTimeout(ctx, nodeTimeout)
-	defer cancelNode()
+	// Select random member.
+	seed := rand.NewSource(time.Now().UnixNano())
+	randGen := rand.New(seed)
+	member := members[randGen.Intn(len(members))]
 
-	// Collect timeline from a random member.
-	return r.getTimelineFrom(ctxNode, members[rand.Intn(len(members))])
+	// Collect timeline from a single member.
+	return r.getTimelineFrom(ctx, member)
 }
 
 // getTimelineFrom obtains timeline from the node identified by member.
@@ -665,12 +655,14 @@ func (r *agent) getTimelineFrom(ctx context.Context, member serf.Member) (events
 	return timeline.GetEvents(), nil
 }
 
-// statusResponse describes a status response from a background process that obtains
-// health status on the specified serf node.
-type statusResponse struct {
-	*pb.NodeStatus
-	member serf.Member
-	err    error
+// isDone returns true if done channel is closed.
+func (r *agent) isDone() bool {
+	select {
+	case <-r.done:
+		return true
+	default:
+		return false
+	}
 }
 
 // recentStatus returns the last known cluster status.
@@ -689,54 +681,8 @@ func (r *agent) recentLocalStatus() *pb.NodeStatus {
 	return r.localStatus
 }
 
-func toMemberStatus(status string) pb.MemberStatus_Type {
-	switch MemberStatus(status) {
-	case MemberAlive:
-		return pb.MemberStatus_Alive
-	case MemberLeaving:
-		return pb.MemberStatus_Leaving
-	case MemberLeft:
-		return pb.MemberStatus_Left
-	case MemberFailed:
-		return pb.MemberStatus_Failed
-	}
-	return pb.MemberStatus_None
-}
-
-// unknownNodeStatus creates an `unknown` node status for a node specified with member.
-func unknownNodeStatus(member *serf.Member) *pb.NodeStatus {
-	return &pb.NodeStatus{
-		Name:         member.Name,
-		Status:       pb.NodeStatus_Unknown,
-		MemberStatus: statusFromMember(member),
-	}
-}
-
-// emptyNodeStatus creates an empty node status.
-func emptyNodeStatus(name string) *pb.NodeStatus {
-	return &pb.NodeStatus{
-		Name:         name,
-		Status:       pb.NodeStatus_Unknown,
-		MemberStatus: &pb.MemberStatus{Name: name},
-	}
-}
-
-// emptySystemStatus creates an empty system status.
-func emptySystemStatus() *pb.SystemStatus {
-	return &pb.SystemStatus{
-		Status: pb.SystemStatus_Unknown,
-	}
-}
-
-// statusFromMember returns new member status value for the specified serf member.
-func statusFromMember(member *serf.Member) *pb.MemberStatus {
-	return &pb.MemberStatus{
-		Name:   member.Name,
-		Status: toMemberStatus(member.Status),
-		Tags:   member.Tags,
-		Addr:   fmt.Sprintf("%s:%d", member.Addr.String(), member.Port),
-	}
-}
+// TODO: Optimization - use a different data structure for storing serf members
+// if we need to constantly filter the list.
 
 // filterLeft filters out members that have left the serf cluster
 func filterLeft(members []serf.Member) (result []serf.Member) {
@@ -749,4 +695,22 @@ func filterLeft(members []serf.Member) (result []serf.Member) {
 		result = append(result, member)
 	}
 	return result
+}
+
+// filterMember filters out member by name.
+func filterMember(members []serf.Member, name string) (result []serf.Member) {
+	for i, member := range members {
+		if member.Name == name {
+			return append(members[:i], members[i+1:]...)
+		}
+	}
+	return result
+}
+
+// statusResponse describes a status response from a background process that obtains
+// health status on the specified serf node.
+type statusResponse struct {
+	*pb.NodeStatus
+	member serf.Member
+	err    error
 }
