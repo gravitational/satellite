@@ -82,7 +82,7 @@ func (s *SQLiteSuite) TestRecordStatus(c *C) {
 
 	expected := []*pb.TimelineEvent{history.NewNodeRecovered(s.clock.Now(), node)}
 
-	c.Assert(actual, DeepEquals, expected, Commentf("Test record status"))
+	c.Assert(actual, DeepEquals, expected, Commentf("Recorded new status"))
 }
 
 func (s *SQLiteSuite) TestEviction(c *C) {
@@ -103,7 +103,7 @@ func (s *SQLiteSuite) TestEviction(c *C) {
 	c.Assert(err, IsNil)
 
 	var expected []*pb.TimelineEvent
-	c.Assert(actual, DeepEquals, expected, Commentf("Test eviction policy"))
+	c.Assert(actual, DeepEquals, expected, Commentf("Evicted expired events"))
 }
 
 func (s *SQLiteSuite) TestFilterEvents(c *C) {
@@ -120,13 +120,13 @@ func (s *SQLiteSuite) TestFilterEvents(c *C) {
 	actual, err := s.timeline.GetEvents(ctx, params)
 	c.Assert(err, IsNil)
 	expected := []*pb.TimelineEvent{history.NewNodeRecovered(s.clock.Now(), node)}
-	c.Assert(actual, DeepEquals, expected, Commentf("Test filter events - one match"))
+	c.Assert(actual, DeepEquals, expected, Commentf("Filter events - one match"))
 
 	params = map[string]string{"type": nodeDegradedType, "node": node}
 	actual, err = s.timeline.GetEvents(ctx, params)
 	c.Assert(err, IsNil)
 	expected = nil
-	c.Assert(actual, DeepEquals, expected, Commentf("Test filter events - no match"))
+	c.Assert(actual, DeepEquals, expected, Commentf("Filter events - no match"))
 }
 
 func (s *SQLiteSuite) TestMergeEvents(c *C) {
@@ -140,7 +140,7 @@ func (s *SQLiteSuite) TestMergeEvents(c *C) {
 	actual, err := s.timeline.GetEvents(ctx, nil)
 	c.Assert(err, IsNil)
 
-	c.Assert(actual, DeepEquals, events, Commentf("Test successfully merge events into timeline"))
+	c.Assert(actual, DeepEquals, events, Commentf("Successfully merge events into timeline"))
 }
 
 // timelineInitTimeout specifies the amount of time given to initialize database.
