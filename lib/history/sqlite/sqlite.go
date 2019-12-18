@@ -26,6 +26,7 @@ import (
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/history"
+	"github.com/gravitational/satellite/utils"
 
 	"github.com/gravitational/trace"
 	"github.com/jmoiron/sqlx"
@@ -74,10 +75,11 @@ func NewTimeline(ctx context.Context, config Config) (*Timeline, error) {
 	// 	return nil, trace.Wrap(err, "failed to init previous status")
 	// }
 
-	// TODO: should this be called in constructor method?
-	// Let caller run event eviction loop?
-	// Create separate init function?
-	go timeline.eventEvictionLoop()
+	// TODO: For now the eviction loop uses an empty context.
+	// Should the constructor accept an additional context to be used here?
+	// Should the timeline initialize its own context to be used here and
+	// provide a `shutdown` method to cancel the context?
+	go timeline.eventEvictionLoop(context.TODO())
 
 	return timeline, nil
 }
@@ -105,16 +107,17 @@ func (t *Timeline) initPrevStatus(ctx context.Context) error {
 }
 
 // eventEvictionLoop periodically evicts old events to free up storage.
-func (t *Timeline) eventEvictionLoop() {
+func (t *Timeline) eventEvictionLoop(ctx context.Context) {
 	ticker := t.config.Clock.NewTicker(evictionFrequency)
-	for {
-		<-ticker.Chan()
-
-		// All events before this time will be deleted.
-		retentionCutOff := t.config.Clock.Now().Add(-(t.config.RetentionDuration))
+	defer ticker.Stop()
+	for range ticker.Chan() {
+		if utils.IsContextDone(ctx) {
+			log.Info("Eviction loop is stopping.")
+			return
+		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), evictionTimeout)
-		if err := t.evictEvents(ctx, retentionCutOff); err != nil {
+		if err := t.evictEvents(ctx, t.getRetentionCutOff()); err != nil {
 			cancel()
 			log.WithError(err).Warnf("Error evicting expired events.")
 		}
@@ -126,14 +129,17 @@ func (t *Timeline) eventEvictionLoop() {
 // the provided status.
 func (t *Timeline) RecordStatus(ctx context.Context, status *pb.NodeStatus) (err error) {
 	t.statusMutex.Lock()
-
 	events := history.DiffNode(t.config.Clock, t.lastStatus, status)
 	if len(events) == 0 {
 		t.statusMutex.Unlock()
 		return nil
 	}
-	t.lastStatus = status
 
+	log.WithField("prev-status", t.lastStatus).
+		WithField("next-status", status).
+		Debug("New status recorded.")
+
+	t.lastStatus = status
 	t.statusMutex.Unlock()
 
 	if err = t.insertEvents(ctx, events); err != nil {
@@ -150,13 +156,11 @@ func (t *Timeline) RecordTimeline(ctx context.Context, events []*pb.TimelineEven
 		return nil
 	}
 
-	// All events before this time will be deleted.
-	retentionCutOff := t.config.Clock.Now().Add(-(t.config.RetentionDuration))
-
 	// Filter out expired events.
 	filtered := []*pb.TimelineEvent{}
 	for _, event := range events {
-		if event.GetTimestamp().ToTime().After(retentionCutOff) {
+		if event.GetTimestamp().ToTime().After(t.getRetentionCutOff()) {
+			log.WithField("filtered-event", event).Debug("Event filtered.")
 			filtered = append(filtered, event)
 		}
 	}
@@ -240,6 +244,12 @@ func (t *Timeline) evictEvents(ctx context.Context, retentionCutOff time.Time) (
 		return trace.Wrap(err)
 	}
 	return nil
+}
+
+// getRetentionCutOff returns the retention cut off time for the timeline. All
+// events before this time is expired and should be removed from the timeline.
+func (t *Timeline) getRetentionCutOff() time.Time {
+	return t.config.Clock.Now().Add(-(t.config.RetentionDuration))
 }
 
 // prepareQuery prepares a query string and a list of arguments constructed from

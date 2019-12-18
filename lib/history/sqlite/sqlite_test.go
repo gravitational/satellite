@@ -143,6 +143,28 @@ func (s *SQLiteSuite) TestMergeEvents(c *C) {
 	c.Assert(actual, DeepEquals, events, Commentf("Successfully merge events into timeline"))
 }
 
+func (s *SQLiteSuite) TestIgnoreDuplicateEvents(c *C) {
+	ctx, cancel := context.WithTimeout(context.TODO(), testTimeout)
+	defer cancel()
+
+	ts := s.clock.Now()
+
+	events := []*pb.TimelineEvent{
+		history.NewNodeDegraded(ts, "test-node"),
+		history.NewNodeDegraded(ts, "test-node"),
+	}
+
+	err := s.timeline.RecordTimeline(ctx, events)
+	c.Assert(err, IsNil)
+
+	actual, err := s.timeline.GetEvents(ctx, nil)
+	c.Assert(err, IsNil)
+
+	expected := []*pb.TimelineEvent{history.NewNodeDegraded(ts, "test-node")}
+
+	c.Assert(actual, DeepEquals, expected, Commentf("Successfully merge events into timeline"))
+}
+
 // timelineInitTimeout specifies the amount of time given to initialize database.
 const timelineInitTimeout = 5 * time.Second
 
