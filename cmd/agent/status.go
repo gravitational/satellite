@@ -128,9 +128,9 @@ func printEvent(event *pb.TimelineEvent) {
 
 	switch event.GetData().(type) {
 	case *pb.TimelineEvent_ClusterDegraded:
-		fmt.Printf("Cluster Degraded\n")
+		fmt.Println("Cluster Degraded")
 	case *pb.TimelineEvent_ClusterRecovered:
-		fmt.Printf("Cluster Recovered\n")
+		fmt.Println("Cluster Recovered")
 	case *pb.TimelineEvent_NodeAdded:
 		fmt.Printf("Node Added [%s]\n", event.GetNodeAdded().GetNode())
 	case *pb.TimelineEvent_NodeRemoved:
