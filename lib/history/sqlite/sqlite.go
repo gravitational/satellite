@@ -275,7 +275,7 @@ func prepareQuery(params map[string]string) (query string, args []interface{}) {
 // filterParams will filter out unknown query parameters.
 func filterParams(params map[string]string) (filtered map[string]string) {
 	filtered = make(map[string]string)
-	var fields = []string{"type", "node", "probe", "old", "new"}
+	var fields = []string{"type", "node", "probe", "oldState", "newState"}
 	for _, key := range fields {
 		if val, ok := params[key]; ok {
 			filtered[key] = val
