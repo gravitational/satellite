@@ -31,8 +31,7 @@
       dest: /home/vagrant/history.sh
       content: |
         {{'#'}}!/bin/bash
-        satellite status \
-          --history \
+        satellite history \
           --ca-file=/var/lib/satellite/creds/ca.cert \
           --client-cert-file=/var/lib/satellite/creds/client.cert \
           --client-key-file=/var/lib/satellite/creds/client.key
