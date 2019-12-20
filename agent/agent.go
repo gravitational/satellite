@@ -330,12 +330,16 @@ func (r *agent) runChecks(ctx context.Context) *pb.NodeStatus {
 	// channel for collecting resulting health probes
 	probeCh := make(chan health.Probes, len(r.Checkers))
 
+	pending := make(map[string]struct{})
+	for _, c := range r.Checkers {
+		pending[c.Name()] = struct{}{}
+	}
 	for _, c := range r.Checkers {
 		select {
 		case semaphoreCh <- struct{}{}:
 			go runChecker(ctx, c, probeCh, semaphoreCh)
 		case <-ctx.Done():
-			log.Warnf("Timed out running tests: %v.", ctx.Err())
+			log.WithError(ctx.Err()).Warn("Timed out running tests.")
 			return emptyNodeStatus(r.name)
 		}
 	}
@@ -345,8 +349,14 @@ func (r *agent) runChecks(ctx context.Context) *pb.NodeStatus {
 		select {
 		case probe := <-probeCh:
 			probes = append(probes, probe...)
+			for _, p := range probe {
+				delete(pending, p.Checker)
+			}
 		case <-ctx.Done():
-			log.Warnf("Timed out collecting test results: %v.", ctx.Err())
+			log.WithFields(log.Fields{
+				log.ErrorKey: ctx.Err(),
+				"pending":    keys(pending),
+			}).Warn("Timed out collecting test results.")
 			return &pb.NodeStatus{
 				Name:   r.name,
 				Status: pb.NodeStatus_Degraded,
@@ -635,3 +645,11 @@ func filterLeft(members []serf.Member) (result []serf.Member) {
 // maxConcurrentCheckers specifies the maximum number of checkers active at
 // any given time.
 const maxConcurrentCheckers = 10
+
+func keys(m map[string]struct{}) (result []string) {
+	result = make([]string, 0, len(m))
+	for k := range m {
+		result = append(result, k)
+	}
+	return result
+}
