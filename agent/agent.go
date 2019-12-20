@@ -216,6 +216,8 @@ type agent struct {
 	// Defaults to statusQueryReplyTimeout if unspecified
 	statusQueryReplyTimeout time.Duration
 
+	closeOnce sync.Once
+
 	// Config is the agent configuration.
 	Config
 }
@@ -285,6 +287,13 @@ func (r *agent) Join(peers []string) error {
 
 // Close stops all background activity and releases the agent's resources.
 func (r *agent) Close() (err error) {
+	r.closeOnce.Do(func() {
+		err = r.close()
+	})
+	return trace.Wrap(err)
+}
+
+func (r *agent) close() (err error) {
 	var errors []error
 	if r.metricsListener != nil {
 		err = r.metricsListener.Close()
@@ -294,7 +303,9 @@ func (r *agent) Close() (err error) {
 	}
 
 	r.rpc.Stop()
-	close(r.done)
+	if r.done != nil {
+		close(r.done)
+	}
 
 	err = r.SerfClient.Close()
 	if err != nil {
