@@ -40,9 +40,9 @@ type sqlEvent struct {
 	Node sql.NullString `db:"node"`
 	// Probe specifies name of probe.
 	Probe sql.NullString `db:"probe"`
-	// Old specifies previous value.
+	// Old specifies previous probe state.
 	Old sql.NullString `db:"oldState"`
-	// New specifies new value.
+	// New specifies new probe state.
 	New sql.NullString `db:"newState"`
 }
 
