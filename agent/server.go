@@ -45,6 +45,7 @@ type RPCServer interface {
 	LocalStatus(context.Context, *pb.LocalStatusRequest) (*pb.LocalStatusResponse, error)
 	Time(context.Context, *pb.TimeRequest) (*pb.TimeResponse, error)
 	Timeline(context.Context, *pb.TimelineRequest) (*pb.TimelineResponse, error)
+	UpdateTimeline(context.Context, *pb.UpdateRequest) (*pb.UpdateResponse, error)
 	Stop()
 }
 
@@ -85,10 +86,15 @@ func (r *server) Time(ctx context.Context, req *pb.TimeRequest) (*pb.TimeRespons
 
 // Timeline sends the current status timeline
 func (r *server) Timeline(ctx context.Context, req *pb.TimelineRequest) (*pb.TimelineResponse, error) {
-	// TODO: Collect timeline events
-	return &pb.TimelineResponse{
-		Events: []*pb.TimelineEvent{},
-	}, nil
+	// TODO
+	return nil, trace.NotImplemented("Timeline not yet implemented")
+}
+
+// UpdateTimeline updates the status timeline with events provided by the
+// timeline request.
+func (r *server) UpdateTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateResponse, error) {
+	// TODO
+	return nil, trace.NotImplemented("UpdateTimeline not yet implemented")
 }
 
 // newRPCServer creates an agent RPC endpoint for each provided listener.

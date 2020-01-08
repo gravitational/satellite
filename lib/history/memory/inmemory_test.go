@@ -19,6 +19,7 @@ package memory
 import (
 	"context"
 	"testing"
+	"time"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/history"
@@ -40,35 +41,68 @@ func (s *InMemorySuite) SetUpSuite(c *C) {
 	s.clock = clockwork.NewFakeClock()
 }
 
+// TestRecordStatus simply tests that the timeline can successfully record
+// a status.
 func (s *InMemorySuite) TestRecordStatus(c *C) {
-	var timeline history.Timeline
-	timeline = NewTimeline(s.clock, 1)
-	err := timeline.RecordStatus(context.TODO(), &pb.SystemStatus{Status: pb.SystemStatus_Running})
-	c.Assert(err, IsNil)
+	withTimeout(func(ctx context.Context) {
+		timeline := s.newTimeline()
+		node := "test-node"
+		old := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
 
-	actual, err := timeline.GetEvents(context.TODO(), nil)
-	c.Assert(err, IsNil)
+		err := timeline.RecordStatus(ctx, old)
+		c.Assert(err, IsNil)
 
-	expected := []*pb.TimelineEvent{history.NewClusterRecovered(s.clock.Now())}
-	c.Assert(actual, DeepEquals, expected, Commentf("Test record status"))
+		actual, err := timeline.GetEvents(ctx, nil)
+		c.Assert(err, IsNil)
+
+		expected := []*pb.TimelineEvent{history.NewNodeRecovered(s.clock.Now(), node)}
+		c.Assert(actual, DeepEquals, expected, Commentf("Expected the status to be recorded."))
+	})
 }
 
+// TestFIFOEviction tests the FIFO eviction policy of the timeline.
 func (s *InMemorySuite) TestFIFOEviction(c *C) {
-	var timeline history.Timeline
-	timeline = NewTimeline(s.clock, 1)
+	withTimeout(func(ctx context.Context) {
+		// Limit timeline capacity to 1.
+		// Necessary to easily test if events are evicted if max capacity is reached.
+		timeline := s.newLimitedTimeline(1)
+		node := "test-node"
+		old := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
+		new := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Degraded}
 
-	old := &pb.SystemStatus{Status: pb.SystemStatus_Running}
-	new := &pb.SystemStatus{Status: pb.SystemStatus_Degraded}
+		// Recording two statuses should result in timeline to exceed capacity.
+		err := timeline.RecordStatus(ctx, old)
+		c.Assert(err, IsNil)
+		err = timeline.RecordStatus(ctx, new)
+		c.Assert(err, IsNil)
 
-	err := timeline.RecordStatus(context.TODO(), old)
-	c.Assert(err, IsNil)
+		actual, err := timeline.GetEvents(ctx, nil)
+		c.Assert(err, IsNil)
 
-	err = timeline.RecordStatus(context.TODO(), new)
-	c.Assert(err, IsNil)
+		expected := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), node)}
+		c.Assert(actual, DeepEquals, expected, Commentf("Expected degraded event."))
+	})
+}
 
-	actual, err := timeline.GetEvents(context.TODO(), nil)
-	c.Assert(err, IsNil)
+// newTimeline initializes a new timeline with default test capacity.
+func (s *InMemorySuite) newTimeline() *Timeline {
+	// defaultCapacity specifies default capacity of test timeline.
+	const defaultCapacity = 256
 
-	expected := []*pb.TimelineEvent{history.NewClusterDegraded(s.clock.Now())}
-	c.Assert(actual, DeepEquals, expected, Commentf("Test FIFO eviction"))
+	return NewTimeline(s.clock, defaultCapacity)
+}
+
+// newLimitedTimeline initializes a new timeline with provided capcity.
+func (s *InMemorySuite) newLimitedTimeline(capacity int) *Timeline {
+	return NewTimeline(s.clock, capacity)
+}
+
+// withTimeout will run the provided test case with the default test timeout.
+func withTimeout(fn func(ctx context.Context)) {
+	// testTimeout specifies the overall time limit for a test.
+	const testTimeout = 10 * time.Second
+
+	ctx, cancel := context.WithTimeout(context.TODO(), testTimeout)
+	defer cancel()
+	fn(ctx)
 }
