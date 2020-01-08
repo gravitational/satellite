@@ -116,9 +116,8 @@ func (t *Timeline) eventEvictionLoop(ctx context.Context) {
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), evictionTimeout)
-		if err := t.evictEvents(ctx, t.getRetentionCutOff()); err != nil {
-			cancel()
+		ctxEvict, cancel := context.WithTimeout(ctx, evictionTimeout)
+		if err := t.evictEvents(ctxEvict, t.getRetentionCutOff()); err != nil {
 			log.WithError(err).Warnf("Error evicting expired events.")
 		}
 		cancel()
