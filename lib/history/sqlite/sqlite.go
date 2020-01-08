@@ -159,10 +159,11 @@ func (t *Timeline) RecordTimeline(ctx context.Context, events []*pb.TimelineEven
 	// Filter out expired events.
 	filtered := []*pb.TimelineEvent{}
 	for _, event := range events {
-		if event.GetTimestamp().ToTime().After(t.getRetentionCutOff()) {
+		if event.GetTimestamp().ToTime().Before(t.getRetentionCutOff()) {
 			log.WithField("filtered-event", event).Debug("Event filtered.")
-			filtered = append(filtered, event)
+			break
 		}
+		filtered = append(filtered, event)
 	}
 
 	if err = t.insertEvents(ctx, filtered); err != nil {
