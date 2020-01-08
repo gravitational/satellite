@@ -40,14 +40,13 @@ import (
 //
 // Implements history.Timeline
 type Timeline struct {
+	sync.Mutex
 	// Config contains timeline configuration.
 	config Config
 	// database points to underlying sqlite database.
 	database *sqlx.DB
 	// lastStatus holds the last recorded status.
 	lastStatus *pb.NodeStatus
-	// statusMutex locks access to the lastStatus field.
-	statusMutex sync.Mutex
 }
 
 // Config defines Timeline configuration.
@@ -127,10 +126,10 @@ func (t *Timeline) eventEvictionLoop(ctx context.Context) {
 // RecordStatus records the differences between the previously stored status and
 // the provided status.
 func (t *Timeline) RecordStatus(ctx context.Context, status *pb.NodeStatus) (err error) {
-	t.statusMutex.Lock()
+	t.Lock()
 	events := history.DiffNode(t.config.Clock, t.lastStatus, status)
 	if len(events) == 0 {
-		t.statusMutex.Unlock()
+		t.Unlock()
 		return nil
 	}
 
@@ -139,7 +138,7 @@ func (t *Timeline) RecordStatus(ctx context.Context, status *pb.NodeStatus) (err
 		Debug("New status recorded.")
 
 	t.lastStatus = status
-	t.statusMutex.Unlock()
+	t.Unlock()
 
 	if err = t.insertEvents(ctx, events); err != nil {
 		return trace.Wrap(err)
