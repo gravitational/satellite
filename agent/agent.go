@@ -616,12 +616,12 @@ func (r *agent) timelineUpdateLoop(ctx context.Context) {
 
 		member, err := r.selectMember(int(index))
 		if err != nil {
-			log.WithError(err).Warn("Failed to select cluster member.")
+			log.WithError(err).Debug("Failed to select remote cluster member for timeline merging.")
 			continue
 		}
 
 		if err := r.updateRemoteChanges(ctx, member); err != nil {
-			log.WithError(err).Warn("Error updating local timeline changes.")
+			log.WithError(err).Warn("Error updating remote timeline changes.")
 			continue
 		}
 
@@ -661,9 +661,7 @@ func (r *agent) updateRemoteChanges(ctx context.Context, member serf.Member) err
 	return nil
 }
 
-// selectMember will select a member based using the index.
-// The index is unit16 so will be limited to ~65000. Assuming clusters will not
-// have over that many members.
+// selectMember will select a member using the provided index.
 func (r *agent) selectMember(index int) (member serf.Member, err error) {
 	members, err := r.SerfClient.Members()
 	if err != nil {
@@ -675,6 +673,10 @@ func (r *agent) selectMember(index int) (member serf.Member, err error) {
 	members = filterMember(members, r.name)
 
 	numAvailable := len(members)
+	if numAvailable < 1 {
+		return member, trace.NotFound("no cluster members available")
+	}
+
 	return members[index%numAvailable], nil
 }
 
