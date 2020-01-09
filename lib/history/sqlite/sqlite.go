@@ -34,6 +34,37 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Config defines Timeline configuration.
+type Config struct {
+	// DBPath specifies the database location.
+	DBPath string
+	// RetentionDuration specifies the duration to store events.
+	RetentionDuration time.Duration
+	// Clock will be used to record event timestamps.
+	Clock clockwork.Clock
+}
+
+// CheckAndSetDefaults validates this configuration object.
+// Config values that were not specified will be set to their default values if
+// available.
+func (c Config) CheckAndSetDefaults() error {
+	var errors []error
+
+	if c.DBPath == "" {
+		errors = append(errors, trace.BadParameter("sqlite database path must be provided"))
+	}
+
+	if c.Clock == nil {
+		c.Clock = clockwork.NewRealClock()
+	}
+
+	if c.RetentionDuration == time.Duration(0) {
+		c.RetentionDuration = defaultTimelineRentention
+	}
+
+	return trace.NewAggregate(errors...)
+}
+
 // Timeline represents a timeline of status events.
 // Timeline events are stored in a local sqlite database.
 // The timeline will retain events for a specified duration and then deleted.
@@ -49,19 +80,13 @@ type Timeline struct {
 	lastStatus *pb.NodeStatus
 }
 
-// Config defines Timeline configuration.
-type Config struct {
-	// DBPath specifies the database location.
-	DBPath string
-	// RetentionDuration specifies the duration to store events.
-	RetentionDuration time.Duration
-	// Clock will be used to record event timestamps.
-	Clock clockwork.Clock
-}
-
 // NewTimeline initializes and returns a new Timeline with the
 // specified configuration.
 func NewTimeline(ctx context.Context, config Config) (*Timeline, error) {
+	if err := config.CheckAndSetDefaults(); err != nil {
+		return nil, trace.Wrap(err)
+	}
+
 	timeline := &Timeline{
 		config: config,
 	}
