@@ -51,9 +51,9 @@ To destroy cluster:
 $ make destroy
 ```
 
-To ssh into a cluster (k8s-master, node-1, node-2):
+To ssh into a vm (k8s-master, node-1, node-2):
 ```console
-$ vagrant ssh k8s-master
+$ vagrant ssh [node-name]
 ```
 
 ## Scripts
@@ -63,11 +63,49 @@ A few scripts are provided once ssh'd into a node.
 Get status:
 ```console
 $ ./status.sh
+{
+   "status": "degraded",
+   "nodes": [
+       {
+         "name": "node-1",
+         "member_status": {
+            "name": "node-1",
+            "addr": "192.168.50.11:7946",
+            "status": "alive",
+            "tags": {
+               "role": "node"
+            }
+         },
+         "status": "degraded",
+         "probes": [
+            {
+               "checker": "etcd-healthz",
+               "status": "failed",
+               "error": "healthz check failed: Get http://127.0.0.1:2379/health: dial tcp 127.0.0.1:2379: connect: connection refused"
+            },
+            {
+               "checker": "kubelet",
+               "status": "running"
+            },
+            {
+               "checker": "docker",
+               "status": "running"
+            }
+         ]
+      },
+      ...
+   ]
+}
+
+
 ```
 
 Get history:
 ```console
 $ ./history.sh
+[Jan  9 19:14:50 UTC] Node Degraded [node-1]
+[Jan  9 19:14:51 UTC] Node Degraded [node-2]
+[Jan  9 19:14:52 UTC] Node Degraded [k8s-master]
 ```
 
 Drop packets from other nodes to test the behavior under network partition:
