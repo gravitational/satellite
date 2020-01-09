@@ -672,7 +672,7 @@ func (r *agent) getTimelineFrom(ctx context.Context, member serf.Member) (events
 	}
 	defer client.Close()
 
-	timeline, err := client.Timeline(ctx)
+	timeline, err := client.Timeline(ctx, &pb.TimelineRequest{})
 	if err != nil {
 		return events, trace.Wrap(err)
 	}

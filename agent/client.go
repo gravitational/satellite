@@ -38,7 +38,7 @@ type Client interface {
 	// Time returns the current time on the target node.
 	Time(context.Context, *pb.TimeRequest) (*pb.TimeResponse, error)
 	// Timeline returns the current status timeline.
-	Timeline(context.Context) (*pb.TimelineResponse, error)
+	Timeline(context.Context, *pb.TimelineRequest) (*pb.TimelineResponse, error)
 	// UpdateTimeline requests that the timeline be updated with the specified event.
 	UpdateTimeline(context.Context, *pb.UpdateRequest) (*pb.UpdateResponse, error)
 }
@@ -146,8 +146,8 @@ func (r *client) Time(ctx context.Context, req *pb.TimeRequest) (time *pb.TimeRe
 }
 
 // Timeline returns the current status timeline.
-func (r *client) Timeline(ctx context.Context) (timeline *pb.TimelineResponse, err error) {
-	resp, err := r.AgentClient.Timeline(ctx, &pb.TimelineRequest{}, r.callOptions...)
+func (r *client) Timeline(ctx context.Context, req *pb.TimelineRequest) (timeline *pb.TimelineResponse, err error) {
+	resp, err := r.AgentClient.Timeline(ctx, req, r.callOptions...)
 	if err != nil {
 		return nil, ConvertGRPCError(err)
 	}
