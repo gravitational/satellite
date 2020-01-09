@@ -578,8 +578,7 @@ func (r *agent) getStatusFrom(ctx context.Context, member serf.Member, respc cha
 	}
 }
 
-// timelineUpdateLoop periodically updates the status timeline by comparing
-// changes in local status and merging a timeline from another member.
+// timelineUpdateLoop periodically updates the status timeline.
 func (r *agent) timelineUpdateLoop(ctx context.Context) {
 	ticker := r.timelineClock.NewTicker(statusUpdateTimeout)
 	defer ticker.Stop()

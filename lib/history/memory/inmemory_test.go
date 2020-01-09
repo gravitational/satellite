@@ -106,6 +106,3 @@ func withTimeout(fn func(ctx context.Context)) {
 	defer cancel()
 	fn(ctx)
 }
-
-// testTimeout specifies the overall time limit for a test.
-const testTimeout = 10 * time.Second

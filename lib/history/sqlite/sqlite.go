@@ -168,10 +168,6 @@ func (t *Timeline) RecordTimeline(ctx context.Context, events []*pb.TimelineEven
 		return trace.Wrap(err)
 	}
 
-	if err = t.insertEvents(ctx, filtered); err != nil {
-		return trace.Wrap(err)
-	}
-
 	return nil
 }
 
