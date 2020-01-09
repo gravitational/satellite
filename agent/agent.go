@@ -176,7 +176,7 @@ func New(config *Config) (Agent, error) {
 // CheckAndSetDefaults validates this configuration object.
 // Config values that were not specified will be set to their default values if
 // available.
-func (r Config) CheckAndSetDefaults() error {
+func (r *Config) CheckAndSetDefaults() error {
 	var errors []error
 
 	if r.CAFile == "" {

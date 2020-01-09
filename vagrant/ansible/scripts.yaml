@@ -25,6 +25,17 @@
           --client-cert-file=/var/lib/satellite/creds/client.cert \
           --client-key-file=/var/lib/satellite/creds/client.key
 
+  - name: History script
+    copy:
+      mode: '755'
+      dest: /home/vagrant/history.sh
+      content: |
+        {{'#'}}!/bin/bash
+        satellite history \
+          --ca-file=/var/lib/satellite/creds/ca.cert \
+          --client-cert-file=/var/lib/satellite/creds/client.cert \
+          --client-key-file=/var/lib/satellite/creds/client.key
+
   - name: Drop input script
     copy:
       mode: '755'
@@ -37,14 +48,14 @@
       line: sudo iptables -I INPUT -s {{hostvars[item]['node_ip']}} -j DROP
     with_items: "{{ groups['nodes'] | difference([inventory_hostname])}}"
   
-  - name: Accept input script
+  - name: Reset network script
     copy:
       mode: '755'
-      dest: /home/vagrant/accept-input.sh
+      dest: /home/vagrant/reset-network.sh
       content: "#!/bin/bash"
 
-  - name: Add accept IPs
+  - name: Add reset network
     lineinfile:
-      path: /home/vagrant/accept-input.sh
+      path: /home/vagrant/reset-network.sh
       line: sudo iptables -D INPUT -s {{hostvars[item]['node_ip']}} -j DROP
     with_items: "{{ groups['nodes'] | difference([inventory_hostname])}}"

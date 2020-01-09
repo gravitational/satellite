@@ -47,7 +47,7 @@ type Config struct {
 // CheckAndSetDefaults validates this configuration object.
 // Config values that were not specified will be set to their default values if
 // available.
-func (c Config) CheckAndSetDefaults() error {
+func (c *Config) CheckAndSetDefaults() error {
 	var errors []error
 
 	if c.DBPath == "" {
