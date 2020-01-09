@@ -106,13 +106,16 @@ type Config struct {
 	// RetentionDuration specifies the duration to store timeline events.
 	RetentionDuration time.Duration
 
+	// Clock to be used for internal time keeping.
+	Clock clockwork.Clock
+
 	// Cache is a short-lived storage used by the agent to persist latest health stats.
 	cache.Cache
 }
 
 // New creates an instance of an agent based on configuration options given in config.
 func New(config *Config) (Agent, error) {
-	if err := config.Check(); err != nil {
+	if err := config.CheckAndSetDefaults(); err != nil {
 		return nil, trace.Wrap(err)
 	}
 
@@ -122,10 +125,6 @@ func New(config *Config) (Agent, error) {
 	client, err := NewSerfClient(clientConfig)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to connect to serf")
-	}
-
-	if config.Tags == nil {
-		config.Tags = make(map[string]string)
 	}
 
 	err = client.UpdateTags(config.Tags, nil)
@@ -141,16 +140,16 @@ func New(config *Config) (Agent, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timelineInitTimeout)
 	defer cancel()
 
-	timeline, err := sqlite.NewTimeline(ctx, sqlite.Config{
+	sqliteConfig := sqlite.Config{
 		DBPath:            config.DBPath,
 		RetentionDuration: config.RetentionDuration,
-		Clock:             clockwork.NewRealClock(),
-	})
+		Clock:             config.Clock,
+	}
+	timeline, err := sqlite.NewTimeline(ctx, sqliteConfig)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to initialize timeline")
 	}
 
-	clock := clockwork.NewRealClock()
 	agent := &agent{
 		Config:                  *config,
 		SerfClient:              client,
@@ -158,9 +157,9 @@ func New(config *Config) (Agent, error) {
 		name:                    config.Name,
 		cache:                   config.Cache,
 		dialRPC:                 DefaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
-		statusClock:             clock,
-		recycleClock:            clock,
-		timelineClock:           clock,
+		statusClock:             config.Clock,
+		recycleClock:            config.Clock,
+		timelineClock:           config.Clock,
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
 		localStatus:             emptyNodeStatus(config.Name),
 		metricsListener:         metricsListener,
@@ -174,8 +173,10 @@ func New(config *Config) (Agent, error) {
 	return agent, nil
 }
 
-// Check validates this configuration object
-func (r Config) Check() error {
+// CheckAndSetDefaults validates this configuration object.
+// Config values that were not specified will be set to their default values if
+// available.
+func (r Config) CheckAndSetDefaults() error {
 	var errors []error
 
 	if r.CAFile == "" {
@@ -196,6 +197,18 @@ func (r Config) Check() error {
 
 	if len(r.RPCAddrs) == 0 {
 		errors = append(errors, trace.BadParameter("at least one RPC address must be provided"))
+	}
+
+	if r.DBPath == "" {
+		errors = append(errors, trace.BadParameter("sqlite database path must be provided"))
+	}
+
+	if r.Tags == nil {
+		r.Tags = make(map[string]string)
+	}
+
+	if r.Clock == nil {
+		r.Clock = clockwork.NewRealClock()
 	}
 
 	return trace.NewAggregate(errors...)
@@ -228,6 +241,8 @@ type agent struct {
 	done chan struct{}
 
 	// TODO: do we need separate clocks here?
+	// Remove when refactoring. Just use Config.Clock.
+
 	// These clocks abstract away access to the time package to allow
 	// testing.
 	statusClock   clockwork.Clock

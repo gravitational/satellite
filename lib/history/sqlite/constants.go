@@ -19,6 +19,9 @@ package sqlite
 import "time"
 
 const (
+	// defaultTimelineRetention defines the default duration to store timeline events.
+	defaultTimelineRentention = time.Hour * 24 * 7
+
 	// evictionFrequency is the time between eviction loops.
 	evictionFrequency = time.Hour
 

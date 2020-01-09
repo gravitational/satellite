@@ -110,7 +110,7 @@ func history(config rpcConfig) (ok bool, err error) {
 	if err != nil {
 		return false, trace.Wrap(err)
 	}
-	timeline, err := client.Timeline(ctx)
+	timeline, err := client.Timeline(ctx, &pb.TimelineRequest{})
 	if err != nil {
 		return false, trace.Wrap(err)
 	}
