@@ -17,7 +17,6 @@ limitations under the License.
 package agent
 
 import (
-	"math/rand"
 	"net"
 	"net/http"
 	"runtime/debug"
@@ -29,6 +28,7 @@ import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/history"
 	"github.com/gravitational/satellite/lib/history/sqlite"
+	"github.com/gravitational/satellite/utils"
 
 	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
@@ -100,19 +100,22 @@ type Config struct {
 	// Tags is a trivial means for adding extra semantic information to an agent.
 	Tags map[string]string
 
-	// Cache is a short-lived storage used by the agent to persist latest health stats.
-	cache.Cache
-
 	// DBPath specifies the location of the database to be used to store timeline.
 	DBPath string
 
 	// RetentionDuration specifies the duration to store timeline events.
 	RetentionDuration time.Duration
+
+	// Clock to be used for internal time keeping.
+	Clock clockwork.Clock
+
+	// Cache is a short-lived storage used by the agent to persist latest health stats.
+	cache.Cache
 }
 
 // New creates an instance of an agent based on configuration options given in config.
 func New(config *Config) (Agent, error) {
-	if err := config.Check(); err != nil {
+	if err := config.CheckAndSetDefaults(); err != nil {
 		return nil, trace.Wrap(err)
 	}
 
@@ -122,10 +125,6 @@ func New(config *Config) (Agent, error) {
 	client, err := NewSerfClient(clientConfig)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to connect to serf")
-	}
-
-	if config.Tags == nil {
-		config.Tags = make(map[string]string)
 	}
 
 	err = client.UpdateTags(config.Tags, nil)
@@ -141,16 +140,16 @@ func New(config *Config) (Agent, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timelineInitTimeout)
 	defer cancel()
 
-	timeline, err := sqlite.NewTimeline(ctx, sqlite.Config{
+	sqliteConfig := sqlite.Config{
 		DBPath:            config.DBPath,
 		RetentionDuration: config.RetentionDuration,
-		Clock:             clockwork.NewRealClock(),
-	})
+		Clock:             config.Clock,
+	}
+	timeline, err := sqlite.NewTimeline(ctx, sqliteConfig)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to initialize timeline")
 	}
 
-	clock := clockwork.NewRealClock()
 	agent := &agent{
 		Config:                  *config,
 		SerfClient:              client,
@@ -158,9 +157,9 @@ func New(config *Config) (Agent, error) {
 		name:                    config.Name,
 		cache:                   config.Cache,
 		dialRPC:                 DefaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
-		statusClock:             clock,
-		recycleClock:            clock,
-		timelineClock:           clock,
+		statusClock:             config.Clock,
+		recycleClock:            config.Clock,
+		timelineClock:           config.Clock,
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
 		localStatus:             emptyNodeStatus(config.Name),
 		metricsListener:         metricsListener,
@@ -174,8 +173,10 @@ func New(config *Config) (Agent, error) {
 	return agent, nil
 }
 
-// Check validates this configuration object
-func (r Config) Check() error {
+// CheckAndSetDefaults validates this configuration object.
+// Config values that were not specified will be set to their default values if
+// available.
+func (r Config) CheckAndSetDefaults() error {
 	var errors []error
 
 	if r.CAFile == "" {
@@ -196,6 +197,18 @@ func (r Config) Check() error {
 
 	if len(r.RPCAddrs) == 0 {
 		errors = append(errors, trace.BadParameter("at least one RPC address must be provided"))
+	}
+
+	if r.DBPath == "" {
+		errors = append(errors, trace.BadParameter("sqlite database path must be provided"))
+	}
+
+	if r.Tags == nil {
+		r.Tags = make(map[string]string)
+	}
+
+	if r.Clock == nil {
+		r.Clock = clockwork.NewRealClock()
 	}
 
 	return trace.NewAggregate(errors...)
@@ -228,6 +241,8 @@ type agent struct {
 	done chan struct{}
 
 	// TODO: do we need separate clocks here?
+	// Remove when refactoring. Just use Config.Clock.
+
 	// These clocks abstract away access to the time package to allow
 	// testing.
 	statusClock   clockwork.Clock
@@ -263,7 +278,7 @@ func (r *agent) Start() error {
 	errChan := make(chan error, 1)
 
 	go r.statusUpdateLoop()
-	go r.timelineUpdateLoop()
+	go r.timelineUpdateLoop(context.TODO())
 
 	if r.metricsListener != nil {
 		go func() {
@@ -578,67 +593,89 @@ func (r *agent) getStatusFrom(ctx context.Context, member serf.Member, respc cha
 	}
 }
 
-// timelineUpdateLoop periodically updates the status timeline by comparing
-// changes in local status and merging a timeline from another member.
-func (r *agent) timelineUpdateLoop() {
+// timelineUpdateLoop periodically updates the status timeline.
+func (r *agent) timelineUpdateLoop(ctx context.Context) {
 	ticker := r.timelineClock.NewTicker(statusUpdateTimeout)
 	defer ticker.Stop()
 
+	// index is used select another member of the cluster.
+	// Type uint16 so limited to 0 - 65535. Assuming clusters will not have
+	// more than that many members.
+	var index uint16
+
 	for range ticker.Chan() {
-		if r.isDone() {
+		if utils.IsContextDone(ctx) {
+			log.Info("Timeline update loop is stopping.")
 			return
 		}
 
-		if err := r.updateTimeline(); err != nil {
-			log.WithError(err).Warnf("Error updating timeline.")
+		if err := r.updateLocalChanges(ctx); err != nil {
+			log.WithError(err).Warn("Error updating local timeline changes.")
+			continue
 		}
+
+		member, err := r.selectMember(int(index))
+		if err != nil {
+			log.WithError(err).Warn("Failed to select cluster member.")
+			continue
+		}
+
+		if err := r.updateRemoteChanges(ctx, member); err != nil {
+			log.WithError(err).Warn("Error updating local timeline changes.")
+			continue
+		}
+
+		index++
 	}
 }
 
-// updateTimeline updates the timeline with any new status changes.
-func (r *agent) updateTimeline() error {
-	ctx, cancel := context.WithTimeout(context.Background(), r.statusQueryReplyTimeout)
+// updateLocalChanges updates the timeline with any new status changes found on
+// the local node.
+func (r *agent) updateLocalChanges(ctx context.Context) error {
+	ctxUpdate, cancel := context.WithTimeout(ctx, updateTimelineTimeout)
 	defer cancel()
 
-	// Update local status changes
-	if status := r.LocalStatus(); status != nil {
-		if err := r.Timeline.RecordStatus(ctx, status); err != nil {
-			return trace.Wrap(err)
-		}
-	}
-
-	// Collect timeline from another cluster member
-	timeline, err := r.collectTimeline(ctx)
-	if err != nil {
+	if err := r.Timeline.RecordStatus(ctxUpdate, r.LocalStatus()); err != nil {
 		return trace.Wrap(err)
-	}
-
-	// Merge timelines
-	if timeline != nil {
-		if err := r.Timeline.RecordTimeline(ctx, timeline); err != nil {
-			return trace.Wrap(err)
-		}
 	}
 
 	return nil
 }
 
-// collectTimeline collects timeline from a random member.
-func (r *agent) collectTimeline(ctx context.Context) (timeline []*pb.TimelineEvent, err error) {
+// updateRemoteChanges updates the timeline with events from another member in
+// the cluster.
+func (r *agent) updateRemoteChanges(ctx context.Context, member serf.Member) error {
+	ctxQuery, cancel := context.WithTimeout(ctx, r.statusQueryReplyTimeout)
+	defer cancel()
+	timeline, err := r.getTimelineFrom(ctxQuery, member)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	ctxUpdate, cancel := context.WithTimeout(ctx, updateTimelineTimeout)
+	defer cancel()
+	if err := r.Timeline.RecordTimeline(ctxUpdate, timeline); err != nil {
+		return trace.Wrap(err)
+	}
+
+	return nil
+}
+
+// selectMember will select a member based using the index.
+// The index is unit16 so will be limited to ~65000. Assuming clusters will not
+// have over that many members.
+func (r *agent) selectMember(index int) (member serf.Member, err error) {
 	members, err := r.SerfClient.Members()
 	if err != nil {
-		return timeline, trace.Wrap(err, "failed to query serf members")
+		return member, trace.Wrap(err, "failed to query serf members")
 	}
+	// Ignore members that have left the cluster.
 	members = filterLeft(members)
+	// Ignore self.
 	members = filterMember(members, r.name)
 
-	// Select random member.
-	seed := rand.NewSource(time.Now().UnixNano())
-	randGen := rand.New(seed)
-	member := members[randGen.Intn(len(members))]
-
-	// Collect timeline from a single member.
-	return r.getTimelineFrom(ctx, member)
+	numAvailable := len(members)
+	return members[index%numAvailable], nil
 }
 
 // getTimelineFrom obtains timeline from the node identified by member.
@@ -649,21 +686,11 @@ func (r *agent) getTimelineFrom(ctx context.Context, member serf.Member) (events
 	}
 	defer client.Close()
 
-	timeline, err := client.Timeline(ctx)
+	timeline, err := client.Timeline(ctx, &pb.TimelineRequest{})
 	if err != nil {
 		return events, trace.Wrap(err)
 	}
 	return timeline.GetEvents(), nil
-}
-
-// isDone returns true if done channel is closed.
-func (r *agent) isDone() bool {
-	select {
-	case <-r.done:
-		return true
-	default:
-		return false
-	}
 }
 
 // recentStatus returns the last known cluster status.

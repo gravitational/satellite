@@ -91,9 +91,9 @@ func run() error {
 		// `history` command
 		chistory         = app.Command("history", "Query cluster status history")
 		chistoryRPCPort  = chistory.Flag("rpc-port", "Local agent RPC port").Default("7575").Int()
-		chistoryCAFile   = cstatus.Flag("ca-file", "CA certificate for verifying server certificates").ExistingFile()
-		chistoryCertFile = cstatus.Flag("client-cert-file", "mTLS client certificate file").ExistingFile()
-		chistoryKeyFile  = cstatus.Flag("client-key-file", "mTLS client key file").ExistingFile()
+		chistoryCAFile   = chistory.Flag("ca-file", "CA certificate for verifying server certificates").ExistingFile()
+		chistoryCertFile = chistory.Flag("client-cert-file", "mTLS client certificate file").ExistingFile()
+		chistoryKeyFile  = chistory.Flag("client-key-file", "mTLS client key file").ExistingFile()
 
 		// checks command
 		cchecks = app.Command("checks", "Run local compatibility checks")

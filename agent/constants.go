@@ -42,6 +42,10 @@ const (
 	// timeline to initialize.
 	timelineInitTimeout = 5 * time.Second
 
+	// updateTimelineTimeout specifies the amount of time to wait for events
+	// to be stored into the timeline.
+	updateTimelineTimeout = 5 * time.Second
+
 	// statusUpdateTimeout is the amount of time to wait between status update collections.
 	statusUpdateTimeout = 30 * time.Second
 

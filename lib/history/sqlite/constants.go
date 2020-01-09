@@ -19,6 +19,9 @@ package sqlite
 import "time"
 
 const (
+	// defaultTimelineRetention defines the default duration to store timeline events.
+	defaultTimelineRentention = time.Hour * 24 * 7
+
 	// evictionFrequency is the time between eviction loops.
 	evictionFrequency = time.Hour
 
@@ -48,10 +51,10 @@ CREATE TABLE IF NOT EXISTS events (
 	id INTEGER PRIMARY KEY,
 	timestamp DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	type TEXT NOT NULL,
-	node TEXT,
-	probe TEXT,
-	oldState TEXT,
-	newState TEXT,
+	node TEXT DEFAULT '',
+	probe TEXT DEFAULT '',
+	oldState TEXT DEFAULT '',
+	newState TEXT DEFAULT '',
 	UNIQUE(timestamp, type, node, probe, oldState, newState)
 )
 `
@@ -72,4 +75,4 @@ INSERT INTO events (
 `
 
 // deleteOldFromEvents is sql statement to delete entries from `events` table.
-const deleteOldFromEvents = `DELETE FROM events WHERE id IN (SELECT id FROM events WHERE timestamp < ?)`
+const deleteOldFromEvents = `DELETE FROM events WHERE timestamp < ?`

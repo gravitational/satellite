@@ -1,0 +1,3 @@
+ansible/inventory
+ansible/ssh-config
+.vagrant

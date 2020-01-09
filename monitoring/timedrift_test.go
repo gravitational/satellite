@@ -166,7 +166,8 @@ func (a *mockedTimeAgentClient) Time(ctx context.Context, req *agentpb.TimeReque
 	}, nil
 }
 
-func (a *mockedTimeAgentClient) Timeline(ctx context.Context) (*agentpb.TimelineResponse, error) {
+func (a *mockedTimeAgentClient) Timeline(ctx context.Context,
+	req *agentpb.TimelineRequest) (*agentpb.TimelineResponse, error) {
 	return nil, nil
 }
 
