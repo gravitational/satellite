@@ -19,7 +19,8 @@ package memory
 import (
 	"context"
 	"testing"
-	"time"
+
+	"github.com/gravitational/satellite/lib/test"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/history"
@@ -44,7 +45,7 @@ func (s *InMemorySuite) SetUpSuite(c *C) {
 // TestRecordStatus simply tests that the timeline can successfully record
 // a status.
 func (s *InMemorySuite) TestRecordStatus(c *C) {
-	withTimeout(func(ctx context.Context) {
+	test.WithTimeout(func(ctx context.Context) {
 		timeline := s.newTimeline()
 		node := "test-node"
 		old := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
@@ -56,13 +57,13 @@ func (s *InMemorySuite) TestRecordStatus(c *C) {
 		c.Assert(err, IsNil)
 
 		expected := []*pb.TimelineEvent{history.NewNodeRecovered(s.clock.Now(), node)}
-		c.Assert(actual, DeepEquals, expected, Commentf("Expected the status to be recorded."))
+		c.Assert(actual, test.DeepCompare, expected, Commentf("Expected the status to be recorded."))
 	})
 }
 
 // TestFIFOEviction tests the FIFO eviction policy of the timeline.
 func (s *InMemorySuite) TestFIFOEviction(c *C) {
-	withTimeout(func(ctx context.Context) {
+	test.WithTimeout(func(ctx context.Context) {
 		// Limit timeline capacity to 1.
 		// Necessary to easily test if events are evicted if max capacity is reached.
 		timeline := s.newLimitedTimeline(1)
@@ -80,7 +81,7 @@ func (s *InMemorySuite) TestFIFOEviction(c *C) {
 		c.Assert(err, IsNil)
 
 		expected := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), node)}
-		c.Assert(actual, DeepEquals, expected, Commentf("Expected degraded event."))
+		c.Assert(actual, test.DeepCompare, expected, Commentf("Expected degraded event."))
 	})
 }
 
@@ -95,14 +96,4 @@ func (s *InMemorySuite) newTimeline() *Timeline {
 // newLimitedTimeline initializes a new timeline with provided capcity.
 func (s *InMemorySuite) newLimitedTimeline(capacity int) *Timeline {
 	return NewTimeline(s.clock, capacity)
-}
-
-// withTimeout will run the provided test case with the default test timeout.
-func withTimeout(fn func(ctx context.Context)) {
-	// testTimeout specifies the overall time limit for a test.
-	const testTimeout = 10 * time.Second
-
-	ctx, cancel := context.WithTimeout(context.TODO(), testTimeout)
-	defer cancel()
-	fn(ctx)
 }
