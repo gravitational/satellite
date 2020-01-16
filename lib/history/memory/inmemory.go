@@ -15,6 +15,7 @@ limitations under the License.
 */
 
 // Package memory provide Timeline implementation stored in memory.
+// Mainly used for development or testing purposes.
 package memory
 
 import (

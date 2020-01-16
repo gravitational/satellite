@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/gravitational/satellite/agent/backend/inmemory"
-
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/history/memory"
