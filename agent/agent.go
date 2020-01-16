@@ -249,17 +249,22 @@ func (r *agent) GetConfig() Config {
 // Start starts the agent's background tasks.
 func (r *agent) Start() error {
 	// TODO: Modify Start to accept a context.
-	ctx := context.TODO()
+	ctx, cancel := context.WithCancel(context.TODO())
 	go r.recycleLoop(ctx)
 	go r.statusUpdateLoop(ctx)
 	go r.timelineUpdateLoop(ctx)
-	go r.serveMetrics(ctx)
+	go r.serveMetrics()
+
+	go func() {
+		<-r.done
+		cancel()
+	}()
 	return nil
 }
 
 // serveMetrics registers the prometheus metrics handler and starts accepting
 // connections on the metrics listener.
-func (r *agent) serveMetrics(ctx context.Context) {
+func (r *agent) serveMetrics() {
 	if r.metricsListener == nil {
 		return
 	}
