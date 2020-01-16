@@ -111,11 +111,12 @@ func (r *server) UpdateTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb
 // Stop stops the grpc server and any additional http servers.
 // TODO: modify Stop to return error
 func (r *server) Stop() {
+	// TODO: pass context in as a parameter.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := r.stopHTTPServers(ctx); err != nil {
-		log.WithError(err).Error("All HTTP servers failed to shutdown.")
+		log.WithError(err).Error("Some HTTP servers failed to shutdown.")
 	}
 
 	r.Server.Stop()

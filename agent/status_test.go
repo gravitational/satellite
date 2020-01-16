@@ -18,119 +18,143 @@ package agent
 
 import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/lib/test"
 
 	serf "github.com/hashicorp/serf/client"
 	. "gopkg.in/check.v1"
 )
 
 func (*AgentSuite) TestSetsSystemStatusFromMemberStatuses(c *C) {
-	resp := &pb.StatusResponse{Status: &pb.SystemStatus{}}
-	resp.Status.Nodes = []*pb.NodeStatus{
-		{
-			MemberStatus: &pb.MemberStatus{
-				Name:   "foo",
-				Status: pb.MemberStatus_Alive,
-				Tags:   tags{"role": string(RoleNode)},
+	status := pb.SystemStatus{
+		Nodes: []*pb.NodeStatus{
+			{
+				Name: "foo",
+				MemberStatus: &pb.MemberStatus{
+					Name:   "foo",
+					Status: pb.MemberStatus_Alive,
+					Tags:   tags{"role": string(RoleNode)},
+				},
 			},
-		},
-		{
-			MemberStatus: &pb.MemberStatus{
-				Name:   "bar",
-				Status: pb.MemberStatus_Failed,
-				Tags:   tags{"role": string(RoleMaster)},
+			{
+				Name: "bar",
+				MemberStatus: &pb.MemberStatus{
+					Name:   "bar",
+					Status: pb.MemberStatus_Failed,
+					Tags:   tags{"role": string(RoleMaster)},
+				},
 			},
 		},
 	}
+	actual := status
+	setSystemStatus(&actual, []serf.Member{{Name: "foo"}, {Name: "bar"}})
 
-	setSystemStatus(resp.Status, []serf.Member{{Name: "foo"}, {Name: "bar"}})
-	c.Assert(resp.Status.Status, Equals, pb.SystemStatus_Degraded)
+	expected := status
+	expected.Status = pb.SystemStatus_Degraded
+
+	c.Assert(actual, test.DeepCompare, expected, Commentf("Expected degraded system status."))
 }
 
 func (*AgentSuite) TestSetsSystemStatusFromNodeStatuses(c *C) {
-	resp := &pb.StatusResponse{Status: &pb.SystemStatus{}}
-	resp.Status.Nodes = []*pb.NodeStatus{
-		{
-			Name:   "foo",
-			Status: pb.NodeStatus_Running,
-			MemberStatus: &pb.MemberStatus{
+	status := pb.SystemStatus{
+		Nodes: []*pb.NodeStatus{
+			{
 				Name:   "foo",
-				Status: pb.MemberStatus_Alive,
-				Tags:   tags{"role": string(RoleNode)},
+				Status: pb.NodeStatus_Running,
+				MemberStatus: &pb.MemberStatus{
+					Name:   "foo",
+					Status: pb.MemberStatus_Alive,
+					Tags:   tags{"role": string(RoleNode)},
+				},
 			},
-		},
-		{
-			Name:   "bar",
-			Status: pb.NodeStatus_Degraded,
-			MemberStatus: &pb.MemberStatus{
+			{
 				Name:   "bar",
-				Status: pb.MemberStatus_Alive,
-				Tags:   tags{"role": string(RoleMaster)},
-			},
-			Probes: []*pb.Probe{
-				{
-					Checker:  "qux",
-					Status:   pb.Probe_Failed,
-					Severity: pb.Probe_Critical,
-					Error:    "not available",
+				Status: pb.NodeStatus_Degraded,
+				MemberStatus: &pb.MemberStatus{
+					Name:   "bar",
+					Status: pb.MemberStatus_Alive,
+					Tags:   tags{"role": string(RoleMaster)},
+				},
+				Probes: []*pb.Probe{
+					{
+						Checker:  "qux",
+						Status:   pb.Probe_Failed,
+						Severity: pb.Probe_Critical,
+						Error:    "not available",
+					},
 				},
 			},
 		},
 	}
 
-	setSystemStatus(resp.Status, []serf.Member{{Name: "foo"}, {Name: "bar"}})
-	c.Assert(resp.Status.Status, Equals, pb.SystemStatus_Degraded)
+	actual := status
+	setSystemStatus(&actual, []serf.Member{{Name: "foo"}, {Name: "bar"}})
+
+	expected := status
+	expected.Status = pb.SystemStatus_Degraded
+
+	c.Assert(actual, test.DeepCompare, expected, Commentf("Expected degraded system status."))
 }
 
 func (*AgentSuite) TestDetectsNoMaster(c *C) {
-	resp := &pb.StatusResponse{Status: &pb.SystemStatus{}}
-	resp.Status.Nodes = []*pb.NodeStatus{
-		{
-			Name: "foo",
-			MemberStatus: &pb.MemberStatus{
-				Name:   "foo",
-				Status: pb.MemberStatus_Alive,
-				Tags:   tags{"role": string(RoleNode)},
+	status := pb.SystemStatus{
+		Nodes: []*pb.NodeStatus{
+			{
+				Name: "foo",
+				MemberStatus: &pb.MemberStatus{
+					Name:   "foo",
+					Status: pb.MemberStatus_Alive,
+					Tags:   tags{"role": string(RoleNode)},
+				},
 			},
-		},
-		{
-			Name: "bar",
-			MemberStatus: &pb.MemberStatus{
-				Name:   "bar",
-				Status: pb.MemberStatus_Alive,
-				Tags:   tags{"role": string(RoleNode)},
+			{
+				Name: "bar",
+				MemberStatus: &pb.MemberStatus{
+					Name:   "bar",
+					Status: pb.MemberStatus_Alive,
+					Tags:   tags{"role": string(RoleNode)},
+				},
 			},
 		},
 	}
 
-	setSystemStatus(resp.Status, []serf.Member{{Name: "foo"}, {Name: "bar"}})
-	c.Assert(resp.Status.Status, Equals, pb.SystemStatus_Degraded)
-	c.Assert(resp.Status.Summary, Equals, errNoMaster.Error())
+	actual := status
+	setSystemStatus(&actual, []serf.Member{{Name: "foo"}, {Name: "bar"}})
+
+	expected := status
+	expected.Status = pb.SystemStatus_Degraded
+	expected.Summary = errNoMaster.Error()
+
+	c.Assert(actual, test.DeepCompare, expected, Commentf("Expected degraded system status."))
 }
 
 func (*AgentSuite) TestSetsOkSystemStatus(c *C) {
-	resp := &pb.StatusResponse{Status: &pb.SystemStatus{}}
-	resp.Status.Nodes = []*pb.NodeStatus{
-		{
-			Name:   "foo",
-			Status: pb.NodeStatus_Running,
-			MemberStatus: &pb.MemberStatus{
+	status := pb.SystemStatus{
+		Nodes: []*pb.NodeStatus{
+			{
 				Name:   "foo",
-				Status: pb.MemberStatus_Alive,
-				Tags:   tags{"role": string(RoleNode)},
+				Status: pb.NodeStatus_Running,
+				MemberStatus: &pb.MemberStatus{
+					Name:   "foo",
+					Status: pb.MemberStatus_Alive,
+					Tags:   tags{"role": string(RoleNode)},
+				},
 			},
-		},
-		{
-			Name:   "bar",
-			Status: pb.NodeStatus_Running,
-			MemberStatus: &pb.MemberStatus{
+			{
 				Name:   "bar",
-				Status: pb.MemberStatus_Alive,
-				Tags:   tags{"role": string(RoleMaster)},
+				Status: pb.NodeStatus_Running,
+				MemberStatus: &pb.MemberStatus{
+					Name:   "bar",
+					Status: pb.MemberStatus_Alive,
+					Tags:   tags{"role": string(RoleMaster)},
+				},
 			},
 		},
 	}
+	actual := status
+	setSystemStatus(&actual, []serf.Member{{Name: "foo"}, {Name: "bar"}})
 
-	expectedStatus := pb.SystemStatus_Running
-	setSystemStatus(resp.Status, []serf.Member{{Name: "foo"}, {Name: "bar"}})
-	c.Assert(resp.Status.Status, Equals, expectedStatus)
+	expected := status
+	expected.Status = pb.SystemStatus_Running
+
+	c.Assert(actual, test.DeepCompare, expected, Commentf("Expected running system status."))
 }
