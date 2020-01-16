@@ -164,6 +164,12 @@ type agent struct {
 	// Defaults to statusQueryReplyTimeout if unspecified
 	statusQueryReplyTimeout time.Duration
 
+	// memberIndex is used to select the next member to collect timeline data
+	// from.
+	// Type uint16 so limited to 0 - 65535. Assuming clusters will not have
+	// more than that many members.
+	memberIndex uint16
+
 	// Config is the agent configuration.
 	Config
 
@@ -443,21 +449,27 @@ func (r *agent) statusUpdateLoop(ctx context.Context) {
 			log.Info("Status update loop is stopping.")
 			return
 		}
-		status, err := r.collectStatus(ctx)
-		if err != nil {
-			log.WithError(err).Warnf("Error collecting system status.")
-			continue
-		}
-
-		if status == nil {
-			continue
-		}
-
-		if err := r.Cache.UpdateStatus(status); err != nil {
-			log.WithError(err).Warnf("Error updating system status in cache.")
-			continue
+		if err := r.updateStatus(ctx); err != nil {
+			log.WithError(err).Warnf("Failed to updates status.")
 		}
 	}
+}
+
+// updateStatus updates the current status.
+func (r *agent) updateStatus(ctx context.Context) error {
+	ctxStatus, cancel := context.WithTimeout(ctx, r.statusQueryReplyTimeout)
+	defer cancel()
+	status, err := r.collectStatus(ctxStatus)
+	if err != nil {
+		return trace.Wrap(err, "error collecting system status")
+	}
+	if status == nil {
+		return nil
+	}
+	if err := r.Cache.UpdateStatus(status); err != nil {
+		return trace.Wrap(err, "error updating system status in cache")
+	}
+	return nil
 }
 
 // collectStatus obtains the cluster status by querying statuses of
@@ -567,35 +579,31 @@ func (r *agent) timelineUpdateLoop(ctx context.Context) {
 	ticker := r.Clock.NewTicker(statusUpdateTimeout)
 	defer ticker.Stop()
 
-	// index is used select another member of the cluster.
-	// Type uint16 so limited to 0 - 65535. Assuming clusters will not have
-	// more than that many members.
-	var index uint16
-
 	for range ticker.Chan() {
 		if utils.IsContextDone(ctx) {
 			log.Info("Timeline update loop is stopping.")
 			return
 		}
-
-		if err := r.updateLocalChanges(ctx); err != nil {
-			log.WithError(err).Warn("Error updating local timeline changes.")
-			continue
+		if err := r.updateTimeline(ctx); err != nil {
+			log.WithError(err).Error("Failed to update timeline.")
 		}
-
-		member, err := r.selectMember(int(index))
-		if err != nil {
-			log.WithError(err).Debug("Failed to select remote cluster member for timeline merging.")
-			continue
-		}
-
-		if err := r.updateRemoteChanges(ctx, member); err != nil {
-			log.WithError(err).Warn("Error updating remote timeline changes.")
-			continue
-		}
-
-		index++
 	}
+}
+
+// updateTimeline records any status changes to the timeline.
+func (r *agent) updateTimeline(ctx context.Context) error {
+	if err := r.updateLocalChanges(ctx); err != nil {
+		return trace.Wrap(err, "error updating local timeline changes")
+	}
+	r.memberIndex++
+	member, err := r.selectMember(int(r.memberIndex))
+	if err != nil {
+		return nil
+	}
+	if err := r.updateRemoteChanges(ctx, member); err != nil {
+		return trace.Wrap(err, "error updating remote timeline changes")
+	}
+	return nil
 }
 
 // updateLocalChanges updates the timeline with any new status changes found on

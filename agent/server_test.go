@@ -471,28 +471,6 @@ func (r *AgentSuite) newAgent(config testAgentConfig) *agent {
 	}
 }
 
-// updateStatus manually triggers status updates without waiting for status
-// update loop.
-func (r *testAgent) updateStatus(ctx context.Context) error {
-	ctxStatus, cancel := context.WithTimeout(ctx, r.statusQueryReplyTimeout)
-	defer cancel()
-
-	status, err := r.collectStatus(ctxStatus)
-	if err != nil {
-		return trace.Wrap(err)
-	}
-
-	if status == nil {
-		return nil
-	}
-
-	if err = r.Cache.UpdateStatus(status); err != nil {
-		return trace.Wrap(err)
-	}
-
-	return nil
-}
-
 // testDialRPC is a test implementation of the dialRPC interface,
 // that creates an RPC client bound to localhost.
 func testDialRPC(port int, certFile, keyFile string) DialRPC {
