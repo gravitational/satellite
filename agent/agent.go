@@ -181,7 +181,7 @@ type agent struct {
 }
 
 // New creates an instance of an agent based on configuration options given in config.
-func New(config Config) (Agent, error) {
+func New(config *Config) (Agent, error) {
 	if err := config.CheckAndSetDefaults(); err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -209,7 +209,7 @@ func New(config Config) (Agent, error) {
 		localStatus:             emptyNodeStatus(config.Name),
 		metricsListener:         metricsListener,
 		done:                    make(chan struct{}),
-		Config:                  config,
+		Config:                  *config,
 		SerfClient:              client,
 		Timeline:                timeline,
 	}

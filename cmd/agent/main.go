@@ -26,10 +26,12 @@ import (
 	"github.com/gravitational/satellite/agent/backend/inmemory"
 	"github.com/gravitational/satellite/agent/cache/multiplex"
 	"github.com/gravitational/satellite/cmd"
+	"github.com/gravitational/satellite/lib/history/sqlite"
 	"github.com/gravitational/satellite/monitoring"
 	"github.com/gravitational/trace"
 	"github.com/gravitational/version"
 
+	serf "github.com/hashicorp/serf/client"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
@@ -153,17 +155,22 @@ func run() error {
 		}
 
 		agentConfig := &agent.Config{
-			Name:              *cagentName,
-			RPCAddrs:          *cagentRPCAddrs,
-			SerfRPCAddr:       *cagentSerfRPCAddr,
-			MetricsAddr:       *cagentMetricsAddr,
-			Tags:              *cagentTags,
-			Cache:             multiplex.New(cache, backends...),
-			CAFile:            *cagentCAFile,
-			CertFile:          *cagentCertFile,
-			KeyFile:           *cagentKeyFile,
-			DBPath:            *cagentDBPath,
-			RetentionDuration: *cagentRetention,
+			Name:        *cagentName,
+			RPCAddrs:    *cagentRPCAddrs,
+			MetricsAddr: *cagentMetricsAddr,
+			Tags:        *cagentTags,
+			Cache:       multiplex.New(cache, backends...),
+			CAFile:      *cagentCAFile,
+			CertFile:    *cagentCertFile,
+			KeyFile:     *cagentKeyFile,
+
+			SerfConfig: serf.Config{
+				Addr: *cagentSerfRPCAddr,
+			},
+			TimelineConfig: sqlite.Config{
+				DBPath:            *cagentDBPath,
+				RetentionDuration: *cagentRetention,
+			},
 		}
 		monitoringConfig := &config{
 			role:                 agent.Role(agentRole),
