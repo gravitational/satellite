@@ -24,7 +24,6 @@ import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/history"
 
-	"github.com/gravitational/trace"
 	"github.com/jonboulle/clockwork"
 )
 
@@ -71,6 +70,7 @@ func (t *Timeline) RecordStatus(ctx context.Context, status *pb.NodeStatus) erro
 	for _, event := range events {
 		t.addEvent(event)
 	}
+	t.filterDuplicates()
 	t.lastStatus = status
 	return nil
 }
@@ -78,7 +78,16 @@ func (t *Timeline) RecordStatus(ctx context.Context, status *pb.NodeStatus) erro
 // RecordTimeline merges the provided events into the current timeline.
 // Duplicate events will be ignored.
 func (t *Timeline) RecordTimeline(ctx context.Context, events []*pb.TimelineEvent) error {
-	return trace.NotImplemented("not implemented")
+	if len(events) == 0 {
+		return nil
+	}
+	t.Lock()
+	defer t.Unlock()
+	for _, event := range events {
+		t.addEvent(event)
+	}
+	t.filterDuplicates()
+	return nil
 }
 
 // GetEvents returns a filtered list of events based on the provided params.
@@ -101,4 +110,17 @@ func (t *Timeline) addEvent(event *pb.TimelineEvent) {
 func (t *Timeline) getFilteredEvents(params map[string]string) (events []*pb.TimelineEvent) {
 	// TODO: for now just return the unfiltered events.
 	return t.events
+}
+
+// filterDuplicates removes duplicate events.
+func (t *Timeline) filterDuplicates() {
+	set := make(map[*pb.TimelineEvent]struct{})
+	filteredEvents := make([]*pb.TimelineEvent, 0, t.capacity)
+	for _, event := range t.events {
+		if _, ok := set[event]; !ok {
+			set[event] = struct{}{}
+			filteredEvents = append(filteredEvents, event)
+		}
+	}
+	t.events = filteredEvents
 }

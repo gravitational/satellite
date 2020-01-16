@@ -20,10 +20,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/gravitational/satellite/lib/test"
-
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/history"
+	"github.com/gravitational/satellite/lib/test"
 
 	"github.com/jonboulle/clockwork"
 	. "gopkg.in/check.v1"
@@ -49,14 +48,12 @@ func (s *InMemorySuite) TestRecordStatus(c *C) {
 		timeline := s.newTimeline()
 		node := "test-node"
 		old := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
+		expected := []*pb.TimelineEvent{history.NewNodeRecovered(s.clock.Now(), node)}
 
-		err := timeline.RecordStatus(ctx, old)
-		c.Assert(err, IsNil)
+		c.Assert(timeline.RecordStatus(ctx, old), IsNil)
 
 		actual, err := timeline.GetEvents(ctx, nil)
 		c.Assert(err, IsNil)
-
-		expected := []*pb.TimelineEvent{history.NewNodeRecovered(s.clock.Now(), node)}
 		c.Assert(actual, test.DeepCompare, expected, Commentf("Expected the status to be recorded."))
 	})
 }
@@ -70,18 +67,30 @@ func (s *InMemorySuite) TestFIFOEviction(c *C) {
 		node := "test-node"
 		old := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
 		new := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Degraded}
+		expected := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), node)}
 
 		// Recording two statuses should result in timeline to exceed capacity.
-		err := timeline.RecordStatus(ctx, old)
-		c.Assert(err, IsNil)
-		err = timeline.RecordStatus(ctx, new)
-		c.Assert(err, IsNil)
+		c.Assert(timeline.RecordStatus(ctx, old), IsNil)
+		c.Assert(timeline.RecordStatus(ctx, new), IsNil)
 
 		actual, err := timeline.GetEvents(ctx, nil)
 		c.Assert(err, IsNil)
-
-		expected := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), node)}
 		c.Assert(actual, test.DeepCompare, expected, Commentf("Expected degraded event."))
+	})
+}
+
+func (s *InMemorySuite) TestIgnoreDuplicate(c *C) {
+	test.WithTimeout(func(ctx context.Context) {
+		timeline := s.newTimeline()
+		node := "test-node"
+		events := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), node)}
+
+		c.Assert(timeline.RecordTimeline(ctx, events), IsNil)
+		c.Assert(timeline.RecordTimeline(ctx, events), IsNil)
+
+		actual, err := timeline.GetEvents(ctx, nil)
+		c.Assert(err, IsNil)
+		c.Assert(actual, test.DeepCompare, events, Commentf("Expected a single event."))
 	})
 }
 
