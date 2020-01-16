@@ -84,9 +84,10 @@ func (s *InMemorySuite) TestIgnoreDuplicate(c *C) {
 		timeline := s.newTimeline()
 		node := "test-node"
 		events := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), node)}
+		duplicates := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), node)}
 
 		c.Assert(timeline.RecordTimeline(ctx, events), IsNil)
-		c.Assert(timeline.RecordTimeline(ctx, events), IsNil)
+		c.Assert(timeline.RecordTimeline(ctx, duplicates), IsNil)
 
 		actual, err := timeline.GetEvents(ctx, nil)
 		c.Assert(err, IsNil)

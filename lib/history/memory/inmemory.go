@@ -21,6 +21,7 @@ package memory
 import (
 	"context"
 	"sync"
+	"time"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/history"
@@ -115,13 +116,78 @@ func (t *Timeline) getFilteredEvents(params map[string]string) (events []*pb.Tim
 
 // filterDuplicates removes duplicate events.
 func (t *Timeline) filterDuplicates() {
-	set := make(map[*pb.TimelineEvent]struct{})
+	set := make(map[comparableEvent]struct{})
 	filteredEvents := make([]*pb.TimelineEvent, 0, t.capacity)
 	for _, event := range t.events {
-		if _, ok := set[event]; !ok {
-			set[event] = struct{}{}
+		comparable := newComparable(event)
+		if _, ok := set[comparable]; !ok {
+			set[comparable] = struct{}{}
 			filteredEvents = append(filteredEvents, event)
 		}
 	}
 	t.events = filteredEvents
 }
+
+// comparableEvent defines an event in a comparable struct.
+// Used when filtering duplicate events.
+type comparableEvent struct {
+	timestamp time.Time
+	eventType string
+	node      string
+	probe     string
+	old       string
+	new       string
+}
+
+func newComparable(event *pb.TimelineEvent) comparableEvent {
+	comparable := comparableEvent{
+		timestamp: event.GetTimestamp().ToTime(),
+	}
+	switch event.GetData().(type) {
+	case *pb.TimelineEvent_ClusterRecovered:
+		comparable.eventType = clusterRecoveredType
+	case *pb.TimelineEvent_ClusterDegraded:
+		comparable.eventType = clusterDegradedType
+	case *pb.TimelineEvent_NodeAdded:
+		e := event.GetNodeAdded()
+		comparable.eventType = nodeAddedType
+		comparable.node = e.GetNode()
+	case *pb.TimelineEvent_NodeRemoved:
+		e := event.GetNodeRemoved()
+		comparable.eventType = nodeRemovedType
+		comparable.node = e.GetNode()
+	case *pb.TimelineEvent_NodeRecovered:
+		e := event.GetNodeRecovered()
+		comparable.eventType = nodeRecoveredType
+		comparable.node = e.GetNode()
+	case *pb.TimelineEvent_NodeDegraded:
+		e := event.GetNodeDegraded()
+		comparable.eventType = nodeDegradedType
+		comparable.node = e.GetNode()
+	case *pb.TimelineEvent_ProbeSucceeded:
+		e := event.GetProbeSucceeded()
+		comparable.eventType = probeSucceededType
+		comparable.node = e.GetNode()
+		comparable.probe = e.GetProbe()
+	case *pb.TimelineEvent_ProbeFailed:
+		e := event.GetProbeFailed()
+		comparable.eventType = probeFailedType
+		comparable.node = e.GetNode()
+		comparable.probe = e.GetProbe()
+	default:
+		comparable.eventType = unknownType
+	}
+	return comparable
+}
+
+const (
+	clusterRecoveredType = "ClusterRecovered"
+	clusterDegradedType  = "ClusterDegraded"
+	nodeAddedType        = "NodeAdded"
+	nodeRemovedType      = "NodeRemoved"
+	nodeRecoveredType    = "NodeRecovered"
+	nodeDegradedType     = "NodeDegraded"
+	probeSucceededType   = "ProbeSucceeded"
+	probeFailedType      = "ProbeFailed"
+	unknownType          = "Unknown"
+)
