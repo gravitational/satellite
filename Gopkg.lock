@@ -489,13 +489,13 @@
   revision = "e2103e2c35297fb7e17febb81e49b312087a2372"
 
 [[projects]]
-  branch = "dmitri/update-upstream"
-  digest = "1:ebc334df4f139726a7b9bb59495c3612b064d45b441d8551d5852855d8fdf5e3"
+  digest = "1:606ac2f6a6f9bead6084f97b45da98b2c612efa785febf4d546391a8ba254515"
   name = "github.com/sirupsen/logrus"
   packages = ["."]
   pruneopts = "UT"
-  revision = "b1b7578d8a6f702e625185029eab4922c4cb2a77"
+  revision = "9ebd8dcf727178553227307b785304594abef057"
   source = "github.com/gravitational/logrus"
+  version = "v1.4.3-alpha.1"
 
 [[projects]]
   digest = "1:1b21a2b4058a779f290c7341cd93267492e0ecea6c8b54f64a4a5fd7ff131034"
