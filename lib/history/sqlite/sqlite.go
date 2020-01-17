@@ -184,7 +184,7 @@ func (t *Timeline) RecordTimeline(ctx context.Context, events []*pb.TimelineEven
 	for _, event := range events {
 		if event.GetTimestamp().ToTime().Before(t.getRetentionCutOff()) {
 			log.WithField("filtered-event", event).Debug("Event filtered.")
-			break
+			continue
 		}
 		filtered = append(filtered, event)
 	}
@@ -197,6 +197,7 @@ func (t *Timeline) RecordTimeline(ctx context.Context, events []*pb.TimelineEven
 }
 
 // GetEvents returns a filtered list of events based on the provided params.
+// The filter uses "AND" logic with the params.
 func (t *Timeline) GetEvents(ctx context.Context, params map[string]string) (events []*pb.TimelineEvent, err error) {
 	query, args := prepareQuery(params)
 	rows, err := t.database.QueryxContext(ctx, query, args...)
