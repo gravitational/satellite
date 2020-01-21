@@ -20,6 +20,7 @@ package memory
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -69,9 +70,7 @@ func (t *Timeline) RecordStatus(ctx context.Context, status *pb.NodeStatus) erro
 	t.Lock()
 	defer t.Unlock()
 
-	for _, event := range events {
-		t.addEvent(event)
-	}
+	t.addEvents(events)
 	t.filterDuplicates()
 	t.lastStatus = status
 	return nil
@@ -85,14 +84,14 @@ func (t *Timeline) RecordTimeline(ctx context.Context, events []*pb.TimelineEven
 	}
 	t.Lock()
 	defer t.Unlock()
-	for _, event := range events {
-		t.addEvent(event)
-	}
+
+	t.addEvents(events)
 	t.filterDuplicates()
 	return nil
 }
 
 // GetEvents returns a filtered list of events based on the provided params.
+// Events will be returned in sorted order by timestamp.
 // Context unused for memory Timeline.
 func (t *Timeline) GetEvents(ctx context.Context, params map[string]string) (events []*pb.TimelineEvent, err error) {
 	t.Lock()
@@ -100,12 +99,18 @@ func (t *Timeline) GetEvents(ctx context.Context, params map[string]string) (eve
 	return t.getFilteredEvents(params), nil
 }
 
-// addEvent appends the provided event to the timeline.
-func (t *Timeline) addEvent(event *pb.TimelineEvent) {
-	if len(t.events) >= t.capacity {
-		t.events = t.events[1:]
+// addEvents adds the events into the timeline. Duplicates will be filtered out
+// and events will be stored in sorted order by timestamp.
+func (t *Timeline) addEvents(events []*pb.TimelineEvent) {
+	t.events = append(t.events, events...)
+	t.filterDuplicates()
+	sort.Sort(byTimestamp(t.events))
+
+	// remove events oldest events if timeline is over capacity.
+	index := len(t.events) - t.capacity
+	if index > 0 {
+		t.events = t.events[index:]
 	}
-	t.events = append(t.events, event)
 }
 
 // getFilteredEvents returns a filtered list of events based on the provided params.
@@ -179,6 +184,15 @@ func newComparable(event *pb.TimelineEvent) comparableEvent {
 	}
 	return comparable
 }
+
+// byTimestamp implements sort.Interface. Events are sorted by timestamp.
+type byTimestamp []*pb.TimelineEvent
+
+func (r byTimestamp) Len() int { return len(r) }
+func (r byTimestamp) Less(i, j int) bool {
+	return r[i].GetTimestamp().ToTime().Before(r[j].GetTimestamp().ToTime())
+}
+func (r byTimestamp) Swap(i, j int) { r[i], r[j] = r[j], r[i] }
 
 const (
 	clusterRecoveredType = "ClusterRecovered"

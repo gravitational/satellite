@@ -33,5 +33,6 @@ type Timeline interface {
 	// Duplicate events will be ignored.
 	RecordTimeline(ctx context.Context, events []*pb.TimelineEvent) error
 	// GetEvents returns a filtered list of events based on the provided params.
+	// Events will be returned in sorted order by timestamp.
 	GetEvents(ctx context.Context, params map[string]string) ([]*pb.TimelineEvent, error)
 }
