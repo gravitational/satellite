@@ -52,7 +52,8 @@ type RPCServer interface {
 // server implements RPCServer for an agent.
 type server struct {
 	*grpc.Server
-	agent *agent
+	agent       *agent
+	httpServers []*http.Server
 }
 
 // Status reports the health status of a serf cluster by iterating over the list
@@ -105,6 +106,37 @@ func (r *server) UpdateTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb
 	return &pb.UpdateResponse{}, nil
 }
 
+// Stop stops the grpc server and any additional http servers.
+// TODO: modify Stop to return error
+func (r *server) Stop() {
+	// TODO: pass context in as a parameter.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := r.stopHTTPServers(ctx); err != nil {
+		log.WithError(err).Error("Some HTTP servers failed to shutdown.")
+	}
+
+	r.Server.Stop()
+}
+
+// stopHTTPServers shuts down all listening http servers.
+func (r *server) stopHTTPServers(ctx context.Context) error {
+	var errors []error
+	for _, srv := range r.httpServers {
+		err := srv.Shutdown(ctx)
+		if err == http.ErrServerClosed {
+			log.WithError(err).Debug("Server has already been shutdown.")
+			continue
+		}
+		if err != nil {
+			errors = append(errors, trace.Wrap(err, "failed to shutdown server running on: %s", srv.Addr))
+			continue
+		}
+	}
+	return trace.NewAggregate(errors...)
+}
+
 // newRPCServer creates an agent RPC endpoint for each provided listener.
 func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []string) (*server, error) {
 	creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
@@ -147,26 +179,37 @@ func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []str
 
 	// handler is a multiplexer for both gRPC and HTTPS queries.
 	// The HTTPS endpoint returns the cluster status as JSON
+	// TODO: why does server need to handle both gRPC and HTTPS queries?
 	handler := grpcHandlerFunc(server, healthzHandler)
 
 	for _, addr := range rpcAddrs {
-		go func(address string) {
-			if err := serve(address, certFile, keyFile, tlsConfig, handler); err != nil {
-				log.WithError(err).Errorf("Failed to serve on %v.", address)
-			}
-		}(addr)
-	}
+		srv := newHTTPServer(addr, tlsConfig, handler)
+		server.httpServers = append(server.httpServers, srv)
 
+		// TODO: separate Start function to start listening.
+		go func(srv *http.Server) {
+			err := srv.ListenAndServeTLS(certFile, keyFile)
+			if err == http.ErrServerClosed {
+				log.WithError(err).Debug("Server has been shutdown/closed.")
+				return
+			}
+			if err != nil {
+				log.WithError(err).Errorf("Failed to serve on %v.", srv.Addr)
+				return
+			}
+		}(srv)
+	}
 	return server, nil
 }
 
-func serve(addr, certFile, keyFile string, tlsConfig *tls.Config, handler http.Handler) error {
+// newHTTPServer constructs a new server using the provided config values.
+func newHTTPServer(address string, tlsConfig *tls.Config, handler http.Handler) *http.Server {
 	server := &http.Server{
-		Addr:      addr,
+		Addr:      address,
 		TLSConfig: tlsConfig,
 		Handler:   handler,
 	}
-	return server.ListenAndServeTLS(certFile, keyFile)
+	return server
 }
 
 // newHealthHandler creates a http.Handler that returns cluster status

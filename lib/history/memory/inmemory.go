@@ -15,16 +15,18 @@ limitations under the License.
 */
 
 // Package memory provide Timeline implementation stored in memory.
+// Mainly used for development or testing purposes and has not been optimized.
+// TODO: Proper LRU caching implementation for storing timeline events.
 package memory
 
 import (
 	"context"
 	"sync"
+	"time"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/history"
 
-	"github.com/gravitational/trace"
 	"github.com/jonboulle/clockwork"
 )
 
@@ -71,6 +73,7 @@ func (t *Timeline) RecordStatus(ctx context.Context, status *pb.NodeStatus) erro
 	for _, event := range events {
 		t.addEvent(event)
 	}
+	t.filterDuplicates()
 	t.lastStatus = status
 	return nil
 }
@@ -78,7 +81,16 @@ func (t *Timeline) RecordStatus(ctx context.Context, status *pb.NodeStatus) erro
 // RecordTimeline merges the provided events into the current timeline.
 // Duplicate events will be ignored.
 func (t *Timeline) RecordTimeline(ctx context.Context, events []*pb.TimelineEvent) error {
-	return trace.NotImplemented("not implemented")
+	if len(events) == 0 {
+		return nil
+	}
+	t.Lock()
+	defer t.Unlock()
+	for _, event := range events {
+		t.addEvent(event)
+	}
+	t.filterDuplicates()
+	return nil
 }
 
 // GetEvents returns a filtered list of events based on the provided params.
@@ -102,3 +114,81 @@ func (t *Timeline) getFilteredEvents(params map[string]string) (events []*pb.Tim
 	// TODO: for now just return the unfiltered events.
 	return t.events
 }
+
+// filterDuplicates removes duplicate events.
+func (t *Timeline) filterDuplicates() {
+	set := make(map[comparableEvent]struct{})
+	filteredEvents := make([]*pb.TimelineEvent, 0, t.capacity)
+	for _, event := range t.events {
+		comparable := newComparable(event)
+		if _, ok := set[comparable]; !ok {
+			set[comparable] = struct{}{}
+			filteredEvents = append(filteredEvents, event)
+		}
+	}
+	t.events = filteredEvents
+}
+
+// comparableEvent defines an event in a comparable struct.
+// Used when filtering duplicate events.
+type comparableEvent struct {
+	timestamp time.Time
+	eventType string
+	node      string
+	probe     string
+	old       string
+	new       string
+}
+
+func newComparable(event *pb.TimelineEvent) comparableEvent {
+	comparable := comparableEvent{
+		timestamp: event.GetTimestamp().ToTime(),
+	}
+	switch event.GetData().(type) {
+	case *pb.TimelineEvent_ClusterRecovered:
+		comparable.eventType = clusterRecoveredType
+	case *pb.TimelineEvent_ClusterDegraded:
+		comparable.eventType = clusterDegradedType
+	case *pb.TimelineEvent_NodeAdded:
+		e := event.GetNodeAdded()
+		comparable.eventType = nodeAddedType
+		comparable.node = e.GetNode()
+	case *pb.TimelineEvent_NodeRemoved:
+		e := event.GetNodeRemoved()
+		comparable.eventType = nodeRemovedType
+		comparable.node = e.GetNode()
+	case *pb.TimelineEvent_NodeRecovered:
+		e := event.GetNodeRecovered()
+		comparable.eventType = nodeRecoveredType
+		comparable.node = e.GetNode()
+	case *pb.TimelineEvent_NodeDegraded:
+		e := event.GetNodeDegraded()
+		comparable.eventType = nodeDegradedType
+		comparable.node = e.GetNode()
+	case *pb.TimelineEvent_ProbeSucceeded:
+		e := event.GetProbeSucceeded()
+		comparable.eventType = probeSucceededType
+		comparable.node = e.GetNode()
+		comparable.probe = e.GetProbe()
+	case *pb.TimelineEvent_ProbeFailed:
+		e := event.GetProbeFailed()
+		comparable.eventType = probeFailedType
+		comparable.node = e.GetNode()
+		comparable.probe = e.GetProbe()
+	default:
+		comparable.eventType = unknownType
+	}
+	return comparable
+}
+
+const (
+	clusterRecoveredType = "ClusterRecovered"
+	clusterDegradedType  = "ClusterDegraded"
+	nodeAddedType        = "NodeAdded"
+	nodeRemovedType      = "NodeRemoved"
+	nodeRecoveredType    = "NodeRecovered"
+	nodeDegradedType     = "NodeDegraded"
+	probeSucceededType   = "ProbeSucceeded"
+	probeFailedType      = "ProbeFailed"
+	unknownType          = "Unknown"
+)
