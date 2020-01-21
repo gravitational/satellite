@@ -14,16 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package agent
+// Package client provides a client interface for interacting with a satellite
+// agent.
+package client
 
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"io/ioutil"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
 	"github.com/gravitational/trace"
+	serf "github.com/hashicorp/serf/client"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -41,6 +45,8 @@ type Client interface {
 	Timeline(context.Context, *pb.TimelineRequest) (*pb.TimelineResponse, error)
 	// UpdateTimeline requests that the timeline be updated with the specified event.
 	UpdateTimeline(context.Context, *pb.UpdateRequest) (*pb.UpdateResponse, error)
+	// Close closes the RPC client connection.
+	Close() error
 }
 
 type client struct {
@@ -50,17 +56,11 @@ type client struct {
 }
 
 // NewClientFunc defines a function that returns RPC agent client.
-type NewClientFunc func(ctx context.Context, addr, caFile, certFile, keyFile string) (*client, error)
+// type NewClientFunc func(ctx context.Context, addr, caFile, certFile, keyFile string) (*client, error)
 
 // NewClient creates a agent RPC client to the given address
 // using the specified client certificate certFile
 func NewClient(ctx context.Context, addr, caFile, certFile, keyFile string) (*client, error) {
-	return newClient(ctx, addr, "", caFile, certFile, keyFile)
-}
-
-// newClient additional allows a serverName override, but is only available
-// from unit tests
-func newClient(ctx context.Context, addr, serverName, caFile, certFile, keyFile string) (*client, error) {
 	// Load client cert/key
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
@@ -82,7 +82,7 @@ func newClient(ctx context.Context, addr, serverName, caFile, certFile, keyFile 
 		RootCAs:      certPool,
 		Certificates: []tls.Certificate{cert},
 		MinVersion:   tls.VersionTLS12,
-		ServerName:   serverName,
+		ServerName:   "",
 		// Use TLS Modern capability suites
 		// https://wiki.mozilla.org/Security/Server_Side_TLS
 		CipherSuites: []uint16{
@@ -96,7 +96,6 @@ func newClient(ctx context.Context, addr, serverName, caFile, certFile, keyFile 
 			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
 		},
 	})
-
 	return NewClientWithCreds(ctx, addr, creds)
 }
 
@@ -166,4 +165,18 @@ func (r *client) UpdateTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb
 // Close closes the RPC client connection.
 func (r *client) Close() error {
 	return r.conn.Close()
+}
+
+// DialRPC returns RPC client for the provided Serf member.
+type DialRPC func(context.Context, *serf.Member) (Client, error)
+
+// DefaultDialRPC is a default RPC client factory function.
+// It creates a new client based on address details from the specific serf member.
+func DefaultDialRPC(caFile, certFile, keyFile string) DialRPC {
+	// RPCPort specifies the default RPC port.
+	const RPCPort = 7575 // FIXME: use serf to discover agents
+
+	return func(ctx context.Context, member *serf.Member) (Client, error) {
+		return NewClient(ctx, fmt.Sprintf("%s:%d", member.Addr.String(), RPCPort), caFile, certFile, keyFile)
+	}
 }
