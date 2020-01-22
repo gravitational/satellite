@@ -40,13 +40,13 @@ import (
 	"github.com/gravitational/satellite/lib/history/memory"
 	"github.com/gravitational/satellite/lib/test"
 	"github.com/gravitational/satellite/utils"
-	"google.golang.org/grpc/credentials"
 
 	"github.com/gravitational/roundtrip"
 	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc/credentials"
 	. "gopkg.in/check.v1"
 )
 
