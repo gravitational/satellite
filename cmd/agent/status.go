@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gravitational/satellite/agent"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/lib/client"
 	"github.com/gravitational/trace"
 
 	"golang.org/x/net/context"
@@ -61,7 +61,14 @@ func status(config statusConfig) (ok bool, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), statusTimeout)
 	defer cancel()
 
-	client, err := agent.NewClient(ctx, RPCAddr, config.caFile, config.certFile, config.keyFile)
+	clientConfig := client.Config{
+		Address:  RPCAddr,
+		CAFile:   config.caFile,
+		CertFile: config.certFile,
+		KeyFile:  config.keyFile,
+	}
+
+	client, err := client.NewClient(ctx, clientConfig)
 	if err != nil {
 		return false, trace.Wrap(err)
 	}
@@ -106,7 +113,14 @@ func history(config rpcConfig) (ok bool, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), statusTimeout)
 	defer cancel()
 
-	client, err := agent.NewClient(ctx, RPCAddr, config.caFile, config.certFile, config.keyFile)
+	clientConfig := client.Config{
+		Address:  RPCAddr,
+		CAFile:   config.caFile,
+		CertFile: config.certFile,
+		KeyFile:  config.keyFile,
+	}
+
+	client, err := client.NewClient(ctx, clientConfig)
 	if err != nil {
 		return false, trace.Wrap(err)
 	}

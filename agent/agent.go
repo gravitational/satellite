@@ -26,6 +26,7 @@ import (
 	"github.com/gravitational/satellite/agent/cache"
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/lib/client"
 	"github.com/gravitational/satellite/lib/history"
 	"github.com/gravitational/satellite/lib/history/sqlite"
 	"github.com/gravitational/satellite/utils"
@@ -151,7 +152,7 @@ type agent struct {
 
 	// dialRPC is a factory function to create clients to other agents.
 	// If future, agent address discovery will happen through serf.
-	dialRPC DialRPC
+	dialRPC client.DialRPC
 
 	// done is a channel used for cleanup.
 	done chan struct{}
@@ -186,7 +187,7 @@ func New(config *Config) (Agent, error) {
 		return nil, trace.Wrap(err)
 	}
 
-	client, err := initSerfClient(config.SerfConfig, config.Tags)
+	serfClient, err := initSerfClient(config.SerfConfig, config.Tags)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to initialize serf client")
 	}
@@ -204,13 +205,13 @@ func New(config *Config) (Agent, error) {
 	}
 
 	agent := &agent{
-		dialRPC:                 DefaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
+		dialRPC:                 client.DefaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
 		localStatus:             emptyNodeStatus(config.Name),
 		metricsListener:         metricsListener,
 		done:                    make(chan struct{}),
 		Config:                  *config,
-		SerfClient:              client,
+		SerfClient:              serfClient,
 		Timeline:                timeline,
 	}
 
@@ -718,9 +719,6 @@ func filterMember(members []serf.Member, name string) (result []serf.Member) {
 	}
 	return result
 }
-
-// DialRPC returns RPC client for the provided Serf member.
-type DialRPC func(context.Context, *serf.Member) (*client, error)
 
 // statusResponse describes a status response from a background process that obtains
 // health status on the specified serf node.
