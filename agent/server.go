@@ -121,11 +121,13 @@ func (r *server) stopHTTPServers(ctx context.Context) error {
 	var errors []error
 	for _, srv := range r.httpServers {
 		err := srv.Shutdown(ctx)
-		if utils.IsContextDone(ctx) {
-			return err
+		if err == http.ErrServerClosed {
+			log.WithError(err).Debug("Server has already been shutdown.")
+			continue
 		}
 		if err != nil {
 			errors = append(errors, trace.Wrap(err, "failed to shutdown server running on: %s", srv.Addr))
+			continue
 		}
 	}
 	return trace.NewAggregate(errors...)

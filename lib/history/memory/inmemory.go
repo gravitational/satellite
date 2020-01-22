@@ -15,7 +15,8 @@ limitations under the License.
 */
 
 // Package memory provide Timeline implementation stored in memory.
-// Mainly used for development or testing purposes.
+// Mainly used for development or testing purposes and has not been optimized.
+// TODO: Proper LRU caching implementation for storing timeline events.
 package memory
 
 import (
