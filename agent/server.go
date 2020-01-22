@@ -25,7 +25,6 @@ import (
 	"time"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-	"github.com/gravitational/satellite/utils"
 
 	"github.com/gravitational/roundtrip"
 	"github.com/gravitational/trace"
