@@ -61,7 +61,14 @@ func status(config statusConfig) (ok bool, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), statusTimeout)
 	defer cancel()
 
-	client, err := client.NewClient(ctx, RPCAddr, config.caFile, config.certFile, config.keyFile)
+	clientConfig := client.Config{
+		Address:  RPCAddr,
+		CAFile:   config.caFile,
+		CertFile: config.certFile,
+		KeyFile:  config.keyFile,
+	}
+
+	client, err := client.NewClient(ctx, clientConfig)
 	if err != nil {
 		return false, trace.Wrap(err)
 	}
@@ -106,7 +113,14 @@ func history(config rpcConfig) (ok bool, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), statusTimeout)
 	defer cancel()
 
-	client, err := client.NewClient(ctx, RPCAddr, config.caFile, config.certFile, config.keyFile)
+	clientConfig := client.Config{
+		Address:  RPCAddr,
+		CAFile:   config.caFile,
+		CertFile: config.certFile,
+		KeyFile:  config.keyFile,
+	}
+
+	client, err := client.NewClient(ctx, clientConfig)
 	if err != nil {
 		return false, trace.Wrap(err)
 	}

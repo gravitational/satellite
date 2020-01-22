@@ -33,6 +33,38 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+// Config defines configuration required to create a new RPC client.
+type Config struct {
+	// Address specifies client RPC address.
+	Address string
+	// CAFile specifies CA file path.
+	CAFile string
+	// CertFile specifies certificate file path.
+	CertFile string
+	// KeyFile specifies key file path.
+	KeyFile string
+}
+
+// CheckAndSetDefaults validates this configuration object.
+// Config values that were not specified will be set to their default values if
+// available.
+func (c *Config) CheckAndSetDefaults() error {
+	var errors []error
+	if c.Address == "" {
+		errors = append(errors, trace.BadParameter("address must be provided"))
+	}
+	if c.CAFile == "" {
+		errors = append(errors, trace.BadParameter("CA file path must be provided"))
+	}
+	if c.CertFile == "" {
+		errors = append(errors, trace.BadParameter("certificate file path must be provided"))
+	}
+	if c.KeyFile == "" {
+		errors = append(errors, trace.BadParameter("key file path must be provided"))
+	}
+	return trace.NewAggregate(errors...)
+}
+
 // Client is an interface to communicate with the serf cluster via agent RPC.
 type Client interface {
 	// Status reports the health status of a serf cluster.
@@ -55,27 +87,28 @@ type client struct {
 	callOptions []grpc.CallOption
 }
 
-// NewClientFunc defines a function that returns RPC agent client.
-// type NewClientFunc func(ctx context.Context, addr, caFile, certFile, keyFile string) (*client, error)
-
 // NewClient creates a agent RPC client to the given address
 // using the specified client certificate certFile
-func NewClient(ctx context.Context, addr, caFile, certFile, keyFile string) (*client, error) {
+func NewClient(ctx context.Context, config Config) (*client, error) {
+	if err := config.CheckAndSetDefaults(); err != nil {
+		return nil, trace.Wrap(err)
+	}
+
 	// Load client cert/key
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	cert, err := tls.LoadX509KeyPair(config.CertFile, config.KeyFile)
 	if err != nil {
 		return nil, trace.ConvertSystemError(err)
 	}
 
 	// Load the CA of the server
-	clientCACert, err := ioutil.ReadFile(caFile)
+	clientCACert, err := ioutil.ReadFile(config.CAFile)
 	if err != nil {
 		return nil, trace.ConvertSystemError(err)
 	}
 
 	certPool := x509.NewCertPool()
 	if !certPool.AppendCertsFromPEM(clientCACert) {
-		return nil, trace.Wrap(err, "failed to append certificates from %v", caFile)
+		return nil, trace.Wrap(err, "failed to append certificates from %v", config.CAFile)
 	}
 
 	creds := credentials.NewTLS(&tls.Config{
@@ -96,7 +129,7 @@ func NewClient(ctx context.Context, addr, caFile, certFile, keyFile string) (*cl
 			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
 		},
 	})
-	return NewClientWithCreds(ctx, addr, creds)
+	return NewClientWithCreds(ctx, config.Address, creds)
 }
 
 // NewClientWithCreds creates a new agent RPC client to the given address
@@ -177,6 +210,12 @@ func DefaultDialRPC(caFile, certFile, keyFile string) DialRPC {
 	const RPCPort = 7575 // FIXME: use serf to discover agents
 
 	return func(ctx context.Context, member *serf.Member) (Client, error) {
-		return NewClient(ctx, fmt.Sprintf("%s:%d", member.Addr.String(), RPCPort), caFile, certFile, keyFile)
+		config := Config{
+			Address:  fmt.Sprintf("%s:%d", member.Addr.String(), RPCPort),
+			CAFile:   caFile,
+			CertFile: certFile,
+			KeyFile:  keyFile,
+		}
+		return NewClient(ctx, config)
 	}
 }
