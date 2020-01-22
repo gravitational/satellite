@@ -19,9 +19,11 @@ package agent
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -33,10 +35,12 @@ import (
 	"github.com/gravitational/satellite/agent/backend/inmemory"
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/lib/client"
 	"github.com/gravitational/satellite/lib/history"
 	"github.com/gravitational/satellite/lib/history/memory"
 	"github.com/gravitational/satellite/lib/test"
 	"github.com/gravitational/satellite/utils"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/gravitational/roundtrip"
 	"github.com/gravitational/trace"
@@ -578,10 +582,51 @@ func (r *AgentSuite) newAgent(config testAgentConfig) *agent {
 
 // testDialRPC is a test implementation of the dialRPC interface,
 // that creates an RPC client bound to localhost.
-func testDialRPC(port int, certFile, keyFile string) DialRPC {
-	return func(ctx context.Context, member *serf.Member) (*client, error) {
+func testDialRPC(port int, certFile, keyFile string) client.DialRPC {
+	return func(ctx context.Context, member *serf.Member) (client.Client, error) {
 		return newClient(ctx, fmt.Sprintf(":%d", port), "agent", certFile, certFile, keyFile)
 	}
+}
+
+// newClient additionally allows a serverName override, but is only available
+// from unit tests.
+func newClient(ctx context.Context, addr, serverName, caFile, certFile, keyFile string) (client.Client, error) {
+	// Load client cert/key
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, trace.ConvertSystemError(err)
+	}
+
+	// Load the CA of the server
+	clientCACert, err := ioutil.ReadFile(caFile)
+	if err != nil {
+		return nil, trace.ConvertSystemError(err)
+	}
+
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(clientCACert) {
+		return nil, trace.Wrap(err, "failed to append certificates from %v", caFile)
+	}
+
+	creds := credentials.NewTLS(&tls.Config{
+		RootCAs:      certPool,
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
+		ServerName:   serverName,
+		// Use TLS Modern capability suites
+		// https://wiki.mozilla.org/Security/Server_Side_TLS
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
+		},
+	})
+	return client.NewClientWithCreds(ctx, addr, creds)
 }
 
 func (r *AgentSuite) httpClient(url string) (*roundtrip.Client, error) {

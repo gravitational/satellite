@@ -19,25 +19,21 @@ package agent
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
 	"time"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/utils"
 
 	"github.com/gravitational/roundtrip"
 	"github.com/gravitational/trace"
-	serf "github.com/hashicorp/serf/client"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
-
-// RPCPort specifies the default RPC port.
-const RPCPort = 7575 // FIXME: use serf to discover agents
 
 // RPCServer is the interface that defines the interaction with an agent via RPC.
 type RPCServer interface {
@@ -285,12 +281,4 @@ func grpcHandlerFunc(rpcServer *server, other http.Handler) http.Handler {
 			other.ServeHTTP(w, r)
 		}
 	})
-}
-
-// DefaultDialRPC is a default RPC client factory function.
-// It creates a new client based on address details from the specific serf member.
-func DefaultDialRPC(caFile, certFile, keyFile string) DialRPC {
-	return func(ctx context.Context, member *serf.Member) (*client, error) {
-		return NewClient(ctx, fmt.Sprintf("%s:%d", member.Addr.String(), RPCPort), caFile, certFile, keyFile)
-	}
 }
