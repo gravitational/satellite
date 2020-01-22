@@ -197,6 +197,7 @@ func (t *Timeline) RecordTimeline(ctx context.Context, events []*pb.TimelineEven
 }
 
 // GetEvents returns a filtered list of events based on the provided params.
+// Events will be return in sorted order by timestamp.
 // The filter uses "AND" logic with the params.
 func (t *Timeline) GetEvents(ctx context.Context, params map[string]string) (events []*pb.TimelineEvent, err error) {
 	query, args := prepareQuery(params)
