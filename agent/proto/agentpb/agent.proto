@@ -19,6 +19,16 @@ package agentpb;
 
 import "event.proto";
 
+// SubscribeRequest is a request to subscribe to an agent's timeline event 
+// queue.
+message SubscribeRequest {
+  // Name specifies the subscriber's serf member name.
+  string name = 1;
+}
+
+// SubscribeResponse defines response received from a subscribe request.
+message SubscribeResponse {}
+
 message StatusRequest {
 }
 
@@ -173,6 +183,9 @@ message TimelineEvent {
 
 // Agent describes the API provided by GRPC agents
 service Agent {
+  // Subscribe to a cluster member. Subscribing agent will be notified of new 
+  // events when available from the cluster member.
+  rpc Subscribe(SubscribeRequest) returns (SubscribeResponse) {}
   // Status collects the global cluster status
   rpc Status(StatusRequest) returns (StatusResponse) {}
   // LocalStatus collects the local node status
