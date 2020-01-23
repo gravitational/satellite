@@ -67,6 +67,9 @@ func (c *Config) CheckAndSetDefaults() error {
 
 // Client is an interface to communicate with the serf cluster via agent RPC.
 type Client interface {
+	// Subscribe to this this cluster member. Subscribing member will be
+	// notified when new timeline events are available.
+	Subscribe(context.Context, *pb.SubscribeRequest) (*pb.SubscribeResponse, error)
 	// Status reports the health status of a serf cluster.
 	Status(context.Context) (*pb.SystemStatus, error)
 	// LocalStatus reports the health status of the local serf cluster node.
@@ -148,6 +151,16 @@ func NewClientWithCreds(ctx context.Context, addr string, creds credentials.Tran
 		// TODO: provide option to initialize client with more call options.
 		callOptions: []grpc.CallOption{grpc.FailFast(false)},
 	}, nil
+}
+
+// Subscribe to this cluster member. Subscribed members will be notified when
+// new timeline events are available.
+func (r *client) Subscribe(ctx context.Context, req *pb.SubscribeRequest) (*pb.SubscribeResponse, error) {
+	resp, err := r.AgentClient.Subscribe(ctx, req, r.callOptions...)
+	if err != nil {
+		return nil, ConvertGRPCError(err)
+	}
+	return resp, nil
 }
 
 // Status reports the health status of the serf cluster.
