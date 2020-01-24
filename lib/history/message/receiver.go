@@ -64,6 +64,7 @@ func (r *Receiver) pushEvents(ctx context.Context, events []*pb.TimelineEvent) e
 	defer client.Close()
 
 	for _, event := range events {
+		// TODO: add retry strategy
 		if _, err := client.UpdateTimeline(ctx, &pb.UpdateRequest{Event: event}); err != nil {
 			return trace.Wrap(err)
 		}
