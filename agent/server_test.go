@@ -38,6 +38,7 @@ import (
 	"github.com/gravitational/satellite/lib/client"
 	"github.com/gravitational/satellite/lib/history"
 	"github.com/gravitational/satellite/lib/history/memory"
+	"github.com/gravitational/satellite/lib/history/message"
 	"github.com/gravitational/satellite/lib/test"
 	"github.com/gravitational/satellite/utils"
 
@@ -400,33 +401,6 @@ func (r *AgentSuite) TestFailsIfTimesOutToCollectStatus(c *C) {
 	})
 }
 
-// TestUpdateLocalTimeline verifies that an agent is able to update its timeline
-// with local status changes.
-func (r *AgentSuite) TestUpdateLocalTimeline(c *C) {
-	comment := Commentf("Expected node-1 recovered.")
-	expected := []*pb.TimelineEvent{
-		history.NewNodeRecovered(r.clock.Now(), "node-1"),
-	}
-	localConfig := testAgentConfig{
-		localStatus: &pb.NodeStatus{
-			Name:   "node-1",
-			Status: pb.NodeStatus_Running,
-		},
-	}
-	localAgent := r.newLocalNode(localConfig)
-
-	test.WithTimeout(func(ctx context.Context) {
-		c.Assert(localAgent.Start(), IsNil)
-		defer localAgent.Close()
-
-		c.Assert(localAgent.updateTimeline(ctx), IsNil)
-
-		resp, err := localAgent.rpc.Timeline(ctx, &pb.TimelineRequest{})
-		c.Assert(err, IsNil)
-		c.Assert(resp.GetEvents(), test.DeepCompare, expected, comment)
-	})
-}
-
 // TestUpdateRemoteTimeline verifies that an agent can correctly handle an
 // UpdateTimeline rpc.
 func (r *AgentSuite) TestUpdateRemoteTimeline(c *C) {
@@ -449,66 +423,14 @@ func (r *AgentSuite) TestUpdateRemoteTimeline(c *C) {
 	})
 }
 
-// TestTimelineMerge validates the communication between several agents to
-// exchange timeline information.
-func (r *AgentSuite) TestAgentProvidesTimeline(c *C) {
-	comment := Commentf("Expected node-1 recovered and node-2 degraded.")
-	expected := []*pb.TimelineEvent{
-		history.NewNodeRecovered(r.clock.Now(), "node-1"),
-		history.NewNodeDegraded(r.clock.Now(), "node-2"),
-	}
-	localConfig := testAgentConfig{
-		node: "node-1",
-		members: []serf.Member{
-			newMember("node-1", "alive"),
-			newMember("node-2", "alive"),
-		},
-		localStatus: &pb.NodeStatus{
-			Name:   "node-1",
-			Status: pb.NodeStatus_Running,
-		},
-	}
-	remoteConfig := testAgentConfig{
-		node: "node-2",
-		members: []serf.Member{
-			newMember("node-1", "alive"),
-			newMember("node-2", "alive"),
-		},
-		localStatus: &pb.NodeStatus{
-			Name:   "node-2",
-			Status: pb.NodeStatus_Degraded,
-		},
-	}
-
-	localAgent := r.newLocalNode(localConfig)
-	remoteAgent, err := r.newRemoteNode(remoteConfig)
-	c.Assert(err, IsNil)
-
-	test.WithTimeout(func(ctx context.Context) {
-		c.Assert(localAgent.Start(), IsNil)
-		defer localAgent.Close()
-
-		c.Assert(remoteAgent.Start(), IsNil)
-		defer remoteAgent.Close()
-
-		c.Assert(remoteAgent.updateTimeline(ctx), IsNil)
-		c.Assert(localAgent.updateTimeline(ctx), IsNil)
-
-		resp, err := localAgent.rpc.Timeline(ctx, &pb.TimelineRequest{})
-		c.Assert(err, IsNil, comment)
-		c.Assert(resp.GetEvents(), test.DeepCompare, expected, comment)
-
-	})
-}
-
 // testAgentConfig specifies config values for testAgent.
 type testAgentConfig struct {
 	node        string
 	rpcPort     int
+	clock       clockwork.Clock
 	members     []serf.Member
 	checkers    []health.Checker
 	localStatus *pb.NodeStatus
-	clock       clockwork.Clock
 }
 
 // setDefaults sets default config values if not previously defined.
@@ -571,6 +493,7 @@ func (r *AgentSuite) newAgent(config testAgentConfig) *agent {
 	return &agent{
 		SerfClient:              &MockSerfClient{members: config.members},
 		Timeline:                timeline,
+		Queue:                   r.newMessenger(),
 		dialRPC:                 testDialRPC(config.rpcPort, r.certFile, r.keyFile),
 		Config:                  agentConfig,
 		Checkers:                config.checkers,
@@ -703,6 +626,61 @@ func (r *testServer) Stop() {
 	if err := r.stopHTTPServers(ctx); err != nil {
 		// TODO: return error
 	}
+}
+
+// mockMessenger implements Messenger with mocked functionality for testing.
+type mockMessenger struct {
+	// published saves published events.
+	published []*pb.TimelineEvent
+	// subscribers maps id to a subscriber.
+	subscribers map[string]message.Subscriber
+}
+
+func (r *AgentSuite) newMessenger() *mockMessenger {
+	return &mockMessenger{subscribers: make(map[string]message.Subscriber)}
+}
+
+// Publish saves published events and notifies subscribers.
+func (r *mockMessenger) Publish(ctx context.Context, events []*pb.TimelineEvent) error {
+	r.published = append(r.published, events...)
+	for _, sub := range r.subscribers {
+		if err := sub.Notify(ctx, nil); err != nil {
+			return trace.Wrap(err)
+		}
+	}
+	return nil
+}
+
+func (r *mockMessenger) Subscribe(id string, sub message.Subscriber) error {
+	r.subscribers[id] = sub
+	return nil
+}
+
+func (r *mockMessenger) Unsubscribe(id string) error {
+	delete(r.subscribers, id)
+	return nil
+}
+
+// mockSubscriber implements Subsciber with mocked functionality for testing.
+type mockSubscriber struct {
+	// notified indicates that the subscriber had been notified.
+	notified bool
+}
+
+func (r *AgentSuite) newSubscriber() *mockSubscriber {
+	return &mockSubscriber{notified: false}
+}
+
+// Notify marks the subscriber to have been notified. We don't care about the
+// events for this test suite.
+func (r *mockSubscriber) Notify(ctx context.Context, events []*pb.TimelineEvent) error {
+	r.notified = true
+	return nil
+}
+
+// Timestamp returns zero value. Will not be used for this test suite.
+func (r *mockSubscriber) Timestamp() time.Time {
+	return time.Time{}
 }
 
 // testChecker implements a health.Checker interface for the tests.

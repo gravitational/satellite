@@ -17,6 +17,7 @@ limitations under the License.
 package agent
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"runtime/debug"
@@ -28,6 +29,7 @@ import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/client"
 	"github.com/gravitational/satellite/lib/history"
+	"github.com/gravitational/satellite/lib/history/message"
 	"github.com/gravitational/satellite/lib/history/sqlite"
 	"github.com/gravitational/satellite/utils"
 
@@ -165,12 +167,6 @@ type agent struct {
 	// Defaults to statusQueryReplyTimeout if unspecified
 	statusQueryReplyTimeout time.Duration
 
-	// memberIndex is used to select the next member to collect timeline data
-	// from.
-	// Type uint16 so limited to 0 - 65535. Assuming clusters will not have
-	// more than that many members.
-	memberIndex uint16
-
 	// Config is the agent configuration.
 	Config
 
@@ -179,6 +175,10 @@ type agent struct {
 
 	// Timeline keeps track of status change events.
 	Timeline history.Timeline
+
+	// Queue is event message queue. Subscribers to this queue will be
+	// notified when new events are available.
+	Queue message.Messenger
 }
 
 // New creates an instance of an agent based on configuration options given in config.
@@ -204,6 +204,11 @@ func New(config *Config) (Agent, error) {
 		return nil, trace.Wrap(err, "failed to initialize timeline")
 	}
 
+	queue, err := initQueue(config.TimelineConfig)
+	if err != nil {
+		return nil, trace.Wrap(err, "failed to initialize event queue")
+	}
+
 	agent := &agent{
 		dialRPC:                 client.DefaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
@@ -213,6 +218,7 @@ func New(config *Config) (Agent, error) {
 		Config:                  *config,
 		SerfClient:              serfClient,
 		Timeline:                timeline,
+		Queue:                   queue,
 	}
 
 	agent.rpc, err = newRPCServer(agent, config.CAFile, config.CertFile, config.KeyFile, config.RPCAddrs)
@@ -242,6 +248,17 @@ func initTimeline(config sqlite.Config) (history.Timeline, error) {
 	return sqlite.NewTimeline(ctx, config)
 }
 
+// initQueue initializes a new event message queue.
+func initQueue(config sqlite.Config) (message.Messenger, error) {
+	// TODO: pass queue db path in config
+	config.DBPath = "/tmp/queue.db"
+	timeline, err := initTimeline(config)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	return message.NewQueue(timeline), nil
+}
+
 // GetConfig returns the agent configuration.
 func (r *agent) GetConfig() Config {
 	return r.Config
@@ -253,7 +270,6 @@ func (r *agent) Start() error {
 	ctx, cancel := context.WithCancel(context.TODO())
 	go r.recycleLoop(ctx)
 	go r.statusUpdateLoop(ctx)
-	go r.timelineUpdateLoop(ctx)
 	go r.serveMetrics()
 
 	go func() {
@@ -276,7 +292,7 @@ func (r *agent) serveMetrics() {
 		log.WithError(err).Debug("Metrics listener has been shutdown/closed.")
 	}
 	if err != nil {
-		log.WithError(err).Errorf("Failed to server metrics.")
+		log.WithError(err).Errorf("Failed to serve metrics.")
 	}
 }
 
@@ -307,7 +323,32 @@ func (r *agent) Join(peers []string) error {
 	if err != nil {
 		return trace.Wrap(err)
 	}
+	if err := r.subscribeMasters(); err != nil {
+		return trace.Wrap(err, "failed to initialize subscribers")
+	}
+	if err := r.subscribeToCluster(); err != nil {
+		return trace.Wrap(err, "failed to subscribe to cluster")
+	}
 	log.Infof("joined %d nodes", numJoined)
+	return nil
+}
+
+// Subscribe to cluster identified by peers.
+// Subscribed peers will notify the agent of new timeline events.
+func (r *agent) Subscribe(name string) error {
+	member, err := r.SerfClient.FindMember(name)
+	if err != nil {
+		return trace.Wrap(err, "failed to find %s", name)
+	}
+
+	// Only subscribe if member has role 'master'
+	if role, ok := member.Tags["role"]; !ok || Role(role) != RoleMaster {
+		return trace.BadParameter("%s does not have role 'master'.", member.Name)
+	}
+
+	if err := r.subscribeMember(member); err != nil {
+		return trace.Wrap(err, "failed to subscribe %s", member.Name)
+	}
 	return nil
 }
 
@@ -430,7 +471,7 @@ func runChecker(ctx context.Context, checker health.Checker, probeCh chan<- heal
 
 // recycleLoop periodically recycles the cache.
 func (r *agent) recycleLoop(ctx context.Context) {
-	ticker := r.Clock.NewTicker(recycleTimeout)
+	ticker := r.Clock.NewTicker(recycleInterval)
 	defer ticker.Stop()
 	for range ticker.Chan() {
 		if utils.IsContextDone(ctx) {
@@ -448,7 +489,7 @@ func (r *agent) recycleLoop(ctx context.Context) {
 // updates the health status of the cluster by querying status of other active
 // cluster members.
 func (r *agent) statusUpdateLoop(ctx context.Context) {
-	ticker := r.Clock.NewTicker(statusUpdateTimeout)
+	ticker := r.Clock.NewTicker(statusUpdateInterval)
 	defer ticker.Stop()
 	for range ticker.Chan() {
 		if utils.IsContextDone(ctx) {
@@ -481,9 +522,6 @@ func (r *agent) updateStatus(ctx context.Context) error {
 // collectStatus obtains the cluster status by querying statuses of
 // known cluster members.
 func (r *agent) collectStatus(ctx context.Context) (systemStatus *pb.SystemStatus, err error) {
-	ctx, cancel := context.WithTimeout(ctx, statusUpdateTimeout)
-	defer cancel()
-
 	systemStatus = &pb.SystemStatus{
 		Status:    pb.SystemStatus_Unknown,
 		Timestamp: pb.NewTimeToProto(r.Clock.Now()),
@@ -498,8 +536,8 @@ func (r *agent) collectStatus(ctx context.Context) (systemStatus *pb.SystemStatu
 
 	log.Debugf("Started collecting statuses from members %v.", members)
 
-	ctxNode, cancelNode := context.WithTimeout(ctx, nodeStatusTimeout)
-	defer cancelNode()
+	ctxNode, cancel := context.WithTimeout(ctx, nodeStatusTimeout)
+	defer cancel()
 
 	statusCh := make(chan *statusResponse, len(members))
 	for _, member := range members {
@@ -535,22 +573,30 @@ L:
 }
 
 // collectLocalStatus executes monitoring tests on the local node.
-func (r *agent) collectLocalStatus(ctx context.Context, local *serf.Member) (status *pb.NodeStatus) {
+func (r *agent) collectLocalStatus(ctx context.Context, local *serf.Member) (status *pb.NodeStatus, err error) {
 	status = r.runChecks(ctx)
 	status.MemberStatus = statusFromMember(local)
+
 	r.Lock()
+	changes := history.DiffNode(r.Clock, r.localStatus, status)
 	r.localStatus = status
 	r.Unlock()
 
-	return status
+	// TODO: publish status change events outside of collection.
+	if err := r.Queue.Publish(ctx, changes); err != nil {
+		return status, trace.Wrap(err, "failed to publish local events to the queue")
+	}
+
+	return status, err
 }
 
 // getLocalStatus obtains local node status.
 func (r *agent) getLocalStatus(ctx context.Context, local serf.Member, respc chan<- *statusResponse) {
-	status := r.collectLocalStatus(ctx, &local)
+	status, err := r.collectLocalStatus(ctx, &local)
 	resp := &statusResponse{
 		NodeStatus: status,
 		member:     local,
+		err:        err,
 	}
 	select {
 	case respc <- resp:
@@ -580,104 +626,6 @@ func (r *agent) getStatusFrom(ctx context.Context, member serf.Member, respc cha
 	}
 }
 
-// timelineUpdateLoop periodically updates the status timeline.
-func (r *agent) timelineUpdateLoop(ctx context.Context) {
-	ticker := r.Clock.NewTicker(statusUpdateTimeout)
-	defer ticker.Stop()
-
-	for range ticker.Chan() {
-		if utils.IsContextDone(ctx) {
-			log.Info("Timeline update loop is stopping.")
-			return
-		}
-		if err := r.updateTimeline(ctx); err != nil {
-			log.WithError(err).Error("Failed to update timeline.")
-		}
-	}
-}
-
-// updateTimeline records any status changes to the timeline.
-func (r *agent) updateTimeline(ctx context.Context) error {
-	if err := r.updateLocalChanges(ctx); err != nil {
-		return trace.Wrap(err, "error updating local timeline changes")
-	}
-	r.memberIndex++
-	member, err := r.selectMember(int(r.memberIndex))
-	if err != nil {
-		return nil
-	}
-	if err := r.updateRemoteChanges(ctx, member); err != nil {
-		return trace.Wrap(err, "error updating remote timeline changes")
-	}
-	return nil
-}
-
-// updateLocalChanges updates the timeline with any new status changes found on
-// the local node.
-func (r *agent) updateLocalChanges(ctx context.Context) error {
-	ctxUpdate, cancel := context.WithTimeout(ctx, updateTimelineTimeout)
-	defer cancel()
-
-	if err := r.Timeline.RecordStatus(ctxUpdate, r.LocalStatus()); err != nil {
-		return trace.Wrap(err)
-	}
-
-	return nil
-}
-
-// updateRemoteChanges updates the timeline with events from another member in
-// the cluster.
-func (r *agent) updateRemoteChanges(ctx context.Context, member serf.Member) error {
-	ctxQuery, cancel := context.WithTimeout(ctx, r.statusQueryReplyTimeout)
-	defer cancel()
-	timeline, err := r.getTimelineFrom(ctxQuery, member)
-	if err != nil {
-		return trace.Wrap(err)
-	}
-
-	ctxUpdate, cancel := context.WithTimeout(ctx, updateTimelineTimeout)
-	defer cancel()
-	if err := r.Timeline.RecordTimeline(ctxUpdate, timeline); err != nil {
-		return trace.Wrap(err)
-	}
-
-	return nil
-}
-
-// selectMember will select a member using the provided index.
-func (r *agent) selectMember(index int) (member serf.Member, err error) {
-	members, err := r.SerfClient.Members()
-	if err != nil {
-		return member, trace.Wrap(err, "failed to query serf members")
-	}
-	// Ignore members that have left the cluster.
-	members = filterLeft(members)
-	// Ignore self.
-	members = filterMember(members, r.Name)
-
-	numAvailable := len(members)
-	if numAvailable < 1 {
-		return member, trace.NotFound("no cluster members available")
-	}
-
-	return members[index%numAvailable], nil
-}
-
-// getTimelineFrom obtains timeline from the node identified by member.
-func (r *agent) getTimelineFrom(ctx context.Context, member serf.Member) (events []*pb.TimelineEvent, err error) {
-	client, err := r.dialRPC(ctx, &member)
-	if err != nil {
-		return events, trace.Wrap(err)
-	}
-	defer client.Close()
-
-	timeline, err := client.Timeline(ctx, &pb.TimelineRequest{})
-	if err != nil {
-		return events, trace.Wrap(err)
-	}
-	return timeline.GetEvents(), nil
-}
-
 // recentStatus returns the last known cluster status.
 func (r *agent) recentStatus() (status *pb.SystemStatus, err error) {
 	status, err = r.Cache.RecentStatus()
@@ -694,8 +642,76 @@ func (r *agent) recentLocalStatus() *pb.NodeStatus {
 	return r.localStatus
 }
 
-// TODO: Optimization - use a different data structure for storing serf members
-// if we need to constantly filter the list.
+// subscribeMasters subscribes all master nodes to this agent's event queue.
+func (r *agent) subscribeMasters() error {
+	members, err := r.SerfClient.Members()
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	// TODO: might be better to just return immediately after failing to
+	// subscribe a node.
+	var errors []error
+
+	for _, member := range members {
+		// Only subscribe if member has role 'master'
+		if role, ok := member.Tags["role"]; !ok || Role(role) != RoleMaster {
+			continue
+		}
+
+		if err := r.subscribeMember(&member); err != nil {
+			errors = append(errors, trace.Wrap(err, "failed to subscribe %s", member.Name))
+			continue
+		}
+	}
+	return trace.NewAggregate(errors...)
+}
+
+// subscribeToCluster subscribes to all members of the cluster.
+func (r *agent) subscribeToCluster() error {
+	// Only subscribe to cluster if agent has role 'master'
+	if role, ok := r.Tags["role"]; !ok || Role(role) != RoleMaster {
+		return nil
+	}
+
+	members, err := r.SerfClient.Members()
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	// TODO: async
+	for _, member := range members {
+		ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
+		defer cancel()
+
+		client, err := r.dialRPC(ctx, &member)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+
+		if _, err := client.Subscribe(ctx, &pb.SubscribeRequest{Name: r.Name}); err != nil {
+			log.WithError(err).Infof("Failed to subscribe to member %s.", member.Name)
+			continue
+		}
+		log.WithField("Member", member.Name).Info("Subscribed to a node.")
+	}
+	return nil
+}
+
+// subscribeMember subscribes member to this agent's event queue.
+func (r *agent) subscribeMember(member *serf.Member) error {
+	clientConfig := client.Config{
+		Address:  fmt.Sprintf("%s:%d", member.Addr.String(), RPCPort),
+		CAFile:   r.CAFile,
+		CertFile: r.CertFile,
+		KeyFile:  r.KeyFile,
+	}
+	receiver := message.NewReceiver(clientConfig)
+	if err := r.Queue.Subscribe(member.Name, receiver); err != nil {
+		return trace.Wrap(err)
+	}
+	return nil
+}
 
 // filterLeft filters out members that have left the serf cluster
 func filterLeft(members []serf.Member) (result []serf.Member) {
@@ -706,16 +722,6 @@ func filterLeft(members []serf.Member) (result []serf.Member) {
 			continue
 		}
 		result = append(result, member)
-	}
-	return result
-}
-
-// filterMember filters out member by name.
-func filterMember(members []serf.Member, name string) (result []serf.Member) {
-	for i, member := range members {
-		if member.Name == name {
-			return append(members[:i], members[i+1:]...)
-		}
 	}
 	return result
 }

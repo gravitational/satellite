@@ -46,13 +46,13 @@ const (
 	// to be stored into the timeline.
 	updateTimelineTimeout = 5 * time.Second
 
-	// statusUpdateTimeout is the amount of time to wait between status update collections.
-	statusUpdateTimeout = 30 * time.Second
+	// statusUpdateInterval is the amount of time to wait between status update collections.
+	statusUpdateInterval = 30 * time.Second
 
-	// recycleTimeout is the amount of time to wait between recycle attempts.
+	// recycleInterval is the amount of time to wait between recycle attempts.
 	// Recycle is a request to clean up / remove stale data that backends can choose to
 	// implement.
-	recycleTimeout = 10 * time.Minute
+	recycleInterval = 10 * time.Minute
 
 	// statusQueryReplyTimeout specifies the amount of time to wait for the cluster
 	// status query reply.
@@ -78,3 +78,6 @@ const (
 // maxConcurrentCheckers specifies the maximum number of checkers active at
 // any given time.
 const maxConcurrentCheckers = 10
+
+// RPCPort defines default RPC port.
+const RPCPort = 7575
