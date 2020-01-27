@@ -41,4 +41,6 @@ type Messenger interface {
 	Subscribe(id string, sub Subscriber) error
 	// Unsubscribe a subscriber specified by the provided id.
 	Unsubscribe(id string) error
+	// IsSubscribed returns true if the id is already subscribed.
+	IsSubscribed(id string) bool
 }

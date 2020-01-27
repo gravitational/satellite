@@ -49,6 +49,9 @@ const (
 	// statusUpdateInterval is the amount of time to wait between status update collections.
 	statusUpdateInterval = 30 * time.Second
 
+	// subscriberInterval is the amount of time to wait between subscriber update attempts.
+	subscriberInterval = 30 * time.Second
+
 	// recycleInterval is the amount of time to wait between recycle attempts.
 	// Recycle is a request to clean up / remove stale data that backends can choose to
 	// implement.

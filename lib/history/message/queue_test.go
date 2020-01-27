@@ -75,12 +75,13 @@ func (s *QueueSuite) TestUnsubscribe(c *C) {
 	queue := s.newQueue()
 	sub := s.newSubscriber()
 	events := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), "node-1")}
+	var expected []*pb.TimelineEvent
 
 	test.WithTimeout(func(ctx context.Context) {
 		c.Assert(queue.Subscribe("sub-1", sub), IsNil)
 		c.Assert(queue.Unsubscribe("sub-1"), IsNil)
 		c.Assert(queue.Publish(ctx, events), IsNil)
-		c.Assert(sub.notified, test.DeepCompare, nil, Commentf("Expected zero value."))
+		c.Assert(sub.notified, test.DeepCompare, expected, Commentf("Expected zero value."))
 	})
 }
 

@@ -91,6 +91,15 @@ func (q *Queue) Unsubscribe(id string) error {
 	return nil
 }
 
+// IsSubscribed returns true is id is subscribed.
+func (q *Queue) IsSubscribed(id string) bool {
+	q.Lock()
+	defer q.Unlock()
+
+	_, ok := q.subscribers[id]
+	return ok
+}
+
 // initSubscriber brings the subscriber up to date with previously stored
 // events.
 func (q *Queue) initSubscriber(sub Subscriber) error {

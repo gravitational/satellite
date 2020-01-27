@@ -269,6 +269,7 @@ func (r *agent) Start() error {
 	// TODO: Modify Start to accept a context.
 	ctx, cancel := context.WithCancel(context.TODO())
 	go r.recycleLoop(ctx)
+	go r.subscriberLoop(ctx)
 	go r.statusUpdateLoop(ctx)
 	go r.serveMetrics()
 
@@ -323,32 +324,7 @@ func (r *agent) Join(peers []string) error {
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	if err := r.subscribeMasters(); err != nil {
-		return trace.Wrap(err, "failed to initialize subscribers")
-	}
-	if err := r.subscribeToCluster(); err != nil {
-		return trace.Wrap(err, "failed to subscribe to cluster")
-	}
 	log.Infof("joined %d nodes", numJoined)
-	return nil
-}
-
-// Subscribe to cluster identified by peers.
-// Subscribed peers will notify the agent of new timeline events.
-func (r *agent) Subscribe(name string) error {
-	member, err := r.SerfClient.FindMember(name)
-	if err != nil {
-		return trace.Wrap(err, "failed to find %s", name)
-	}
-
-	// Only subscribe if member has role 'master'
-	if role, ok := member.Tags["role"]; !ok || Role(role) != RoleMaster {
-		return trace.BadParameter("%s does not have role 'master'.", member.Name)
-	}
-
-	if err := r.subscribeMember(member); err != nil {
-		return trace.Wrap(err, "failed to subscribe %s", member.Name)
-	}
 	return nil
 }
 
@@ -483,6 +459,49 @@ func (r *agent) recycleLoop(ctx context.Context) {
 			continue
 		}
 	}
+}
+
+// subscriberLoop periodically updates the set of subscribers to this agent's
+// event queue.
+func (r *agent) subscriberLoop(ctx context.Context) {
+	ticker := r.Clock.NewTicker(subscriberInterval)
+	defer ticker.Stop()
+	for range ticker.Chan() {
+		if utils.IsContextDone(ctx) {
+			log.Info("Subscriber loop is stopping.")
+			return
+		}
+		if err := r.subscriberUpdate(); err != nil {
+			log.WithError(err).Warnf("Failed to update subscribers.")
+			continue
+		}
+	}
+}
+
+// subscriberUpdate updates the current set of subscribers. If any new master
+// nodes have joined the cluster, they will be subscribed to this agent's event
+// queue.
+func (r *agent) subscriberUpdate() error {
+	members, err := r.SerfClient.Members()
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	for _, member := range members {
+		// Only subscribe master nodes.
+		if role, ok := member.Tags["role"]; !ok || Role(role) != RoleMaster {
+			continue
+		}
+
+		// Member is already subscribed.
+		if r.Queue.IsSubscribed(member.Name) {
+			continue
+		}
+
+		if err := r.subscribeMember(member); err != nil {
+			return trace.Wrap(err)
+		}
+	}
+	return nil
 }
 
 // statusUpdateLoop is a long running background process that periodically
@@ -642,64 +661,8 @@ func (r *agent) recentLocalStatus() *pb.NodeStatus {
 	return r.localStatus
 }
 
-// subscribeMasters subscribes all master nodes to this agent's event queue.
-func (r *agent) subscribeMasters() error {
-	members, err := r.SerfClient.Members()
-	if err != nil {
-		return trace.Wrap(err)
-	}
-
-	// TODO: might be better to just return immediately after failing to
-	// subscribe a node.
-	var errors []error
-
-	for _, member := range members {
-		// Only subscribe if member has role 'master'
-		if role, ok := member.Tags["role"]; !ok || Role(role) != RoleMaster {
-			continue
-		}
-
-		if err := r.subscribeMember(&member); err != nil {
-			errors = append(errors, trace.Wrap(err, "failed to subscribe %s", member.Name))
-			continue
-		}
-	}
-	return trace.NewAggregate(errors...)
-}
-
-// subscribeToCluster subscribes to all members of the cluster.
-func (r *agent) subscribeToCluster() error {
-	// Only subscribe to cluster if agent has role 'master'
-	if role, ok := r.Tags["role"]; !ok || Role(role) != RoleMaster {
-		return nil
-	}
-
-	members, err := r.SerfClient.Members()
-	if err != nil {
-		return trace.Wrap(err)
-	}
-
-	// TODO: async
-	for _, member := range members {
-		ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
-		defer cancel()
-
-		client, err := r.dialRPC(ctx, &member)
-		if err != nil {
-			return trace.Wrap(err)
-		}
-
-		if _, err := client.Subscribe(ctx, &pb.SubscribeRequest{Name: r.Name}); err != nil {
-			log.WithError(err).Infof("Failed to subscribe to member %s.", member.Name)
-			continue
-		}
-		log.WithField("Member", member.Name).Info("Subscribed to a node.")
-	}
-	return nil
-}
-
 // subscribeMember subscribes member to this agent's event queue.
-func (r *agent) subscribeMember(member *serf.Member) error {
+func (r *agent) subscribeMember(member serf.Member) error {
 	clientConfig := client.Config{
 		Address:  fmt.Sprintf("%s:%d", member.Addr.String(), RPCPort),
 		CAFile:   r.CAFile,

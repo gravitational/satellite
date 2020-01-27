@@ -661,6 +661,11 @@ func (r *mockMessenger) Unsubscribe(id string) error {
 	return nil
 }
 
+func (r *mockMessenger) IsSubscribed(id string) bool {
+	_, ok := r.subscribers[id]
+	return ok
+}
+
 // mockSubscriber implements Subsciber with mocked functionality for testing.
 type mockSubscriber struct {
 	// notified indicates that the subscriber had been notified.
