@@ -36,9 +36,6 @@ import (
 
 // RPCServer is the interface that defines the interaction with an agent via RPC.
 type RPCServer interface {
-	// Subscribe to this agent's timeline event queue. Subscriber will be
-	// notified when new events are available.
-	Subscribe(context.Context, *pb.SubscribeRequest) (*pb.SubscribeResponse, error)
 	Status(context.Context, *pb.StatusRequest) (*pb.StatusResponse, error)
 	LocalStatus(context.Context, *pb.LocalStatusRequest) (*pb.LocalStatusResponse, error)
 	Time(context.Context, *pb.TimeRequest) (*pb.TimeResponse, error)
@@ -52,15 +49,6 @@ type server struct {
 	*grpc.Server
 	agent       *agent
 	httpServers []*http.Server
-}
-
-// Subscribe to this agent's timeline event queue. Subscribers will be notified
-// when new events are available.
-func (r *server) Subscribe(ctx context.Context, req *pb.SubscribeRequest) (*pb.SubscribeResponse, error) {
-	if err := r.agent.Subscribe(req.GetName()); err != nil {
-		return nil, trace.Wrap(err)
-	}
-	return &pb.SubscribeResponse{}, nil
 }
 
 // Status reports the health status of a serf cluster by iterating over the list
