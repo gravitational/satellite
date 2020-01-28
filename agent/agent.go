@@ -31,7 +31,6 @@ import (
 	"github.com/gravitational/satellite/lib/history"
 	"github.com/gravitational/satellite/lib/history/message"
 	"github.com/gravitational/satellite/lib/history/sqlite"
-	"github.com/gravitational/satellite/utils"
 
 	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
@@ -449,14 +448,16 @@ func runChecker(ctx context.Context, checker health.Checker, probeCh chan<- heal
 func (r *agent) recycleLoop(ctx context.Context) {
 	ticker := r.Clock.NewTicker(recycleInterval)
 	defer ticker.Stop()
-	for range ticker.Chan() {
-		if utils.IsContextDone(ctx) {
+
+	for {
+		select {
+		case <-ctx.Done():
 			log.Info("Recycle loop is stopping.")
 			return
-		}
-		if err := r.Cache.Recycle(); err != nil {
-			log.WithError(err).Warnf("Error recycling status.")
-			continue
+		case <-ticker.Chan():
+			if err := r.Cache.Recycle(); err != nil {
+				log.WithError(err).Warn("Failed to recycle status.")
+			}
 		}
 	}
 }
@@ -466,15 +467,18 @@ func (r *agent) recycleLoop(ctx context.Context) {
 func (r *agent) subscriberLoop(ctx context.Context) {
 	ticker := r.Clock.NewTicker(subscriberInterval)
 	defer ticker.Stop()
-	for range ticker.Chan() {
-		if utils.IsContextDone(ctx) {
+
+	for {
+		select {
+		case <-ctx.Done():
 			log.Info("Subscriber loop is stopping.")
 			return
+		case <-ticker.Chan():
+			if err := r.subscriberUpdate(); err != nil {
+				log.WithError(err).Warn("Failed to update subscribers.")
+			}
 		}
-		if err := r.subscriberUpdate(); err != nil {
-			log.WithError(err).Warnf("Failed to update subscribers.")
-			continue
-		}
+
 	}
 }
 
@@ -510,13 +514,16 @@ func (r *agent) subscriberUpdate() error {
 func (r *agent) statusUpdateLoop(ctx context.Context) {
 	ticker := r.Clock.NewTicker(statusUpdateInterval)
 	defer ticker.Stop()
-	for range ticker.Chan() {
-		if utils.IsContextDone(ctx) {
+
+	for {
+		select {
+		case <-ctx.Done():
 			log.Info("Status update loop is stopping.")
 			return
-		}
-		if err := r.updateStatus(ctx); err != nil {
-			log.WithError(err).Warnf("Failed to updates status.")
+		case <-ticker.Chan():
+			if err := r.updateStatus(ctx); err != nil {
+				log.WithError(err).Warn("Failed to update status.")
+			}
 		}
 	}
 }
