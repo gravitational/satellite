@@ -49,6 +49,8 @@ type Agent interface {
 	Join(peers []string) error
 	// LocalStatus reports the health status of the local agent node.
 	LocalStatus() *pb.NodeStatus
+	// LastSeen returns the last seen timestamp from the specified member.
+	LastSeen(name string) time.Time
 	// IsMember returns whether this agent is already a member of serf cluster
 	IsMember() bool
 	// GetConfig returns the agent configuration.
@@ -165,6 +167,11 @@ type agent struct {
 	// Defaults to statusQueryReplyTimeout if unspecified
 	statusQueryReplyTimeout time.Duration
 
+	// lastSeen keeps track of the last seen timestamp from a cluster member.
+	// The last seen timestamp can be queried by a member and be used to
+	// filter out events that have already been recorded by this member.
+	lastSeen map[string]time.Time
+
 	// memberIndex is used to select the next member to collect timeline data
 	// from.
 	// Type uint16 so limited to 0 - 65535. Assuming clusters will not have
@@ -209,6 +216,7 @@ func New(config *Config) (Agent, error) {
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
 		localStatus:             emptyNodeStatus(config.Name),
 		metricsListener:         metricsListener,
+		lastSeen:                make(map[string]time.Time),
 		done:                    make(chan struct{}),
 		Config:                  *config,
 		SerfClient:              serfClient,
@@ -338,6 +346,21 @@ func (r *agent) Close() (err error) {
 // LocalStatus reports the status of the local agent node.
 func (r *agent) LocalStatus() *pb.NodeStatus {
 	return r.recentLocalStatus()
+}
+
+// LastSeen returns the last seen timestamp from the specified member.
+func (r *agent) LastSeen(name string) time.Time {
+	r.Lock()
+	defer r.Unlock()
+
+	if timestamp, ok := r.lastSeen[name]; ok {
+		return timestamp
+	}
+
+	// If a last seen timestamp is not recorded for this member, initialize
+	// timestamp for this member.
+	r.lastSeen[name] = time.Time{}
+	return time.Time{}
 }
 
 // runChecks executes the monitoring tests configured for this agent in parallel.

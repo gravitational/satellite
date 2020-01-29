@@ -71,6 +71,9 @@ type Client interface {
 	Status(context.Context) (*pb.SystemStatus, error)
 	// LocalStatus reports the health status of the local serf cluster node.
 	LocalStatus(context.Context) (*pb.NodeStatus, error)
+	// LastSeen requests the last seen timestamp for a member specified by
+	// their serf name.
+	LastSeen(context.Context, *pb.LastSeenRequest) (*pb.LastSeenResponse, error)
 	// Time returns the current time on the target node.
 	Time(context.Context, *pb.TimeRequest) (*pb.TimeResponse, error)
 	// Timeline returns the current status timeline.
@@ -166,6 +169,16 @@ func (r *client) LocalStatus(ctx context.Context) (*pb.NodeStatus, error) {
 		return nil, ConvertGRPCError(err)
 	}
 	return resp.Status, nil
+}
+
+// LastSeen requests the last seen timestamp for member specified by their serf
+// name.
+func (r *client) LastSeen(ctx context.Context, req *pb.LastSeenRequest) (*pb.LastSeenResponse, error) {
+	resp, err := r.AgentClient.LastSeen(ctx, req, r.callOptions...)
+	if err != nil {
+		return nil, ConvertGRPCError(err)
+	}
+	return resp, nil
 }
 
 // Time returns the current time on the target node.

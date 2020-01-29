@@ -38,6 +38,8 @@ import (
 type RPCServer interface {
 	Status(context.Context, *pb.StatusRequest) (*pb.StatusResponse, error)
 	LocalStatus(context.Context, *pb.LocalStatusRequest) (*pb.LocalStatusResponse, error)
+	// LastSeen returns the last seen timestamp for a specified member.
+	LastSeen(context.Context, *pb.LastSeenRequest) (*pb.LastSeenResponse, error)
 	Time(context.Context, *pb.TimeRequest) (*pb.TimeResponse, error)
 	Timeline(context.Context, *pb.TimelineRequest) (*pb.TimelineResponse, error)
 	UpdateTimeline(context.Context, *pb.UpdateRequest) (*pb.UpdateResponse, error)
@@ -71,6 +73,14 @@ func (r *server) LocalStatus(ctx context.Context, req *pb.LocalStatusRequest) (r
 	resp.Status = r.agent.recentLocalStatus()
 
 	return resp, nil
+}
+
+// LastSeen returns the last seen timestamp for a specified member.
+func (r *server) LastSeen(ctx context.Context, req *pb.LastSeenRequest) (resp *pb.LastSeenResponse, err error) {
+	timestamp := r.agent.LastSeen(req.GetName())
+	return &pb.LastSeenResponse{
+		Timestamp: pb.NewTimeToProto(timestamp),
+	}, nil
 }
 
 // Time sends back the target node server time
