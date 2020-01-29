@@ -25,7 +25,7 @@ import (
 // WithTimeout runs the provided test case with the default test timeout.
 func WithTimeout(fn func(ctx context.Context)) {
 	// testTimeout specifies the overall time limit for a test.
-	const testTimeout = 10 * time.Second
+	const testTimeout = 5 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 	fn(ctx)

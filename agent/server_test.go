@@ -255,7 +255,9 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 
 			resp, err := localAgent.rpc.Status(ctx, &pb.StatusRequest{})
 			c.Assert(err, IsNil, comment)
-			c.Assert(sortProbes(*resp.Status), test.DeepCompare, testCase.status, comment)
+
+			sortStatus(resp.Status)
+			c.Assert(*resp.Status, test.DeepCompare, testCase.status, comment)
 		})
 	}
 }
@@ -329,7 +331,9 @@ func (r *AgentSuite) TestReflectsSystemStatusInStatusCode(c *C) {
 
 		var status pb.SystemStatus
 		c.Assert(json.Unmarshal(resp.Bytes(), &status), IsNil)
-		c.Assert(sortProbes(status), test.DeepCompare, expected)
+
+		sortStatus(&status)
+		c.Assert(status, test.DeepCompare, expected)
 	})
 }
 
@@ -396,22 +400,22 @@ func (r *AgentSuite) TestFailsIfTimesOutToCollectStatus(c *C) {
 
 		resp, err := localAgent.rpc.Status(ctx, &pb.StatusRequest{})
 		c.Assert(err, IsNil)
-		c.Assert(sortProbes(*resp.Status), test.DeepCompare, expected)
+
+		sortStatus(resp.Status)
+		c.Assert(*resp.Status, test.DeepCompare, expected)
 	})
 }
 
 // TestUpdateLocalTimeline verifies that an agent is able to update its timeline
 // with local status changes.
 func (r *AgentSuite) TestUpdateLocalTimeline(c *C) {
-	comment := Commentf("Expected node-1 recovered.")
-	expected := []*pb.TimelineEvent{
-		history.NewNodeRecovered(r.clock.Now(), "node-1"),
-	}
+	comment := Commentf("Expected master recovered.")
+	expected := []*pb.TimelineEvent{history.NewNodeRecovered(r.clock.Now(), "master")}
+	members := []serf.Member{newMember("master", "alive")}
 	localConfig := testAgentConfig{
-		localStatus: &pb.NodeStatus{
-			Name:   "node-1",
-			Status: pb.NodeStatus_Running,
-		},
+		node:     "master",
+		members:  members,
+		checkers: []health.Checker{healthyTest, healthyTest},
 	}
 	localAgent := r.newLocalNode(localConfig)
 
@@ -419,11 +423,12 @@ func (r *AgentSuite) TestUpdateLocalTimeline(c *C) {
 		c.Assert(localAgent.Start(), IsNil)
 		defer localAgent.Close()
 
-		c.Assert(localAgent.updateTimeline(ctx), IsNil)
-
-		resp, err := localAgent.rpc.Timeline(ctx, &pb.TimelineRequest{})
+		_, err := localAgent.collectLocalStatus(ctx, &members[0])
 		c.Assert(err, IsNil)
-		c.Assert(resp.GetEvents(), test.DeepCompare, expected, comment)
+
+		events, err := localAgent.LocalTimeline.GetEvents(ctx, nil)
+		c.Assert(err, IsNil)
+		c.Assert(events, test.DeepCompare, expected, comment)
 	})
 }
 
@@ -432,7 +437,7 @@ func (r *AgentSuite) TestUpdateLocalTimeline(c *C) {
 func (r *AgentSuite) TestUpdateRemoteTimeline(c *C) {
 	comment := Commentf("Expected node-1 recovered.")
 	req := &pb.UpdateRequest{Event: history.NewNodeRecovered(r.clock.Now(), "node-1")}
-	expected := []*pb.TimelineEvent{history.NewNodeRecovered(r.clock.Now(), "node-1")}
+	expected := &pb.TimelineResponse{Events: []*pb.TimelineEvent{history.NewNodeRecovered(r.clock.Now(), "node-1")}}
 	remoteAgent, err := r.newRemoteNode(testAgentConfig{})
 	c.Assert(err, IsNil)
 
@@ -445,39 +450,27 @@ func (r *AgentSuite) TestUpdateRemoteTimeline(c *C) {
 
 		resp, err := remoteAgent.rpc.Timeline(ctx, &pb.TimelineRequest{})
 		c.Assert(err, IsNil)
-		c.Assert(resp.GetEvents(), test.DeepCompare, expected, comment)
+		c.Assert(resp, test.DeepCompare, expected, comment)
 	})
 }
 
-// TestTimelineMerge validates the communication between several agents to
-// exchange timeline information.
-func (r *AgentSuite) TestAgentProvidesTimeline(c *C) {
-	comment := Commentf("Expected node-1 recovered and node-2 degraded.")
-	expected := []*pb.TimelineEvent{
-		history.NewNodeRecovered(r.clock.Now(), "node-1"),
-		history.NewNodeDegraded(r.clock.Now(), "node-2"),
-	}
-	localConfig := testAgentConfig{
-		node: "node-1",
-		members: []serf.Member{
-			newMember("node-1", "alive"),
-			newMember("node-2", "alive"),
-		},
-		localStatus: &pb.NodeStatus{
-			Name:   "node-1",
-			Status: pb.NodeStatus_Running,
-		},
+// TestNotifyMaster validates the communication between master and node. Local
+// timeline events should be pushed to the master.
+func (r *AgentSuite) TestNotifyMaster(c *C) {
+	comment := Commentf("Expected node-1 to push local events to master")
+	expected := &pb.TimelineResponse{Events: []*pb.TimelineEvent{history.NewNodeRecovered(r.clock.Now(), "node-1")}}
+	members := []serf.Member{
+		newMember("master", "alive"),
+		newMember("node-1", "alive"),
 	}
 	remoteConfig := testAgentConfig{
-		node: "node-2",
-		members: []serf.Member{
-			newMember("node-1", "alive"),
-			newMember("node-2", "alive"),
-		},
-		localStatus: &pb.NodeStatus{
-			Name:   "node-2",
-			Status: pb.NodeStatus_Degraded,
-		},
+		node:    "master",
+		members: members,
+	}
+	localConfig := testAgentConfig{
+		node:     "node-1",
+		members:  members,
+		checkers: []health.Checker{healthyTest, healthyTest},
 	}
 
 	localAgent := r.newLocalNode(localConfig)
@@ -491,13 +484,42 @@ func (r *AgentSuite) TestAgentProvidesTimeline(c *C) {
 		c.Assert(remoteAgent.Start(), IsNil)
 		defer remoteAgent.Close()
 
-		c.Assert(remoteAgent.updateTimeline(ctx), IsNil)
-		c.Assert(localAgent.updateTimeline(ctx), IsNil)
+		_, err = localAgent.collectLocalStatus(ctx, &members[1])
+		c.Assert(err, IsNil)
 
-		resp, err := localAgent.rpc.Timeline(ctx, &pb.TimelineRequest{})
+		resp, err := remoteAgent.rpc.Timeline(ctx, &pb.TimelineRequest{})
 		c.Assert(err, IsNil, comment)
-		c.Assert(resp.GetEvents(), test.DeepCompare, expected, comment)
+		c.Assert(resp, test.DeepCompare, expected, comment)
+	})
+}
 
+// TestAgentProvidesLastSeen validates that the agent is correctly recording
+// last seen timestamps.
+func (r *AgentSuite) TestAgentProvidesLastSeen(c *C) {
+	comment := Commentf("Expected the current time to be last seen.")
+	remoteConfig := testAgentConfig{
+		node:    "master",
+		members: []serf.Member{newMember("master", "alive")},
+		localStatus: &pb.NodeStatus{
+			Name:   "master",
+			Status: pb.NodeStatus_Degraded,
+		},
+	}
+	expected := &pb.LastSeenResponse{Timestamp: pb.NewTimeToProto(r.clock.Now())}
+
+	remoteAgent, err := r.newRemoteNode(remoteConfig)
+	c.Assert(err, IsNil)
+
+	test.WithTimeout(func(ctx context.Context) {
+		c.Assert(remoteAgent.Start(), IsNil)
+		defer remoteAgent.Close()
+
+		_, err := remoteAgent.collectLocalStatus(ctx, &remoteConfig.members[0])
+		c.Assert(err, IsNil)
+
+		resp, err := remoteAgent.rpc.LastSeen(ctx, &pb.LastSeenRequest{Name: "master"})
+		c.Assert(err, IsNil)
+		c.Assert(resp, test.DeepCompare, expected, comment)
 	})
 }
 
@@ -561,6 +583,7 @@ func (r *AgentSuite) newAgent(config testAgentConfig) *agent {
 
 	config.setDefaults()
 	timeline := memory.NewTimeline(config.clock, timelineCapacity)
+	localTimeline := memory.NewTimeline(config.clock, timelineCapacity)
 
 	agentConfig := Config{
 		Cache: inmemory.New(),
@@ -571,10 +594,12 @@ func (r *AgentSuite) newAgent(config testAgentConfig) *agent {
 	return &agent{
 		SerfClient:              &MockSerfClient{members: config.members},
 		Timeline:                timeline,
+		LocalTimeline:           localTimeline,
 		dialRPC:                 testDialRPC(config.rpcPort, r.certFile, r.keyFile),
 		Config:                  agentConfig,
 		Checkers:                config.checkers,
 		localStatus:             config.localStatus,
+		lastSeen:                make(map[string]time.Time),
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
 		done:                    make(chan struct{}),
 	}
@@ -658,12 +683,11 @@ func newMember(name string, status string) serf.Member {
 	return result
 }
 
-// sortProbes return system status with sorted probes.
-func sortProbes(status pb.SystemStatus) pb.SystemStatus {
+func sortStatus(status *pb.SystemStatus) {
+	sort.Sort(byName(status.Nodes))
 	for _, node := range status.Nodes {
 		sort.Sort(byChecker(node.Probes))
 	}
-	return status
 }
 
 var healthyTest = &testChecker{
@@ -729,7 +753,7 @@ func (r *testChecker) Check(ctx context.Context, reporter health.Reporter) {
 }
 
 // byChecker implements sort.Interface.
-// Enables probes to be sorted.
+// Enables probes to be sorted by checker.
 type byChecker []*pb.Probe
 
 func (r byChecker) Len() int           { return len(r) }
@@ -737,3 +761,11 @@ func (r byChecker) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
 func (r byChecker) Less(i, j int) bool { return r[i].Checker < r[j].Checker }
 
 type tags map[string]string
+
+// byName implements sort.Interface.
+// Enables nodes to be sorted by name.
+type byName []*pb.NodeStatus
+
+func (r byName) Len() int           { return len(r) }
+func (r byName) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
+func (r byName) Less(i, j int) bool { return r[i].Name < r[j].Name }

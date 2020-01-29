@@ -29,7 +29,6 @@ import (
 	"github.com/gravitational/satellite/lib/client"
 	"github.com/gravitational/satellite/lib/history"
 	"github.com/gravitational/satellite/lib/history/sqlite"
-	"github.com/gravitational/satellite/utils"
 
 	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
@@ -468,14 +467,17 @@ func runChecker(ctx context.Context, checker health.Checker, probeCh chan<- heal
 func (r *agent) recycleLoop(ctx context.Context) {
 	ticker := r.Clock.NewTicker(recycleTimeout)
 	defer ticker.Stop()
-	for range ticker.Chan() {
-		if utils.IsContextDone(ctx) {
+
+	for {
+		select {
+		case <-ctx.Done():
 			log.Info("Recycle loop is stopping.")
 			return
-		}
-		if err := r.Cache.Recycle(); err != nil {
-			log.WithError(err).Warnf("Error recycling status.")
-			continue
+		case <-ticker.Chan():
+			if err := r.Cache.Recycle(); err != nil {
+				log.WithError(err).Warnf("Error recycling status.")
+			}
+
 		}
 	}
 }
@@ -486,13 +488,17 @@ func (r *agent) recycleLoop(ctx context.Context) {
 func (r *agent) statusUpdateLoop(ctx context.Context) {
 	ticker := r.Clock.NewTicker(statusUpdateTimeout)
 	defer ticker.Stop()
-	for range ticker.Chan() {
-		if utils.IsContextDone(ctx) {
+
+	for {
+		select {
+		case <-ctx.Done():
 			log.Info("Status update loop is stopping.")
 			return
-		}
-		if err := r.updateStatus(ctx); err != nil {
-			log.WithError(err).Warnf("Failed to updates status.")
+		case <-ticker.Chan():
+			if err := r.updateStatus(ctx); err != nil {
+				log.WithError(err).Warnf("Failed to updates status.")
+			}
+
 		}
 	}
 }
@@ -565,6 +571,7 @@ L:
 			break L
 		}
 	}
+
 	setSystemStatus(systemStatus, members)
 
 	return systemStatus, nil
@@ -590,6 +597,20 @@ func (r *agent) collectLocalStatus(ctx context.Context, local *serf.Member) (sta
 	}
 
 	return status, nil
+}
+
+// getLocalStatus obtains local node status.
+func (r *agent) getLocalStatus(ctx context.Context, local serf.Member, respc chan<- *statusResponse) {
+	status, err := r.collectLocalStatus(ctx, &local)
+	resp := &statusResponse{
+		NodeStatus: status,
+		member:     local,
+		err:        err,
+	}
+	select {
+	case respc <- resp:
+	case <-r.done:
+	}
 }
 
 // notifyMasters pushes new timeline events to all master nodes in the cluster.
@@ -630,9 +651,7 @@ func (r *agent) notifyMaster(ctx context.Context, member *serf.Member, events []
 		return trace.Wrap(err)
 	}
 
-	// Subtract a second in case multiple events were recorded with the same timestamp.
-	// If any events failed to push previously, they will be resent.
-	filtered := filterByTimestamp(events, resp.GetTimestamp().ToTime().Add(-time.Second))
+	filtered := filterByTimestamp(events, resp.GetTimestamp().ToTime())
 
 	for _, event := range filtered {
 		if _, err := client.UpdateTimeline(ctx, &pb.UpdateRequest{Name: r.Name, Event: event}); err != nil {
@@ -641,20 +660,6 @@ func (r *agent) notifyMaster(ctx context.Context, member *serf.Member, events []
 	}
 
 	return nil
-}
-
-// getLocalStatus obtains local node status.
-func (r *agent) getLocalStatus(ctx context.Context, local serf.Member, respc chan<- *statusResponse) {
-	status, err := r.collectLocalStatus(ctx, &local)
-	resp := &statusResponse{
-		NodeStatus: status,
-		member:     local,
-		err:        err,
-	}
-	select {
-	case respc <- resp:
-	case <-r.done:
-	}
 }
 
 // getStatusFrom obtains node status from the node identified by member.
@@ -712,9 +717,10 @@ func filterLeft(members []serf.Member) (result []serf.Member) {
 // timestamp.
 func filterByTimestamp(events []*pb.TimelineEvent, timestamp time.Time) (filtered []*pb.TimelineEvent) {
 	for _, event := range events {
-		if event.GetTimestamp().ToTime().After(timestamp) {
-			filtered = append(filtered, event)
+		if event.GetTimestamp().ToTime().Before(timestamp) {
+			continue
 		}
+		filtered = append(filtered, event)
 	}
 	return filtered
 }
