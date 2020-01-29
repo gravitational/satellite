@@ -108,6 +108,8 @@ func (r *server) UpdateTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb
 	if err := r.agent.Timeline.RecordTimeline(ctx, []*pb.TimelineEvent{req.GetEvent()}); err != nil {
 		return nil, GRPCError(err)
 	}
+	r.agent.recordLastSeen(req.GetName(), req.GetEvent().GetTimestamp().ToTime())
+
 	return &pb.UpdateResponse{}, nil
 }
 

@@ -106,6 +106,9 @@ type Config struct {
 	// TimelineConfig specifies sqlite timeline configuration.
 	TimelineConfig sqlite.Config
 
+	// LocalTimelineConfig specifies local timeline configuration.
+	LocalTimelineConfig sqlite.Config
+
 	// Clock to be used for internal time keeping.
 	Clock clockwork.Clock
 
@@ -172,20 +175,18 @@ type agent struct {
 	// filter out events that have already been recorded by this member.
 	lastSeen map[string]time.Time
 
-	// memberIndex is used to select the next member to collect timeline data
-	// from.
-	// Type uint16 so limited to 0 - 65535. Assuming clusters will not have
-	// more than that many members.
-	memberIndex uint16
-
 	// Config is the agent configuration.
 	Config
 
 	// SerfClient provides access to the serf agent.
 	SerfClient SerfClient
 
-	// Timeline keeps track of status change events.
+	// Timeline keeps track of all timeline events in the cluster. This timeline
+	// is only used on members that have the role 'master'.
 	Timeline history.Timeline
+
+	// LocalTimeline keeps track of local timeline events.
+	LocalTimeline history.Timeline
 }
 
 // New creates an instance of an agent based on configuration options given in config.
@@ -211,6 +212,11 @@ func New(config *Config) (Agent, error) {
 		return nil, trace.Wrap(err, "failed to initialize timeline")
 	}
 
+	localTimeline, err := initTimeline(config.LocalTimelineConfig)
+	if err != nil {
+		return nil, trace.Wrap(err, "failed to initialize local timeline")
+	}
+
 	agent := &agent{
 		dialRPC:                 client.DefaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
@@ -221,6 +227,7 @@ func New(config *Config) (Agent, error) {
 		Config:                  *config,
 		SerfClient:              serfClient,
 		Timeline:                timeline,
+		LocalTimeline:           localTimeline,
 	}
 
 	agent.rpc, err = newRPCServer(agent, config.CAFile, config.CertFile, config.KeyFile, config.RPCAddrs)
@@ -261,7 +268,6 @@ func (r *agent) Start() error {
 	ctx, cancel := context.WithCancel(context.TODO())
 	go r.recycleLoop(ctx)
 	go r.statusUpdateLoop(ctx)
-	go r.timelineUpdateLoop(ctx)
 	go r.serveMetrics()
 
 	go func() {
@@ -361,6 +367,13 @@ func (r *agent) LastSeen(name string) time.Time {
 	// timestamp for this member.
 	r.lastSeen[name] = time.Time{}
 	return time.Time{}
+}
+
+// recordLastSeen records the last seen timestamp for the specified member.
+func (r *agent) recordLastSeen(name string, lastSeen time.Time) {
+	r.Lock()
+	defer r.Unlock()
+	r.lastSeen[name] = lastSeen
 }
 
 // runChecks executes the monitoring tests configured for this agent in parallel.
@@ -558,22 +571,85 @@ L:
 }
 
 // collectLocalStatus executes monitoring tests on the local node.
-func (r *agent) collectLocalStatus(ctx context.Context, local *serf.Member) (status *pb.NodeStatus) {
+func (r *agent) collectLocalStatus(ctx context.Context, local *serf.Member) (status *pb.NodeStatus, err error) {
 	status = r.runChecks(ctx)
 	status.MemberStatus = statusFromMember(local)
+
 	r.Lock()
+	changes := history.DiffNode(r.Clock, r.localStatus, status)
 	r.localStatus = status
 	r.Unlock()
 
-	return status
+	/// TODO: handle recording of timeline outside of collection.
+	if err := r.LocalTimeline.RecordTimeline(ctx, changes); err != nil {
+		return status, trace.Wrap(err, "failed to record local timeline events")
+	}
+
+	if err := r.notifyMasters(ctx); err != nil {
+		return status, trace.Wrap(err, "failed to notify master nodes of local timeline events")
+	}
+
+	return status, nil
+}
+
+// notifyMasters pushes new timeline events to all master nodes in the cluster.
+func (r *agent) notifyMasters(ctx context.Context) error {
+	members, err := r.SerfClient.Members()
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	events, err := r.LocalTimeline.GetEvents(ctx, nil)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	// TODO: async
+	for _, member := range members {
+		if role, ok := member.Tags["role"]; ok && Role(role) == RoleMaster {
+			if err := r.notifyMaster(ctx, &member, events); err != nil {
+				log.WithError(err).Warnf("Failed to notify %s of new timeline events.", member.Name)
+			}
+		}
+	}
+
+	return nil
+}
+
+// notifyMaster push new timeline events to the specified member.
+func (r *agent) notifyMaster(ctx context.Context, member *serf.Member, events []*pb.TimelineEvent) error {
+	client, err := r.dialRPC(ctx, member)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	defer client.Close()
+
+	// Filter events by last seen timestamp. Only push unrecorded events.
+	resp, err := client.LastSeen(ctx, &pb.LastSeenRequest{Name: r.Name})
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	// Subtract a second in case multiple events were recorded with the same timestamp.
+	// If any events failed to push previously, they will be resent.
+	filtered := filterByTimestamp(events, resp.GetTimestamp().ToTime().Add(-time.Second))
+
+	for _, event := range filtered {
+		if _, err := client.UpdateTimeline(ctx, &pb.UpdateRequest{Name: r.Name, Event: event}); err != nil {
+			return trace.Wrap(err)
+		}
+	}
+
+	return nil
 }
 
 // getLocalStatus obtains local node status.
 func (r *agent) getLocalStatus(ctx context.Context, local serf.Member, respc chan<- *statusResponse) {
-	status := r.collectLocalStatus(ctx, &local)
+	status, err := r.collectLocalStatus(ctx, &local)
 	resp := &statusResponse{
 		NodeStatus: status,
 		member:     local,
+		err:        err,
 	}
 	select {
 	case respc <- resp:
@@ -603,104 +679,6 @@ func (r *agent) getStatusFrom(ctx context.Context, member serf.Member, respc cha
 	}
 }
 
-// timelineUpdateLoop periodically updates the status timeline.
-func (r *agent) timelineUpdateLoop(ctx context.Context) {
-	ticker := r.Clock.NewTicker(statusUpdateTimeout)
-	defer ticker.Stop()
-
-	for range ticker.Chan() {
-		if utils.IsContextDone(ctx) {
-			log.Info("Timeline update loop is stopping.")
-			return
-		}
-		if err := r.updateTimeline(ctx); err != nil {
-			log.WithError(err).Error("Failed to update timeline.")
-		}
-	}
-}
-
-// updateTimeline records any status changes to the timeline.
-func (r *agent) updateTimeline(ctx context.Context) error {
-	if err := r.updateLocalChanges(ctx); err != nil {
-		return trace.Wrap(err, "error updating local timeline changes")
-	}
-	r.memberIndex++
-	member, err := r.selectMember(int(r.memberIndex))
-	if err != nil {
-		return nil
-	}
-	if err := r.updateRemoteChanges(ctx, member); err != nil {
-		return trace.Wrap(err, "error updating remote timeline changes")
-	}
-	return nil
-}
-
-// updateLocalChanges updates the timeline with any new status changes found on
-// the local node.
-func (r *agent) updateLocalChanges(ctx context.Context) error {
-	ctxUpdate, cancel := context.WithTimeout(ctx, updateTimelineTimeout)
-	defer cancel()
-
-	if err := r.Timeline.RecordStatus(ctxUpdate, r.LocalStatus()); err != nil {
-		return trace.Wrap(err)
-	}
-
-	return nil
-}
-
-// updateRemoteChanges updates the timeline with events from another member in
-// the cluster.
-func (r *agent) updateRemoteChanges(ctx context.Context, member serf.Member) error {
-	ctxQuery, cancel := context.WithTimeout(ctx, r.statusQueryReplyTimeout)
-	defer cancel()
-	timeline, err := r.getTimelineFrom(ctxQuery, member)
-	if err != nil {
-		return trace.Wrap(err)
-	}
-
-	ctxUpdate, cancel := context.WithTimeout(ctx, updateTimelineTimeout)
-	defer cancel()
-	if err := r.Timeline.RecordTimeline(ctxUpdate, timeline); err != nil {
-		return trace.Wrap(err)
-	}
-
-	return nil
-}
-
-// selectMember will select a member using the provided index.
-func (r *agent) selectMember(index int) (member serf.Member, err error) {
-	members, err := r.SerfClient.Members()
-	if err != nil {
-		return member, trace.Wrap(err, "failed to query serf members")
-	}
-	// Ignore members that have left the cluster.
-	members = filterLeft(members)
-	// Ignore self.
-	members = filterMember(members, r.Name)
-
-	numAvailable := len(members)
-	if numAvailable < 1 {
-		return member, trace.NotFound("no cluster members available")
-	}
-
-	return members[index%numAvailable], nil
-}
-
-// getTimelineFrom obtains timeline from the node identified by member.
-func (r *agent) getTimelineFrom(ctx context.Context, member serf.Member) (events []*pb.TimelineEvent, err error) {
-	client, err := r.dialRPC(ctx, &member)
-	if err != nil {
-		return events, trace.Wrap(err)
-	}
-	defer client.Close()
-
-	timeline, err := client.Timeline(ctx, &pb.TimelineRequest{})
-	if err != nil {
-		return events, trace.Wrap(err)
-	}
-	return timeline.GetEvents(), nil
-}
-
 // recentStatus returns the last known cluster status.
 func (r *agent) recentStatus() (status *pb.SystemStatus, err error) {
 	status, err = r.Cache.RecentStatus()
@@ -717,9 +695,6 @@ func (r *agent) recentLocalStatus() *pb.NodeStatus {
 	return r.localStatus
 }
 
-// TODO: Optimization - use a different data structure for storing serf members
-// if we need to constantly filter the list.
-
 // filterLeft filters out members that have left the serf cluster
 func filterLeft(members []serf.Member) (result []serf.Member) {
 	result = make([]serf.Member, 0, len(members))
@@ -733,14 +708,15 @@ func filterLeft(members []serf.Member) (result []serf.Member) {
 	return result
 }
 
-// filterMember filters out member by name.
-func filterMember(members []serf.Member, name string) (result []serf.Member) {
-	for i, member := range members {
-		if member.Name == name {
-			return append(members[:i], members[i+1:]...)
+// filterByTimestamp filters out events that occurred before the provided
+// timestamp.
+func filterByTimestamp(events []*pb.TimelineEvent, timestamp time.Time) (filtered []*pb.TimelineEvent) {
+	for _, event := range events {
+		if event.GetTimestamp().ToTime().After(timestamp) {
+			filtered = append(filtered, event)
 		}
 	}
-	return result
+	return filtered
 }
 
 // statusResponse describes a status response from a background process that obtains
