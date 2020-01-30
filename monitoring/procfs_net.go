@@ -63,7 +63,7 @@ func (r portCollector) sockets(fetchSockets ...socketGetterFunc) (ret []process,
 
 	for _, socket := range sockets {
 		proc, err := r.findProcessByInode(socket.inode())
-		if err != nil && socket.inode() != "0" {
+		if err != nil && socket.inode() != "0" && !trace.IsNotFound(err) {
 			log.WithFields(log.Fields{
 				log.ErrorKey: err,
 				"inode":      socket.inode(),
@@ -356,7 +356,7 @@ func mapPidToInode(pid pid, inodes map[string]pid) error {
 	for _, f := range files {
 		inodePath := filepath.Join(dir, f)
 		inode, err := os.Readlink(inodePath)
-		if err != nil {
+		if err != nil && !os.IsNotExist(err) {
 			log.Debugf("failed to readlink(%q): %v", inodePath, err)
 			continue
 		}
