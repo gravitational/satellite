@@ -118,7 +118,6 @@ func NewClient(ctx context.Context, config Config) (*client, error) {
 		RootCAs:      certPool,
 		Certificates: []tls.Certificate{cert},
 		MinVersion:   tls.VersionTLS12,
-		ServerName:   "",
 		// Use TLS Modern capability suites
 		// https://wiki.mozilla.org/Security/Server_Side_TLS
 		CipherSuites: []uint16{

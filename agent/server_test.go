@@ -673,18 +673,7 @@ func newClient(ctx context.Context, addr, serverName, caFile, certFile, keyFile 
 		Certificates: []tls.Certificate{cert},
 		MinVersion:   tls.VersionTLS12,
 		ServerName:   serverName,
-		// Use TLS Modern capability suites
-		// https://wiki.mozilla.org/Security/Server_Side_TLS
-		CipherSuites: []uint16{
-			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
-		},
+		CipherSuites: defaultCipherSuites,
 	})
 	return client.NewClientWithCreds(ctx, addr, creds)
 }
