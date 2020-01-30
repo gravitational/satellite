@@ -53,6 +53,10 @@ type Agent interface {
 	LocalStatus() *pb.NodeStatus
 	// LastSeen returns the last seen timestamp from the specified member.
 	LastSeen(name string) (time.Time, error)
+	// GetTimeline returns the current cluster timeline.
+	GetTimeline(ctx context.Context, params map[string]string) ([]*pb.TimelineEvent, error)
+	// RecordTimeline records the events into the cluster timeline.
+	RecordTimeline(ctx context.Context, events []*pb.TimelineEvent) error
 	// IsMember returns whether this agent is already a member of serf cluster
 	IsMember() bool
 	// GetConfig returns the agent configuration.
@@ -213,14 +217,18 @@ func New(config *Config) (Agent, error) {
 		return nil, trace.Wrap(err, "failed to serve prometheus metrics")
 	}
 
-	timeline, err := initTimeline(config.TimelineConfig, "cluster.db")
-	if err != nil {
-		return nil, trace.Wrap(err, "failed to initialize timeline")
-	}
-
 	localTimeline, err := initTimeline(config.TimelineConfig, "local.db")
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to initialize local timeline")
+	}
+
+	// Only initialize cluster timeline for master nodes.
+	var timeline history.Timeline
+	if role, ok := config.Tags["role"]; ok && Role(role) == RoleMaster {
+		timeline, err = initTimeline(config.TimelineConfig, "cluster.db")
+		if err != nil {
+			return nil, trace.Wrap(err, "failed to initialize timeline")
+		}
 	}
 
 	lastSeen, err := ttlmap.New(config.ClusterCapacity)
@@ -436,6 +444,22 @@ func (r *agent) runChecks(ctx context.Context) *pb.NodeStatus {
 		Status: probes.Status(),
 		Probes: probes.GetProbes(),
 	}
+}
+
+// GetTimeline returns the current cluster timeline.
+func (r *agent) GetTimeline(ctx context.Context, params map[string]string) ([]*pb.TimelineEvent, error) {
+	if role, ok := r.Tags["role"]; !ok || Role(role) != RoleMaster {
+		return nil, trace.BadParameter("requesting cluster timeline from non master")
+	}
+	return r.Timeline.GetEvents(ctx, params)
+}
+
+// RecordTimeline records the events into the cluster timeline.
+func (r *agent) RecordTimeline(ctx context.Context, events []*pb.TimelineEvent) error {
+	if role, ok := r.Tags["role"]; !ok || Role(role) != RoleMaster {
+		return trace.BadParameter("attempting to record events to non master")
+	}
+	return r.Timeline.RecordTimeline(ctx, events)
 }
 
 // runChecker executes the specified checker and reports results on probeCh.

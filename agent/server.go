@@ -95,7 +95,7 @@ func (r *server) Time(ctx context.Context, req *pb.TimeRequest) (*pb.TimeRespons
 
 // Timeline sends the current status timeline
 func (r *server) Timeline(ctx context.Context, req *pb.TimelineRequest) (*pb.TimelineResponse, error) {
-	events, err := r.agent.Timeline.GetEvents(ctx, req.GetParams())
+	events, err := r.GetTimeline(ctx, req.GetParams())
 	if err != nil {
 		return nil, GRPCError(err)
 	}
@@ -108,7 +108,7 @@ func (r *server) Timeline(ctx context.Context, req *pb.TimelineRequest) (*pb.Tim
 // UpdateTimeline updates the timeline with a new event.
 // Duplicate requests will have no effect.
 func (r *server) UpdateTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateResponse, error) {
-	if err := r.agent.Timeline.RecordTimeline(ctx, []*pb.TimelineEvent{req.GetEvent()}); err != nil {
+	if err := r.agent.RecordTimeline(ctx, []*pb.TimelineEvent{req.GetEvent()}); err != nil {
 		return nil, GRPCError(err)
 	}
 	if err := r.agent.recordLastSeen(req.GetName(), req.GetEvent().GetTimestamp().ToTime()); err != nil {
