@@ -445,7 +445,10 @@ func (r *AgentSuite) TestUpdateRemoteTimeline(c *C) {
 	comment := Commentf("Expected node-1 recovered.")
 	req := &pb.UpdateRequest{Event: history.NewNodeRecovered(r.clock.Now(), "node-1")}
 	expected := &pb.TimelineResponse{Events: []*pb.TimelineEvent{history.NewNodeRecovered(r.clock.Now(), "node-1")}}
-	remoteAgent, err := r.newRemoteNode(testAgentConfig{})
+	remoteConfig := testAgentConfig{
+		role: "master",
+	}
+	remoteAgent, err := r.newRemoteNode(remoteConfig)
 	c.Assert(err, IsNil)
 
 	test.WithTimeout(func(ctx context.Context) {
@@ -472,6 +475,7 @@ func (r *AgentSuite) TestNotifyMaster(c *C) {
 	}
 	remoteConfig := testAgentConfig{
 		node:    "master",
+		role:    "master",
 		members: members,
 	}
 	localConfig := testAgentConfig{
@@ -507,6 +511,7 @@ func (r *AgentSuite) TestAgentProvidesLastSeen(c *C) {
 	comment := Commentf("Expected the current time to be last seen.")
 	remoteConfig := testAgentConfig{
 		node:    "master",
+		role:    "master",
 		members: []serf.Member{newMember("master", "alive")},
 		localStatus: &pb.NodeStatus{
 			Name:   "master",
@@ -535,6 +540,7 @@ func (r *AgentSuite) TestAgentProvidesLastSeen(c *C) {
 // testAgentConfig specifies config values for testAgent.
 type testAgentConfig struct {
 	node        string
+	role        string
 	rpcPort     int
 	members     []serf.Member
 	checkers    []health.Checker
@@ -552,6 +558,9 @@ func (config *testAgentConfig) setDefaults() {
 	}
 	if config.localStatus == nil {
 		config.localStatus = emptyNodeStatus(config.node)
+	}
+	if config.role == "" {
+		config.role = "node"
 	}
 }
 
@@ -602,10 +611,14 @@ func (r *AgentSuite) newAgent(config testAgentConfig) (*agent, error) {
 	timeline := memory.NewTimeline(config.clock, timelineCapacity)
 	localTimeline := memory.NewTimeline(config.clock, timelineCapacity)
 
+	agentTags := make(tags)
+	agentTags["role"] = config.role
+
 	agentConfig := Config{
 		Cache: inmemory.New(),
 		Name:  config.node,
 		Clock: config.clock,
+		Tags:  agentTags,
 	}
 
 	lastSeen, err := ttlmap.New(clusterCapacity)

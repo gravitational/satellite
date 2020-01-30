@@ -224,16 +224,17 @@ func New(config *Config) (Agent, error) {
 
 	// Only initialize cluster timeline for master nodes.
 	var timeline history.Timeline
+	var lastSeen *ttlmap.TTLMap
 	if role, ok := config.Tags["role"]; ok && Role(role) == RoleMaster {
 		timeline, err = initTimeline(config.TimelineConfig, "cluster.db")
 		if err != nil {
 			return nil, trace.Wrap(err, "failed to initialize timeline")
 		}
-	}
 
-	lastSeen, err := ttlmap.New(config.ClusterCapacity)
-	if err != nil {
-		return nil, trace.Wrap(err, "failed to initialize last seen ttl map")
+		lastSeen, err = ttlmap.New(config.ClusterCapacity)
+		if err != nil {
+			return nil, trace.Wrap(err, "failed to initialize last seen ttl map")
+		}
 	}
 
 	agent := &agent{
@@ -379,6 +380,10 @@ func (r *agent) LocalStatus() *pb.NodeStatus {
 // If no value is stored for the specific member, a timestamp will be
 // initialized for the member with the zero value.
 func (r *agent) LastSeen(name string) (lastSeen time.Time, err error) {
+	if !hasRoleMaster(r.Tags) {
+		return lastSeen, trace.BadParameter("requesting last seen timestamp from non master")
+	}
+
 	r.Lock()
 	defer r.Unlock()
 
@@ -399,6 +404,10 @@ func (r *agent) LastSeen(name string) (lastSeen time.Time, err error) {
 
 // recordLastSeen records the last seen timestamp for the specified member.
 func (r *agent) recordLastSeen(name string, lastSeen time.Time) error {
+	if !hasRoleMaster(r.Tags) {
+		return trace.BadParameter("attempting to recolrd last seen timestamp from non master")
+	}
+
 	r.Lock()
 	defer r.Unlock()
 	return r.lastSeen.Set(name, lastSeen, lastSeenTTL)
@@ -522,7 +531,6 @@ func (r *agent) recycleLoop(ctx context.Context) {
 			if err := r.Cache.Recycle(); err != nil {
 				log.WithError(err).Warnf("Error recycling status.")
 			}
-
 		}
 	}
 }
@@ -543,7 +551,6 @@ func (r *agent) statusUpdateLoop(ctx context.Context) {
 			if err := r.updateStatus(ctx); err != nil {
 				log.WithError(err).Warnf("Failed to updates status.")
 			}
-
 		}
 	}
 }
@@ -673,7 +680,7 @@ func (r *agent) notifyMasters(ctx context.Context) error {
 
 	// TODO: async
 	for _, member := range members {
-		if !hasRoleMaster(r.Tags) {
+		if !hasRoleMaster(member.Tags) {
 			continue
 		}
 		if err := r.notifyMaster(ctx, &member, events); err != nil {
