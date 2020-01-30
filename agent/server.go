@@ -95,7 +95,7 @@ func (r *server) Time(ctx context.Context, req *pb.TimeRequest) (*pb.TimeRespons
 
 // Timeline sends the current status timeline
 func (r *server) Timeline(ctx context.Context, req *pb.TimelineRequest) (*pb.TimelineResponse, error) {
-	events, err := r.GetTimeline(ctx, req.GetParams())
+	events, err := r.agent.GetTimeline(ctx, req.GetParams())
 	if err != nil {
 		return nil, GRPCError(err)
 	}

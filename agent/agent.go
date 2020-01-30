@@ -448,18 +448,18 @@ func (r *agent) runChecks(ctx context.Context) *pb.NodeStatus {
 
 // GetTimeline returns the current cluster timeline.
 func (r *agent) GetTimeline(ctx context.Context, params map[string]string) ([]*pb.TimelineEvent, error) {
-	if role, ok := r.Tags["role"]; !ok || Role(role) != RoleMaster {
-		return nil, trace.BadParameter("requesting cluster timeline from non master")
+	if hasRoleMaster(r.Tags) {
+		return r.Timeline.GetEvents(ctx, params)
 	}
-	return r.Timeline.GetEvents(ctx, params)
+	return nil, trace.BadParameter("requesting cluster timeline from non master")
 }
 
 // RecordTimeline records the events into the cluster timeline.
 func (r *agent) RecordTimeline(ctx context.Context, events []*pb.TimelineEvent) error {
-	if role, ok := r.Tags["role"]; !ok || Role(role) != RoleMaster {
-		return trace.BadParameter("attempting to record events to non master")
+	if hasRoleMaster(r.Tags) {
+		return r.Timeline.RecordTimeline(ctx, events)
 	}
-	return r.Timeline.RecordTimeline(ctx, events)
+	return trace.BadParameter("attempting to update cluster timeline of non master")
 }
 
 // runChecker executes the specified checker and reports results on probeCh.
@@ -664,6 +664,7 @@ func (r *agent) notifyMasters(ctx context.Context) error {
 	if err != nil {
 		return trace.Wrap(err)
 	}
+	members = filterLeft(members)
 
 	events, err := r.LocalTimeline.GetEvents(ctx, nil)
 	if err != nil {
@@ -672,10 +673,11 @@ func (r *agent) notifyMasters(ctx context.Context) error {
 
 	// TODO: async
 	for _, member := range members {
-		if role, ok := member.Tags["role"]; ok && Role(role) == RoleMaster {
-			if err := r.notifyMaster(ctx, &member, events); err != nil {
-				log.WithError(err).Warnf("Failed to notify %s of new timeline events.", member.Name)
-			}
+		if !hasRoleMaster(r.Tags) {
+			continue
+		}
+		if err := r.notifyMaster(ctx, &member, events); err != nil {
+			log.WithError(err).Warnf("Failed to notify %s of new timeline events.", member.Name)
 		}
 	}
 
@@ -768,6 +770,12 @@ func filterByTimestamp(events []*pb.TimelineEvent, timestamp time.Time) (filtere
 		filtered = append(filtered, event)
 	}
 	return filtered
+}
+
+// hasRoleMaster returns true if tags contains role 'master'.
+func hasRoleMaster(tags map[string]string) bool {
+	role, ok := tags["role"]
+	return ok && Role(role) == RoleMaster
 }
 
 // statusResponse describes a status response from a background process that obtains
