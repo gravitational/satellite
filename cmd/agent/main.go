@@ -77,9 +77,8 @@ func run() error {
 		cagentCertFile       = cagent.Flag("cert-file", "SSL certificate for server RPC").ExistingFile()
 		cagentKeyFile        = cagent.Flag("key-file", "SSL certificate key for server RPC").ExistingFile()
 		// sqlite config
-		cagentTimelinePath      = cagent.Flag("timeline", "SQLite database location for timeline storage").Default("/tmp/timeline.db").String()
-		cagentLocalTimelinePath = cagent.Flag("local-timeline", "SQLite database location for local timeline storage").Default("/tmp/timeline-local.db").String()
-		cagentRetention         = cagent.Flag("retention", "Window to retain timeline as a Go duration").Duration()
+		cagentTimelineDir = cagent.Flag("timeline", "Directory to be used for timeline storage").Default("/tmp/timeline").String()
+		cagentRetention   = cagent.Flag("retention", "Window to retain timeline as a Go duration").Duration()
 
 		// `status` command
 		cstatus            = app.Command("status", "Query cluster status")
@@ -163,11 +162,7 @@ func run() error {
 				Addr: *cagentSerfRPCAddr,
 			},
 			TimelineConfig: sqlite.Config{
-				DBPath:            *cagentTimelinePath,
-				RetentionDuration: *cagentRetention,
-			},
-			LocalTimelineConfig: sqlite.Config{
-				DBPath:            *cagentLocalTimelinePath,
+				DBPath:            *cagentTimelineDir,
 				RetentionDuration: *cagentRetention,
 			},
 		}

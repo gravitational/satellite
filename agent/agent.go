@@ -19,6 +19,7 @@ package agent
 import (
 	"net"
 	"net/http"
+	"path"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -104,9 +105,6 @@ type Config struct {
 
 	// TimelineConfig specifies sqlite timeline configuration.
 	TimelineConfig sqlite.Config
-
-	// LocalTimelineConfig specifies local timeline configuration.
-	LocalTimelineConfig sqlite.Config
 
 	// Clock to be used for internal time keeping.
 	Clock clockwork.Clock
@@ -206,12 +204,12 @@ func New(config *Config) (Agent, error) {
 		return nil, trace.Wrap(err, "failed to serve prometheus metrics")
 	}
 
-	timeline, err := initTimeline(config.TimelineConfig)
+	timeline, err := initTimeline(config.TimelineConfig, "cluster.db")
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to initialize timeline")
 	}
 
-	localTimeline, err := initTimeline(config.LocalTimelineConfig)
+	localTimeline, err := initTimeline(config.TimelineConfig, "local.db")
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to initialize local timeline")
 	}
@@ -249,10 +247,12 @@ func initSerfClient(config serf.Config, tags map[string]string) (SerfClient, err
 	return client, nil
 }
 
-// initTimeline initializes a new sqlite timeline.
-func initTimeline(config sqlite.Config) (history.Timeline, error) {
+// initTimeline initializes a new sqlite timeline. dbName specifies the
+// SQLite database file name.
+func initTimeline(config sqlite.Config, fileName string) (history.Timeline, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timelineInitTimeout)
 	defer cancel()
+	config.DBPath = path.Join(config.DBPath, fileName)
 	return sqlite.NewTimeline(ctx, config)
 }
 
