@@ -17,6 +17,7 @@ limitations under the License.
 package agent
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"path"
@@ -32,6 +33,7 @@ import (
 	"github.com/gravitational/satellite/lib/history/sqlite"
 
 	"github.com/gravitational/trace"
+	"github.com/gravitational/ttlmap"
 	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -50,7 +52,7 @@ type Agent interface {
 	// LocalStatus reports the health status of the local agent node.
 	LocalStatus() *pb.NodeStatus
 	// LastSeen returns the last seen timestamp from the specified member.
-	LastSeen(name string) time.Time
+	LastSeen(name string) (time.Time, error)
 	// IsMember returns whether this agent is already a member of serf cluster
 	IsMember() bool
 	// GetConfig returns the agent configuration.
@@ -109,6 +111,9 @@ type Config struct {
 	// Clock to be used for internal time keeping.
 	Clock clockwork.Clock
 
+	// ClusterCapacity specifies the max number of members in the cluster.
+	ClusterCapacity int
+
 	// Cache is a short-lived storage used by the agent to persist latest health stats.
 	cache.Cache
 }
@@ -139,6 +144,9 @@ func (r *Config) CheckAndSetDefaults() error {
 	if r.Clock == nil {
 		r.Clock = clockwork.NewRealClock()
 	}
+	if r.ClusterCapacity == 0 {
+		r.ClusterCapacity = 100
+	}
 	return trace.NewAggregate(errors...)
 }
 
@@ -167,10 +175,11 @@ type agent struct {
 	// Defaults to statusQueryReplyTimeout if unspecified
 	statusQueryReplyTimeout time.Duration
 
-	// lastSeen keeps track of the last seen timestamp from a cluster member.
+	// lastSeen keeps track of the last seen timestamp of an event from a
+	// specific cluster member.
 	// The last seen timestamp can be queried by a member and be used to
-	// filter out events that have already been recorded by this member.
-	lastSeen map[string]time.Time
+	// filter out events that have already been recorded by this agent.
+	lastSeen ttlmap.TTLMap
 
 	// Config is the agent configuration.
 	Config
@@ -214,12 +223,17 @@ func New(config *Config) (Agent, error) {
 		return nil, trace.Wrap(err, "failed to initialize local timeline")
 	}
 
+	lastSeen, err := ttlmap.New(config.ClusterCapacity)
+	if err != nil {
+		return nil, trace.Wrap(err, "failed to initialize last seen ttl map")
+	}
+
 	agent := &agent{
 		dialRPC:                 client.DefaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
 		localStatus:             emptyNodeStatus(config.Name),
 		metricsListener:         metricsListener,
-		lastSeen:                make(map[string]time.Time),
+		lastSeen:                *lastSeen,
 		done:                    make(chan struct{}),
 		Config:                  *config,
 		SerfClient:              serfClient,
@@ -354,25 +368,32 @@ func (r *agent) LocalStatus() *pb.NodeStatus {
 }
 
 // LastSeen returns the last seen timestamp from the specified member.
-func (r *agent) LastSeen(name string) time.Time {
+// If no value is stored for the specific member, a timestamp will be
+// initialized for the member with the zero value.
+func (r *agent) LastSeen(name string) (lastSeen time.Time, err error) {
 	r.Lock()
 	defer r.Unlock()
 
-	if timestamp, ok := r.lastSeen[name]; ok {
-		return timestamp
+	if val, ok := r.lastSeen.Get(name); ok {
+		if lastSeen, ok = val.(time.Time); !ok {
+			return lastSeen, trace.Wrap(err, fmt.Sprintf("got invalid type %T", val))
+		}
 	}
 
-	// If a last seen timestamp is not recorded for this member, initialize
-	// timestamp for this member.
-	r.lastSeen[name] = time.Time{}
-	return time.Time{}
+	// Reset ttl if successfully retrieved lastSeen.
+	// Initialize value if lastSeen had not been previously stored.
+	if err := r.lastSeen.Set(name, time.Time{}, lastSeenTTL); err != nil {
+		return lastSeen, trace.Wrap(err, fmt.Sprintf("failed to initialize timestamp for %s", name))
+	}
+
+	return lastSeen, nil
 }
 
 // recordLastSeen records the last seen timestamp for the specified member.
-func (r *agent) recordLastSeen(name string, lastSeen time.Time) {
+func (r *agent) recordLastSeen(name string, lastSeen time.Time) error {
 	r.Lock()
 	defer r.Unlock()
-	r.lastSeen[name] = lastSeen
+	return r.lastSeen.Set(name, lastSeen, lastSeenTTL)
 }
 
 // runChecks executes the monitoring tests configured for this agent in parallel.
@@ -645,12 +666,12 @@ func (r *agent) notifyMaster(ctx context.Context, member *serf.Member, events []
 	}
 	defer client.Close()
 
-	// Filter events by last seen timestamp. Only push unrecorded events.
 	resp, err := client.LastSeen(ctx, &pb.LastSeenRequest{Name: r.Name})
 	if err != nil {
 		return trace.Wrap(err)
 	}
 
+	// Filter out previously recorded events.
 	filtered := filterByTimestamp(events, resp.GetTimestamp().ToTime())
 
 	for _, event := range filtered {

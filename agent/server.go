@@ -77,7 +77,10 @@ func (r *server) LocalStatus(ctx context.Context, req *pb.LocalStatusRequest) (r
 
 // LastSeen returns the last seen timestamp for a specified member.
 func (r *server) LastSeen(ctx context.Context, req *pb.LastSeenRequest) (resp *pb.LastSeenResponse, err error) {
-	timestamp := r.agent.LastSeen(req.GetName())
+	timestamp, err := r.agent.LastSeen(req.GetName())
+	if err != nil {
+		return nil, GRPCError(err)
+	}
 	return &pb.LastSeenResponse{
 		Timestamp: pb.NewTimeToProto(timestamp),
 	}, nil
@@ -108,8 +111,9 @@ func (r *server) UpdateTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb
 	if err := r.agent.Timeline.RecordTimeline(ctx, []*pb.TimelineEvent{req.GetEvent()}); err != nil {
 		return nil, GRPCError(err)
 	}
-	r.agent.recordLastSeen(req.GetName(), req.GetEvent().GetTimestamp().ToTime())
-
+	if err := r.agent.recordLastSeen(req.GetName(), req.GetEvent().GetTimestamp().ToTime()); err != nil {
+		return nil, GRPCError(err)
+	}
 	return &pb.UpdateResponse{}, nil
 }
 

@@ -38,6 +38,11 @@ const (
 
 // Timeout values
 const (
+	// lastSeenTTL specifies the time to live for the stored lastSeen values.
+	// This ensures agents do not hold on to unused information when a member
+	// leaves the cluster.
+	lastSeenTTL = 3 * time.Minute
+
 	// timelineInitTimeout specifies the amount of time to wait for the
 	// timeline to initialize.
 	timelineInitTimeout = 5 * time.Second

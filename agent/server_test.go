@@ -43,6 +43,7 @@ import (
 
 	"github.com/gravitational/roundtrip"
 	"github.com/gravitational/trace"
+	"github.com/gravitational/ttlmap"
 	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
 	log "github.com/sirupsen/logrus"
@@ -238,7 +239,8 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 
 	for _, testCase := range agentTestCases {
 		comment := Commentf(testCase.comment)
-		localAgent := r.newLocalNode(testCase.localConfig)
+		localAgent, err := r.newLocalNode(testCase.localConfig)
+		c.Assert(err, IsNil)
 		remoteAgent, err := r.newRemoteNode(testCase.remoteConfig)
 		c.Assert(err, IsNil)
 
@@ -276,17 +278,20 @@ func (r *AgentSuite) TestIsMember(c *C) {
 	// Cannot be a member of a single node cluster
 	configTest1 := config
 	configTest1.members = []serf.Member{newMember(name, "alive")}
-	agent := r.newAgent(configTest1)
+	agent, err := r.newAgent(configTest1)
+	c.Assert(err, IsNil)
 	c.Assert(agent.IsMember(), Equals, false)
 
 	configTest2 := config
 	configTest2.members = []serf.Member{newMember("node2", "alive"), newMember("node3", "alive")}
-	agent = r.newAgent(configTest2)
+	agent, err = r.newAgent(configTest2)
+	c.Assert(err, IsNil)
 	c.Assert(agent.IsMember(), Equals, false)
 
 	configTest3 := config
 	configTest3.members = []serf.Member{newMember(name, "alive"), newMember("node2", "alive")}
-	agent = r.newAgent(configTest3)
+	agent, err = r.newAgent(configTest3)
+	c.Assert(err, IsNil)
 	c.Assert(agent.IsMember(), Equals, true)
 }
 
@@ -389,7 +394,8 @@ func (r *AgentSuite) TestFailsIfTimesOutToCollectStatus(c *C) {
 		Status:    pb.SystemStatus_Degraded,
 		Summary:   fmt.Sprintf(msgNoStatus, "master,"),
 	}
-	localAgent := r.newLocalNode(localConfig)
+	localAgent, err := r.newLocalNode(localConfig)
+	c.Assert(err, IsNil)
 	localAgent.statusQueryReplyTimeout = 0 * time.Second
 
 	test.WithTimeout(func(ctx context.Context) {
@@ -417,7 +423,8 @@ func (r *AgentSuite) TestUpdateLocalTimeline(c *C) {
 		members:  members,
 		checkers: []health.Checker{healthyTest, healthyTest},
 	}
-	localAgent := r.newLocalNode(localConfig)
+	localAgent, err := r.newLocalNode(localConfig)
+	c.Assert(err, IsNil)
 
 	test.WithTimeout(func(ctx context.Context) {
 		c.Assert(localAgent.Start(), IsNil)
@@ -473,7 +480,8 @@ func (r *AgentSuite) TestNotifyMaster(c *C) {
 		checkers: []health.Checker{healthyTest, healthyTest},
 	}
 
-	localAgent := r.newLocalNode(localConfig)
+	localAgent, err := r.newLocalNode(localConfig)
+	c.Assert(err, IsNil)
 	remoteAgent, err := r.newRemoteNode(remoteConfig)
 	c.Assert(err, IsNil)
 
@@ -505,6 +513,7 @@ func (r *AgentSuite) TestAgentProvidesLastSeen(c *C) {
 			Status: pb.NodeStatus_Degraded,
 		},
 	}
+
 	expected := &pb.LastSeenResponse{Timestamp: pb.NewTimeToProto(r.clock.Now())}
 
 	remoteAgent, err := r.newRemoteNode(remoteConfig)
@@ -552,18 +561,24 @@ type testAgent struct {
 }
 
 // newLocalNode creates a new instance of the local agent - agent used to make status queries.
-func (r *AgentSuite) newLocalNode(config testAgentConfig) *testAgent {
+func (r *AgentSuite) newLocalNode(config testAgentConfig) (*testAgent, error) {
 	config.setDefaults()
-	agent := r.newAgent(config)
+	agent, err := r.newAgent(config)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
 	agent.rpc = &testServer{&server{agent: agent}}
-	return &testAgent{agent: agent}
+	return &testAgent{agent: agent}, nil
 }
 
 // newRemoteNode creates a new instance of a remote agent - agent used to answer
 // status query requests via a running RPC endpoint.
 func (r *AgentSuite) newRemoteNode(config testAgentConfig) (*testAgent, error) {
 	config.setDefaults()
-	agent := r.newAgent(config)
+	agent, err := r.newAgent(config)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
 	addr := fmt.Sprintf("127.0.0.1:%v", config.rpcPort)
 
 	// Use the same CA certificate for client and server
@@ -577,9 +592,11 @@ func (r *AgentSuite) newRemoteNode(config testAgentConfig) (*testAgent, error) {
 }
 
 // newAgent creates a new agent instance.
-func (r *AgentSuite) newAgent(config testAgentConfig) *agent {
+func (r *AgentSuite) newAgent(config testAgentConfig) (*agent, error) {
 	// timelineCapacity specifies the default timeline capacity for tests.
-	timelineCapacity := 256
+	const timelineCapacity = 256
+	// clusterCapacity specifies the max number of nodes in a test cluster.
+	const clusterCapacity = 3
 
 	config.setDefaults()
 	timeline := memory.NewTimeline(config.clock, timelineCapacity)
@@ -591,6 +608,11 @@ func (r *AgentSuite) newAgent(config testAgentConfig) *agent {
 		Clock: config.clock,
 	}
 
+	lastSeen, err := ttlmap.New(clusterCapacity)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
 	return &agent{
 		SerfClient:              &MockSerfClient{members: config.members},
 		Timeline:                timeline,
@@ -599,10 +621,10 @@ func (r *AgentSuite) newAgent(config testAgentConfig) *agent {
 		Config:                  agentConfig,
 		Checkers:                config.checkers,
 		localStatus:             config.localStatus,
-		lastSeen:                make(map[string]time.Time),
+		lastSeen:                *lastSeen,
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
 		done:                    make(chan struct{}),
-	}
+	}, nil
 }
 
 // testDialRPC is a test implementation of the dialRPC interface,
