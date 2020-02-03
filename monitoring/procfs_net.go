@@ -62,8 +62,11 @@ func (r portCollector) sockets(fetchSockets ...socketGetterFunc) (ret []process,
 	}
 
 	for _, socket := range sockets {
+		if emptyInode(socket) {
+			continue
+		}
 		proc, err := r.findProcessByInode(socket.inode())
-		if err != nil && socket.inode() != "0" && !trace.IsNotFound(err) {
+		if err != nil && !trace.IsNotFound(err) {
 			log.WithFields(log.Fields{
 				log.ErrorKey: err,
 				"inode":      socket.inode(),
@@ -504,4 +507,11 @@ type unixSocket struct {
 	State    uint
 	Inode    uint
 	Path     string
+}
+
+func emptyInode(socket socket) bool {
+	// Reference: https://ext4.wiki.kernel.org/index.php/Ext4_Disk_Layout#Special_inodes
+	// nilInode signifies an empty inode value
+	const nilInode = "0"
+	return socket.inode() == nilInode
 }

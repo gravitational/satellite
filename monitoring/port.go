@@ -24,6 +24,7 @@ import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
 	"github.com/gravitational/trace"
+	log "github.com/sirupsen/logrus"
 )
 
 // NewPortChecker returns a new port range checker
@@ -109,6 +110,11 @@ func (c *portChecker) checkProcess(proc process, reporter health.Reporter) bool 
 		switch proc.socket.state() {
 		case TimeWait, Close, CloseWait:
 			// ignore sockets in certain terminal states
+			log.WithFields(log.Fields{
+				"socket":  formatSocket(proc.socket),
+				"process": proc.name,
+				"pid":     proc.pid,
+			}).Debug("Ignore lingering socket.")
 			continue
 		}
 
