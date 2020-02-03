@@ -31,6 +31,7 @@ import (
 	"github.com/gravitational/satellite/lib/client"
 	"github.com/gravitational/satellite/lib/history"
 	"github.com/gravitational/satellite/lib/history/sqlite"
+	"github.com/gravitational/satellite/lib/membership"
 
 	"github.com/gravitational/trace"
 	"github.com/gravitational/ttlmap"
@@ -40,30 +41,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
-
-// Agent is the interface to interact with the monitoring agent.
-type Agent interface {
-	// Start starts agent's background jobs.
-	Start() error
-	// Close stops background activity and releases resources.
-	Close() error
-	// Join makes an attempt to join a cluster specified by the list of peers.
-	Join(peers []string) error
-	// LocalStatus reports the health status of the local agent node.
-	LocalStatus() *pb.NodeStatus
-	// LastSeen returns the last seen timestamp from the specified member.
-	LastSeen(name string) (time.Time, error)
-	// GetTimeline returns the current cluster timeline.
-	GetTimeline(ctx context.Context, params map[string]string) ([]*pb.TimelineEvent, error)
-	// RecordTimeline records the events into the cluster timeline.
-	RecordTimeline(ctx context.Context, events []*pb.TimelineEvent) error
-	// IsMember returns whether this agent is already a member of serf cluster
-	IsMember() bool
-	// GetConfig returns the agent configuration.
-	GetConfig() Config
-	// CheckerRepository allows to add checks to the agent.
-	health.CheckerRepository
-}
 
 // Config defines satellite configuration.
 type Config struct {
@@ -183,13 +160,13 @@ type agent struct {
 	// specific cluster member.
 	// The last seen timestamp can be queried by a member and be used to
 	// filter out events that have already been recorded by this agent.
-	lastSeen ttlmap.TTLMap
+	lastSeen *ttlmap.TTLMap
 
 	// Config is the agent configuration.
 	Config
 
-	// SerfClient provides access to the serf agent.
-	SerfClient SerfClient
+	// ClusterMembership provides access to cluster membership service.
+	ClusterMembership membership.ClusterMembership
 
 	// Timeline keeps track of all timeline events in the cluster. This timeline
 	// is only used on members that have the role 'master'.
@@ -200,7 +177,7 @@ type agent struct {
 }
 
 // New creates an instance of an agent based on configuration options given in config.
-func New(config *Config) (Agent, error) {
+func New(config *Config) (*agent, error) {
 	if err := config.CheckAndSetDefaults(); err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -242,10 +219,10 @@ func New(config *Config) (Agent, error) {
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
 		localStatus:             emptyNodeStatus(config.Name),
 		metricsListener:         metricsListener,
-		lastSeen:                *lastSeen,
+		lastSeen:                lastSeen,
 		done:                    make(chan struct{}),
 		Config:                  *config,
-		SerfClient:              serfClient,
+		ClusterMembership:       serfClient,
 		Timeline:                timeline,
 		LocalTimeline:           localTimeline,
 	}
@@ -259,8 +236,8 @@ func New(config *Config) (Agent, error) {
 
 // initSerfClient initializes a new serf client and modifies the client with
 // the provided tags.
-func initSerfClient(config serf.Config, tags map[string]string) (SerfClient, error) {
-	client, err := NewSerfClient(config)
+func initSerfClient(config serf.Config, tags map[string]string) (*membership.RetryingClient, error) {
+	client, err := membership.NewSerfClient(config)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to connect to serf")
 	}
@@ -318,18 +295,18 @@ func (r *agent) serveMetrics() {
 
 // IsMember returns true if this agent is a member of the serf cluster
 func (r *agent) IsMember() bool {
-	members, err := r.SerfClient.Members()
+	members, err := r.ClusterMembership.Members()
 	if err != nil {
 		log.Errorf("failed to retrieve members: %v", trace.DebugReport(err))
 		return false
 	}
 	// if we're the only one, consider that we're not in the cluster yet
 	// (cause more often than not there are more than 1 member)
-	if len(members) == 1 && members[0].Name == r.Name {
+	if len(members) == 1 && members[0].Name() == r.Name {
 		return false
 	}
 	for _, member := range members {
-		if member.Name == r.Name {
+		if member.Name() == r.Name {
 			return true
 		}
 	}
@@ -339,10 +316,11 @@ func (r *agent) IsMember() bool {
 // Join attempts to join a serf cluster identified by peers.
 func (r *agent) Join(peers []string) error {
 	noReplay := false
-	numJoined, err := r.SerfClient.Join(peers, noReplay)
+	numJoined, err := r.ClusterMembership.Join(peers, noReplay)
 	if err != nil {
 		return trace.Wrap(err)
 	}
+
 	log.Infof("joined %d nodes", numJoined)
 	return nil
 }
@@ -360,7 +338,7 @@ func (r *agent) Close() (err error) {
 	r.rpc.Stop()
 	close(r.done)
 
-	err = r.SerfClient.Close()
+	err = r.ClusterMembership.Close()
 	if err != nil {
 		errors = append(errors, trace.Wrap(err))
 	}
@@ -369,6 +347,11 @@ func (r *agent) Close() (err error) {
 		return trace.NewAggregate(errors...)
 	}
 	return nil
+}
+
+// Time reports the current server time.
+func (r *agent) Time() time.Time {
+	return r.Clock.Now()
 }
 
 // LocalStatus reports the status of the local agent node.
@@ -389,7 +372,7 @@ func (r *agent) LastSeen(name string) (lastSeen time.Time, err error) {
 
 	if val, ok := r.lastSeen.Get(name); ok {
 		if lastSeen, ok = val.(time.Time); !ok {
-			return lastSeen, trace.Wrap(err, fmt.Sprintf("got invalid type %T", val))
+			return lastSeen, trace.BadParameter("got invalid type %T", val)
 		}
 	}
 
@@ -402,15 +385,30 @@ func (r *agent) LastSeen(name string) (lastSeen time.Time, err error) {
 	return lastSeen, nil
 }
 
-// recordLastSeen records the last seen timestamp for the specified member.
-func (r *agent) recordLastSeen(name string, lastSeen time.Time) error {
+// RecordLastSeen records the timestamp for the specified member.
+// Attempts to record a last seen timestamp that is older than the currently
+// recorded timestamp will be ignored.
+func (r *agent) RecordLastSeen(name string, timestamp time.Time) error {
 	if !hasRoleMaster(r.Tags) {
-		return trace.BadParameter("attempting to recolrd last seen timestamp from non master")
+		return trace.BadParameter("attempting to record last seen timestamp for non master")
 	}
 
 	r.Lock()
 	defer r.Unlock()
-	return r.lastSeen.Set(name, lastSeen, lastSeenTTL)
+
+	var lastSeen time.Time
+	if val, ok := r.lastSeen.Get(name); ok {
+		if lastSeen, ok = val.(time.Time); !ok {
+			return trace.BadParameter("got invalid type %T", val)
+		}
+	}
+
+	// Ignore timestamp that is older than currently stored last seen timestamp.
+	if timestamp.Before(lastSeen) {
+		return nil
+	}
+
+	return r.lastSeen.Set(name, timestamp, lastSeenTTL)
 }
 
 // runChecks executes the monitoring tests configured for this agent in parallel.
@@ -583,12 +581,11 @@ func (r *agent) collectStatus(ctx context.Context) (systemStatus *pb.SystemStatu
 		Timestamp: pb.NewTimeToProto(r.Clock.Now()),
 	}
 
-	members, err := r.SerfClient.Members()
+	members, err := r.ClusterMembership.Members()
 	if err != nil {
 		log.WithError(err).Warn("Failed to query serf members.")
 		return nil, trace.Wrap(err, "failed to query serf members")
 	}
-	members = filterLeft(members)
 
 	log.Debugf("Started collecting statuses from members %v.", members)
 
@@ -597,8 +594,8 @@ func (r *agent) collectStatus(ctx context.Context) (systemStatus *pb.SystemStatu
 
 	statusCh := make(chan *statusResponse, len(members))
 	for _, member := range members {
-		if r.Name == member.Name {
-			go r.getLocalStatus(ctxNode, member, statusCh)
+		if r.Name == member.Name() {
+			go r.getLocalStatus(ctxNode, statusCh)
 		} else {
 			go r.getStatusFrom(ctxNode, member, statusCh)
 		}
@@ -612,8 +609,8 @@ L:
 			nodeStatus := status.NodeStatus
 			if status.err != nil {
 				log.Warnf("Failed to query node %s(%v) status: %v.",
-					status.member.Name, status.member.Addr, status.err)
-				nodeStatus = unknownNodeStatus(&status.member)
+					status.member.Name(), status.member.Addr(), status.err)
+				nodeStatus = unknownNodeStatus(status.member)
 			}
 			systemStatus.Nodes = append(systemStatus.Nodes, nodeStatus)
 		case <-ctx.Done():
@@ -630,7 +627,12 @@ L:
 }
 
 // collectLocalStatus executes monitoring tests on the local node.
-func (r *agent) collectLocalStatus(ctx context.Context, local *serf.Member) (status *pb.NodeStatus, err error) {
+func (r *agent) collectLocalStatus(ctx context.Context) (status *pb.NodeStatus, err error) {
+	local, err := r.ClusterMembership.FindMember(r.Name)
+	if err != nil {
+		return nil, trace.Wrap(err, "failed to query local serf member")
+	}
+
 	status = r.runChecks(ctx)
 	status.MemberStatus = statusFromMember(local)
 
@@ -652,8 +654,11 @@ func (r *agent) collectLocalStatus(ctx context.Context, local *serf.Member) (sta
 }
 
 // getLocalStatus obtains local node status.
-func (r *agent) getLocalStatus(ctx context.Context, local serf.Member, respc chan<- *statusResponse) {
-	status, err := r.collectLocalStatus(ctx, &local)
+func (r *agent) getLocalStatus(ctx context.Context, respc chan<- *statusResponse) {
+	// TODO: restructure code so that local member is not needed here.
+	local, _ := r.ClusterMembership.FindMember(r.Name)
+
+	status, err := r.collectLocalStatus(ctx)
 	resp := &statusResponse{
 		NodeStatus: status,
 		member:     local,
@@ -667,11 +672,10 @@ func (r *agent) getLocalStatus(ctx context.Context, local serf.Member, respc cha
 
 // notifyMasters pushes new timeline events to all master nodes in the cluster.
 func (r *agent) notifyMasters(ctx context.Context) error {
-	members, err := r.SerfClient.Members()
+	members, err := r.ClusterMembership.Members()
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	members = filterLeft(members)
 
 	events, err := r.LocalTimeline.GetEvents(ctx, nil)
 	if err != nil {
@@ -680,11 +684,11 @@ func (r *agent) notifyMasters(ctx context.Context) error {
 
 	// TODO: async
 	for _, member := range members {
-		if !hasRoleMaster(member.Tags) {
+		if !hasRoleMaster(member.Tags()) {
 			continue
 		}
-		if err := r.notifyMaster(ctx, &member, events); err != nil {
-			log.WithError(err).Warnf("Failed to notify %s of new timeline events.", member.Name)
+		if err := r.notifyMaster(ctx, member, events); err != nil {
+			log.WithError(err).Warnf("Failed to notify %s of new timeline events.", member.Name())
 		}
 	}
 
@@ -692,8 +696,8 @@ func (r *agent) notifyMasters(ctx context.Context) error {
 }
 
 // notifyMaster push new timeline events to the specified member.
-func (r *agent) notifyMaster(ctx context.Context, member *serf.Member, events []*pb.TimelineEvent) error {
-	client, err := r.dialRPC(ctx, member)
+func (r *agent) notifyMaster(ctx context.Context, member membership.ClusterMember, events []*pb.TimelineEvent) error {
+	client, err := member.Dial(ctx, r.CAFile, r.CertFile, r.KeyFile)
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -717,8 +721,8 @@ func (r *agent) notifyMaster(ctx context.Context, member *serf.Member, events []
 }
 
 // getStatusFrom obtains node status from the node identified by member.
-func (r *agent) getStatusFrom(ctx context.Context, member serf.Member, respc chan<- *statusResponse) {
-	client, err := r.dialRPC(ctx, &member)
+func (r *agent) getStatusFrom(ctx context.Context, member membership.ClusterMember, respc chan<- *statusResponse) {
+	client, err := member.Dial(ctx, r.CAFile, r.CertFile, r.KeyFile)
 	resp := &statusResponse{member: member}
 	if err != nil {
 		resp.err = trace.Wrap(err)
@@ -738,8 +742,8 @@ func (r *agent) getStatusFrom(ctx context.Context, member serf.Member, respc cha
 	}
 }
 
-// recentStatus returns the last known cluster status.
-func (r *agent) recentStatus() (status *pb.SystemStatus, err error) {
+// Status returns the last known cluster status.
+func (r *agent) Status() (status *pb.SystemStatus, err error) {
 	status, err = r.Cache.RecentStatus()
 	if err == nil && status == nil {
 		status = pb.EmptyStatus()
@@ -752,19 +756,6 @@ func (r *agent) recentLocalStatus() *pb.NodeStatus {
 	r.Lock()
 	defer r.Unlock()
 	return r.localStatus
-}
-
-// filterLeft filters out members that have left the serf cluster
-func filterLeft(members []serf.Member) (result []serf.Member) {
-	result = make([]serf.Member, 0, len(members))
-	for _, member := range members {
-		if member.Status == MemberLeft {
-			// Skip
-			continue
-		}
-		result = append(result, member)
-	}
-	return result
 }
 
 // filterByTimestamp filters out events that occurred before the provided
@@ -789,6 +780,6 @@ func hasRoleMaster(tags map[string]string) bool {
 // health status on the specified serf node.
 type statusResponse struct {
 	*pb.NodeStatus
-	member serf.Member
+	member membership.ClusterMember
 	err    error
 }

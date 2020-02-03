@@ -18,13 +18,18 @@ package agent
 
 import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/lib/membership"
 	"github.com/gravitational/satellite/lib/test"
 
 	serf "github.com/hashicorp/serf/client"
 	. "gopkg.in/check.v1"
 )
 
-func (*AgentSuite) TestSetsSystemStatusFromMemberStatuses(c *C) {
+type StatusSuite struct{}
+
+var _ = Suite(&StatusSuite{})
+
+func (*StatusSuite) TestSetsSystemStatusFromMemberStatuses(c *C) {
 	status := pb.SystemStatus{
 		Nodes: []*pb.NodeStatus{
 			{
@@ -46,7 +51,11 @@ func (*AgentSuite) TestSetsSystemStatusFromMemberStatuses(c *C) {
 		},
 	}
 	actual := status
-	setSystemStatus(&actual, []serf.Member{{Name: "foo"}, {Name: "bar"}})
+	members := []membership.ClusterMember{
+		membership.SerfMember{Member: &serf.Member{Name: "foo"}},
+		membership.SerfMember{Member: &serf.Member{Name: "bar"}},
+	}
+	setSystemStatus(&actual, members)
 
 	expected := status
 	expected.Status = pb.SystemStatus_Degraded
@@ -54,7 +63,7 @@ func (*AgentSuite) TestSetsSystemStatusFromMemberStatuses(c *C) {
 	c.Assert(actual, test.DeepCompare, expected, Commentf("Expected degraded system status."))
 }
 
-func (*AgentSuite) TestSetsSystemStatusFromNodeStatuses(c *C) {
+func (*StatusSuite) TestSetsSystemStatusFromNodeStatuses(c *C) {
 	status := pb.SystemStatus{
 		Nodes: []*pb.NodeStatus{
 			{
@@ -87,7 +96,11 @@ func (*AgentSuite) TestSetsSystemStatusFromNodeStatuses(c *C) {
 	}
 
 	actual := status
-	setSystemStatus(&actual, []serf.Member{{Name: "foo"}, {Name: "bar"}})
+	members := []membership.ClusterMember{
+		membership.SerfMember{Member: &serf.Member{Name: "foo"}},
+		membership.SerfMember{Member: &serf.Member{Name: "bar"}},
+	}
+	setSystemStatus(&actual, members)
 
 	expected := status
 	expected.Status = pb.SystemStatus_Degraded
@@ -95,7 +108,7 @@ func (*AgentSuite) TestSetsSystemStatusFromNodeStatuses(c *C) {
 	c.Assert(actual, test.DeepCompare, expected, Commentf("Expected degraded system status."))
 }
 
-func (*AgentSuite) TestDetectsNoMaster(c *C) {
+func (*StatusSuite) TestDetectsNoMaster(c *C) {
 	status := pb.SystemStatus{
 		Nodes: []*pb.NodeStatus{
 			{
@@ -118,7 +131,11 @@ func (*AgentSuite) TestDetectsNoMaster(c *C) {
 	}
 
 	actual := status
-	setSystemStatus(&actual, []serf.Member{{Name: "foo"}, {Name: "bar"}})
+	members := []membership.ClusterMember{
+		membership.SerfMember{Member: &serf.Member{Name: "foo"}},
+		membership.SerfMember{Member: &serf.Member{Name: "bar"}},
+	}
+	setSystemStatus(&actual, members)
 
 	expected := status
 	expected.Status = pb.SystemStatus_Degraded
@@ -127,7 +144,7 @@ func (*AgentSuite) TestDetectsNoMaster(c *C) {
 	c.Assert(actual, test.DeepCompare, expected, Commentf("Expected degraded system status."))
 }
 
-func (*AgentSuite) TestSetsOkSystemStatus(c *C) {
+func (*StatusSuite) TestSetsOkSystemStatus(c *C) {
 	status := pb.SystemStatus{
 		Nodes: []*pb.NodeStatus{
 			{
@@ -151,7 +168,11 @@ func (*AgentSuite) TestSetsOkSystemStatus(c *C) {
 		},
 	}
 	actual := status
-	setSystemStatus(&actual, []serf.Member{{Name: "foo"}, {Name: "bar"}})
+	members := []membership.ClusterMember{
+		membership.SerfMember{Member: &serf.Member{Name: "foo"}},
+		membership.SerfMember{Member: &serf.Member{Name: "bar"}},
+	}
+	setSystemStatus(&actual, members)
 
 	expected := status
 	expected.Status = pb.SystemStatus_Running

@@ -87,6 +87,9 @@ const (
 // any given time.
 const maxConcurrentCheckers = 10
 
+// RPCPort specifies the default RPC port.
+const RPCPort = 7575 // FIXME: use serf to discover agents
+
 // defaultCipherSuites specify default cipher suites  to be used when creating
 // tls config.
 // Use TLS Modern capability suites
