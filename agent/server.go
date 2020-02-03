@@ -19,7 +19,6 @@ package agent
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -29,20 +28,18 @@ import (
 
 	"github.com/gravitational/roundtrip"
 	"github.com/gravitational/trace"
-	serf "github.com/hashicorp/serf/client"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
 
-// RPCPort specifies the default RPC port.
-const RPCPort = 7575 // FIXME: use serf to discover agents
-
 // RPCServer is the interface that defines the interaction with an agent via RPC.
 type RPCServer interface {
 	Status(context.Context, *pb.StatusRequest) (*pb.StatusResponse, error)
 	LocalStatus(context.Context, *pb.LocalStatusRequest) (*pb.LocalStatusResponse, error)
+	// LastSeen returns the last seen timestamp for a specified member.
+	LastSeen(context.Context, *pb.LastSeenRequest) (*pb.LastSeenResponse, error)
 	Time(context.Context, *pb.TimeRequest) (*pb.TimeResponse, error)
 	Timeline(context.Context, *pb.TimelineRequest) (*pb.TimelineResponse, error)
 	UpdateTimeline(context.Context, *pb.UpdateRequest) (*pb.UpdateResponse, error)
@@ -78,6 +75,17 @@ func (r *server) LocalStatus(ctx context.Context, req *pb.LocalStatusRequest) (r
 	return resp, nil
 }
 
+// LastSeen returns the last seen timestamp for a specified member.
+func (r *server) LastSeen(ctx context.Context, req *pb.LastSeenRequest) (resp *pb.LastSeenResponse, err error) {
+	timestamp, err := r.agent.LastSeen(req.GetName())
+	if err != nil {
+		return nil, GRPCError(err)
+	}
+	return &pb.LastSeenResponse{
+		Timestamp: pb.NewTimeToProto(timestamp),
+	}, nil
+}
+
 // Time sends back the target node server time
 func (r *server) Time(ctx context.Context, req *pb.TimeRequest) (*pb.TimeResponse, error) {
 	return &pb.TimeResponse{
@@ -87,7 +95,7 @@ func (r *server) Time(ctx context.Context, req *pb.TimeRequest) (*pb.TimeRespons
 
 // Timeline sends the current status timeline
 func (r *server) Timeline(ctx context.Context, req *pb.TimelineRequest) (*pb.TimelineResponse, error) {
-	events, err := r.agent.Timeline.GetEvents(ctx, req.GetParams())
+	events, err := r.agent.GetTimeline(ctx, req.GetParams())
 	if err != nil {
 		return nil, GRPCError(err)
 	}
@@ -100,7 +108,10 @@ func (r *server) Timeline(ctx context.Context, req *pb.TimelineRequest) (*pb.Tim
 // UpdateTimeline updates the timeline with a new event.
 // Duplicate requests will have no effect.
 func (r *server) UpdateTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateResponse, error) {
-	if err := r.agent.Timeline.RecordTimeline(ctx, []*pb.TimelineEvent{req.GetEvent()}); err != nil {
+	if err := r.agent.RecordTimeline(ctx, []*pb.TimelineEvent{req.GetEvent()}); err != nil {
+		return nil, GRPCError(err)
+	}
+	if err := r.agent.recordLastSeen(req.GetName(), req.GetEvent().GetTimestamp().ToTime()); err != nil {
 		return nil, GRPCError(err)
 	}
 	return &pb.UpdateResponse{}, nil
@@ -285,12 +296,4 @@ func grpcHandlerFunc(rpcServer *server, other http.Handler) http.Handler {
 			other.ServeHTTP(w, r)
 		}
 	})
-}
-
-// DefaultDialRPC is a default RPC client factory function.
-// It creates a new client based on address details from the specific serf member.
-func DefaultDialRPC(caFile, certFile, keyFile string) DialRPC {
-	return func(ctx context.Context, member *serf.Member) (*client, error) {
-		return NewClient(ctx, fmt.Sprintf("%s:%d", member.Addr.String(), RPCPort), caFile, certFile, keyFile)
-	}
 }

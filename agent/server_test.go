@@ -19,9 +19,11 @@ package agent
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -33,6 +35,7 @@ import (
 	"github.com/gravitational/satellite/agent/backend/inmemory"
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/lib/client"
 	"github.com/gravitational/satellite/lib/history"
 	"github.com/gravitational/satellite/lib/history/memory"
 	"github.com/gravitational/satellite/lib/test"
@@ -40,9 +43,11 @@ import (
 
 	"github.com/gravitational/roundtrip"
 	"github.com/gravitational/trace"
+	"github.com/gravitational/ttlmap"
 	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc/credentials"
 	. "gopkg.in/check.v1"
 )
 
@@ -234,7 +239,8 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 
 	for _, testCase := range agentTestCases {
 		comment := Commentf(testCase.comment)
-		localAgent := r.newLocalNode(testCase.localConfig)
+		localAgent, err := r.newLocalNode(testCase.localConfig)
+		c.Assert(err, IsNil)
 		remoteAgent, err := r.newRemoteNode(testCase.remoteConfig)
 		c.Assert(err, IsNil)
 
@@ -251,7 +257,9 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 
 			resp, err := localAgent.rpc.Status(ctx, &pb.StatusRequest{})
 			c.Assert(err, IsNil, comment)
-			c.Assert(sortProbes(*resp.Status), test.DeepCompare, testCase.status, comment)
+
+			sortStatus(resp.Status)
+			c.Assert(*resp.Status, test.DeepCompare, testCase.status, comment)
 		})
 	}
 }
@@ -270,17 +278,20 @@ func (r *AgentSuite) TestIsMember(c *C) {
 	// Cannot be a member of a single node cluster
 	configTest1 := config
 	configTest1.members = []serf.Member{newMember(name, "alive")}
-	agent := r.newAgent(configTest1)
+	agent, err := r.newAgent(configTest1)
+	c.Assert(err, IsNil)
 	c.Assert(agent.IsMember(), Equals, false)
 
 	configTest2 := config
 	configTest2.members = []serf.Member{newMember("node2", "alive"), newMember("node3", "alive")}
-	agent = r.newAgent(configTest2)
+	agent, err = r.newAgent(configTest2)
+	c.Assert(err, IsNil)
 	c.Assert(agent.IsMember(), Equals, false)
 
 	configTest3 := config
 	configTest3.members = []serf.Member{newMember(name, "alive"), newMember("node2", "alive")}
-	agent = r.newAgent(configTest3)
+	agent, err = r.newAgent(configTest3)
+	c.Assert(err, IsNil)
 	c.Assert(agent.IsMember(), Equals, true)
 }
 
@@ -325,7 +336,9 @@ func (r *AgentSuite) TestReflectsSystemStatusInStatusCode(c *C) {
 
 		var status pb.SystemStatus
 		c.Assert(json.Unmarshal(resp.Bytes(), &status), IsNil)
-		c.Assert(sortProbes(status), test.DeepCompare, expected)
+
+		sortStatus(&status)
+		c.Assert(status, test.DeepCompare, expected)
 	})
 }
 
@@ -381,7 +394,8 @@ func (r *AgentSuite) TestFailsIfTimesOutToCollectStatus(c *C) {
 		Status:    pb.SystemStatus_Degraded,
 		Summary:   fmt.Sprintf(msgNoStatus, "master,"),
 	}
-	localAgent := r.newLocalNode(localConfig)
+	localAgent, err := r.newLocalNode(localConfig)
+	c.Assert(err, IsNil)
 	localAgent.statusQueryReplyTimeout = 0 * time.Second
 
 	test.WithTimeout(func(ctx context.Context) {
@@ -392,34 +406,36 @@ func (r *AgentSuite) TestFailsIfTimesOutToCollectStatus(c *C) {
 
 		resp, err := localAgent.rpc.Status(ctx, &pb.StatusRequest{})
 		c.Assert(err, IsNil)
-		c.Assert(sortProbes(*resp.Status), test.DeepCompare, expected)
+
+		sortStatus(resp.Status)
+		c.Assert(*resp.Status, test.DeepCompare, expected)
 	})
 }
 
 // TestUpdateLocalTimeline verifies that an agent is able to update its timeline
 // with local status changes.
 func (r *AgentSuite) TestUpdateLocalTimeline(c *C) {
-	comment := Commentf("Expected node-1 recovered.")
-	expected := []*pb.TimelineEvent{
-		history.NewNodeRecovered(r.clock.Now(), "node-1"),
-	}
+	comment := Commentf("Expected master recovered.")
+	expected := []*pb.TimelineEvent{history.NewNodeRecovered(r.clock.Now(), "master")}
+	members := []serf.Member{newMember("master", "alive")}
 	localConfig := testAgentConfig{
-		localStatus: &pb.NodeStatus{
-			Name:   "node-1",
-			Status: pb.NodeStatus_Running,
-		},
+		node:     "master",
+		members:  members,
+		checkers: []health.Checker{healthyTest, healthyTest},
 	}
-	localAgent := r.newLocalNode(localConfig)
+	localAgent, err := r.newLocalNode(localConfig)
+	c.Assert(err, IsNil)
 
 	test.WithTimeout(func(ctx context.Context) {
 		c.Assert(localAgent.Start(), IsNil)
 		defer localAgent.Close()
 
-		c.Assert(localAgent.updateTimeline(ctx), IsNil)
-
-		resp, err := localAgent.rpc.Timeline(ctx, &pb.TimelineRequest{})
+		_, err := localAgent.collectLocalStatus(ctx, &members[0])
 		c.Assert(err, IsNil)
-		c.Assert(resp.GetEvents(), test.DeepCompare, expected, comment)
+
+		events, err := localAgent.LocalTimeline.GetEvents(ctx, nil)
+		c.Assert(err, IsNil)
+		c.Assert(events, test.DeepCompare, expected, comment)
 	})
 }
 
@@ -428,8 +444,11 @@ func (r *AgentSuite) TestUpdateLocalTimeline(c *C) {
 func (r *AgentSuite) TestUpdateRemoteTimeline(c *C) {
 	comment := Commentf("Expected node-1 recovered.")
 	req := &pb.UpdateRequest{Event: history.NewNodeRecovered(r.clock.Now(), "node-1")}
-	expected := []*pb.TimelineEvent{history.NewNodeRecovered(r.clock.Now(), "node-1")}
-	remoteAgent, err := r.newRemoteNode(testAgentConfig{})
+	expected := &pb.TimelineResponse{Events: []*pb.TimelineEvent{history.NewNodeRecovered(r.clock.Now(), "node-1")}}
+	remoteConfig := testAgentConfig{
+		role: "master",
+	}
+	remoteAgent, err := r.newRemoteNode(remoteConfig)
 	c.Assert(err, IsNil)
 
 	test.WithTimeout(func(ctx context.Context) {
@@ -441,42 +460,32 @@ func (r *AgentSuite) TestUpdateRemoteTimeline(c *C) {
 
 		resp, err := remoteAgent.rpc.Timeline(ctx, &pb.TimelineRequest{})
 		c.Assert(err, IsNil)
-		c.Assert(resp.GetEvents(), test.DeepCompare, expected, comment)
+		c.Assert(resp, test.DeepCompare, expected, comment)
 	})
 }
 
-// TestTimelineMerge validates the communication between several agents to
-// exchange timeline information.
-func (r *AgentSuite) TestAgentProvidesTimeline(c *C) {
-	comment := Commentf("Expected node-1 recovered and node-2 degraded.")
-	expected := []*pb.TimelineEvent{
-		history.NewNodeRecovered(r.clock.Now(), "node-1"),
-		history.NewNodeDegraded(r.clock.Now(), "node-2"),
-	}
-	localConfig := testAgentConfig{
-		node: "node-1",
-		members: []serf.Member{
-			newMember("node-1", "alive"),
-			newMember("node-2", "alive"),
-		},
-		localStatus: &pb.NodeStatus{
-			Name:   "node-1",
-			Status: pb.NodeStatus_Running,
-		},
+// TestNotifyMaster validates the communication between master and node. Local
+// timeline events should be pushed to the master.
+func (r *AgentSuite) TestNotifyMaster(c *C) {
+	comment := Commentf("Expected node-1 to push local events to master")
+	expected := &pb.TimelineResponse{Events: []*pb.TimelineEvent{history.NewNodeRecovered(r.clock.Now(), "node-1")}}
+	members := []serf.Member{
+		newMember("master", "alive"),
+		newMember("node-1", "alive"),
 	}
 	remoteConfig := testAgentConfig{
-		node: "node-2",
-		members: []serf.Member{
-			newMember("node-1", "alive"),
-			newMember("node-2", "alive"),
-		},
-		localStatus: &pb.NodeStatus{
-			Name:   "node-2",
-			Status: pb.NodeStatus_Degraded,
-		},
+		node:    "master",
+		role:    "master",
+		members: members,
+	}
+	localConfig := testAgentConfig{
+		node:     "node-1",
+		members:  members,
+		checkers: []health.Checker{healthyTest, healthyTest},
 	}
 
-	localAgent := r.newLocalNode(localConfig)
+	localAgent, err := r.newLocalNode(localConfig)
+	c.Assert(err, IsNil)
 	remoteAgent, err := r.newRemoteNode(remoteConfig)
 	c.Assert(err, IsNil)
 
@@ -487,19 +496,51 @@ func (r *AgentSuite) TestAgentProvidesTimeline(c *C) {
 		c.Assert(remoteAgent.Start(), IsNil)
 		defer remoteAgent.Close()
 
-		c.Assert(remoteAgent.updateTimeline(ctx), IsNil)
-		c.Assert(localAgent.updateTimeline(ctx), IsNil)
+		_, err = localAgent.collectLocalStatus(ctx, &members[1])
+		c.Assert(err, IsNil)
 
-		resp, err := localAgent.rpc.Timeline(ctx, &pb.TimelineRequest{})
+		resp, err := remoteAgent.rpc.Timeline(ctx, &pb.TimelineRequest{})
 		c.Assert(err, IsNil, comment)
-		c.Assert(resp.GetEvents(), test.DeepCompare, expected, comment)
+		c.Assert(resp, test.DeepCompare, expected, comment)
+	})
+}
 
+// TestAgentProvidesLastSeen validates that the agent is correctly recording
+// last seen timestamps.
+func (r *AgentSuite) TestAgentProvidesLastSeen(c *C) {
+	comment := Commentf("Expected the current time to be last seen.")
+	remoteConfig := testAgentConfig{
+		node:    "master",
+		role:    "master",
+		members: []serf.Member{newMember("master", "alive")},
+		localStatus: &pb.NodeStatus{
+			Name:   "master",
+			Status: pb.NodeStatus_Degraded,
+		},
+	}
+
+	expected := &pb.LastSeenResponse{Timestamp: pb.NewTimeToProto(r.clock.Now())}
+
+	remoteAgent, err := r.newRemoteNode(remoteConfig)
+	c.Assert(err, IsNil)
+
+	test.WithTimeout(func(ctx context.Context) {
+		c.Assert(remoteAgent.Start(), IsNil)
+		defer remoteAgent.Close()
+
+		_, err := remoteAgent.collectLocalStatus(ctx, &remoteConfig.members[0])
+		c.Assert(err, IsNil)
+
+		resp, err := remoteAgent.rpc.LastSeen(ctx, &pb.LastSeenRequest{Name: "master"})
+		c.Assert(err, IsNil)
+		c.Assert(resp, test.DeepCompare, expected, comment)
 	})
 }
 
 // testAgentConfig specifies config values for testAgent.
 type testAgentConfig struct {
 	node        string
+	role        string
 	rpcPort     int
 	members     []serf.Member
 	checkers    []health.Checker
@@ -518,6 +559,9 @@ func (config *testAgentConfig) setDefaults() {
 	if config.localStatus == nil {
 		config.localStatus = emptyNodeStatus(config.node)
 	}
+	if config.role == "" {
+		config.role = "node"
+	}
 }
 
 // testAgent adds additional testing functionality to agent.
@@ -526,18 +570,24 @@ type testAgent struct {
 }
 
 // newLocalNode creates a new instance of the local agent - agent used to make status queries.
-func (r *AgentSuite) newLocalNode(config testAgentConfig) *testAgent {
+func (r *AgentSuite) newLocalNode(config testAgentConfig) (*testAgent, error) {
 	config.setDefaults()
-	agent := r.newAgent(config)
+	agent, err := r.newAgent(config)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
 	agent.rpc = &testServer{&server{agent: agent}}
-	return &testAgent{agent: agent}
+	return &testAgent{agent: agent}, nil
 }
 
 // newRemoteNode creates a new instance of a remote agent - agent used to answer
 // status query requests via a running RPC endpoint.
 func (r *AgentSuite) newRemoteNode(config testAgentConfig) (*testAgent, error) {
 	config.setDefaults()
-	agent := r.newAgent(config)
+	agent, err := r.newAgent(config)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
 	addr := fmt.Sprintf("127.0.0.1:%v", config.rpcPort)
 
 	// Use the same CA certificate for client and server
@@ -551,37 +601,81 @@ func (r *AgentSuite) newRemoteNode(config testAgentConfig) (*testAgent, error) {
 }
 
 // newAgent creates a new agent instance.
-func (r *AgentSuite) newAgent(config testAgentConfig) *agent {
+func (r *AgentSuite) newAgent(config testAgentConfig) (*agent, error) {
 	// timelineCapacity specifies the default timeline capacity for tests.
-	timelineCapacity := 256
+	const timelineCapacity = 256
+	// clusterCapacity specifies the max number of nodes in a test cluster.
+	const clusterCapacity = 3
 
 	config.setDefaults()
 	timeline := memory.NewTimeline(config.clock, timelineCapacity)
+	localTimeline := memory.NewTimeline(config.clock, timelineCapacity)
+
+	agentTags := make(tags)
+	agentTags["role"] = config.role
 
 	agentConfig := Config{
 		Cache: inmemory.New(),
 		Name:  config.node,
 		Clock: config.clock,
+		Tags:  agentTags,
+	}
+
+	lastSeen, err := ttlmap.New(clusterCapacity)
+	if err != nil {
+		return nil, trace.Wrap(err)
 	}
 
 	return &agent{
 		SerfClient:              &MockSerfClient{members: config.members},
 		Timeline:                timeline,
+		LocalTimeline:           localTimeline,
 		dialRPC:                 testDialRPC(config.rpcPort, r.certFile, r.keyFile),
 		Config:                  agentConfig,
 		Checkers:                config.checkers,
 		localStatus:             config.localStatus,
+		lastSeen:                *lastSeen,
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
 		done:                    make(chan struct{}),
-	}
+	}, nil
 }
 
 // testDialRPC is a test implementation of the dialRPC interface,
 // that creates an RPC client bound to localhost.
-func testDialRPC(port int, certFile, keyFile string) DialRPC {
-	return func(ctx context.Context, member *serf.Member) (*client, error) {
+func testDialRPC(port int, certFile, keyFile string) client.DialRPC {
+	return func(ctx context.Context, member *serf.Member) (client.Client, error) {
 		return newClient(ctx, fmt.Sprintf(":%d", port), "agent", certFile, certFile, keyFile)
 	}
+}
+
+// newClient additionally allows a serverName override, but is only available
+// from unit tests.
+func newClient(ctx context.Context, addr, serverName, caFile, certFile, keyFile string) (client.Client, error) {
+	// Load client cert/key
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, trace.ConvertSystemError(err)
+	}
+
+	// Load the CA of the server
+	clientCACert, err := ioutil.ReadFile(caFile)
+	if err != nil {
+		return nil, trace.ConvertSystemError(err)
+	}
+
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(clientCACert) {
+		return nil, trace.Wrap(err, "failed to append certificates from %v", caFile)
+	}
+
+	creds := credentials.NewTLS(&tls.Config{
+		RootCAs:      certPool,
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
+		ServerName:   serverName,
+		CipherSuites: defaultCipherSuites,
+	})
+	return client.NewClientWithCreds(ctx, addr, creds)
 }
 
 func (r *AgentSuite) httpClient(url string) (*roundtrip.Client, error) {
@@ -613,12 +707,11 @@ func newMember(name string, status string) serf.Member {
 	return result
 }
 
-// sortProbes return system status with sorted probes.
-func sortProbes(status pb.SystemStatus) pb.SystemStatus {
+func sortStatus(status *pb.SystemStatus) {
+	sort.Sort(byName(status.Nodes))
 	for _, node := range status.Nodes {
 		sort.Sort(byChecker(node.Probes))
 	}
-	return status
 }
 
 var healthyTest = &testChecker{
@@ -684,7 +777,7 @@ func (r *testChecker) Check(ctx context.Context, reporter health.Reporter) {
 }
 
 // byChecker implements sort.Interface.
-// Enables probes to be sorted.
+// Enables probes to be sorted by checker.
 type byChecker []*pb.Probe
 
 func (r byChecker) Len() int           { return len(r) }
@@ -692,3 +785,11 @@ func (r byChecker) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
 func (r byChecker) Less(i, j int) bool { return r[i].Checker < r[j].Checker }
 
 type tags map[string]string
+
+// byName implements sort.Interface.
+// Enables nodes to be sorted by name.
+type byName []*pb.NodeStatus
+
+func (r byName) Len() int           { return len(r) }
+func (r byName) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
+func (r byName) Less(i, j int) bool { return r[i].Name < r[j].Name }

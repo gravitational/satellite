@@ -18,7 +18,6 @@ package main
 
 import (
 	"os"
-	"time"
 
 	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/agent/backend"
@@ -78,8 +77,8 @@ func run() error {
 		cagentCertFile       = cagent.Flag("cert-file", "SSL certificate for server RPC").ExistingFile()
 		cagentKeyFile        = cagent.Flag("key-file", "SSL certificate key for server RPC").ExistingFile()
 		// sqlite config
-		cagentDBPath    = cagent.Flag("db-path", "SQLite database location").Default("/tmp/timeline.db").String()
-		cagentRetention = cagent.Flag("retention", "Window to retain timeline as a Go duration").Duration()
+		cagentTimelineDir = cagent.Flag("timeline", "Directory to be used for timeline storage").Default("/tmp/timeline").String()
+		cagentRetention   = cagent.Flag("retention", "Window to retain timeline as a Go duration").Duration()
 
 		// `status` command
 		cstatus            = app.Command("status", "Query cluster status")
@@ -149,11 +148,6 @@ func run() error {
 			backends = append(backends, influxdb)
 		}
 
-		// Use retention duration of 1 week if no duration is provided
-		if *cagentRetention == time.Duration(0) {
-			*cagentRetention = defaultTimelineRentention
-		}
-
 		agentConfig := &agent.Config{
 			Name:        *cagentName,
 			RPCAddrs:    *cagentRPCAddrs,
@@ -168,7 +162,7 @@ func run() error {
 				Addr: *cagentSerfRPCAddr,
 			},
 			TimelineConfig: sqlite.Config{
-				DBPath:            *cagentDBPath,
+				DBPath:            *cagentTimelineDir,
 				RetentionDuration: *cagentRetention,
 			},
 		}

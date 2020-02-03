@@ -160,6 +160,11 @@ func (a *mockedTimeAgentClient) LocalStatus(ctx context.Context) (*agentpb.NodeS
 	return nil, nil
 }
 
+func (a *mockedTimeAgentClient) LastSeen(ctx context.Context,
+	req *agentpb.LastSeenRequest) (*agentpb.LastSeenResponse, error) {
+	return nil, trace.NotImplemented("LastSeen not implemented")
+}
+
 func (a *mockedTimeAgentClient) Time(ctx context.Context, req *agentpb.TimeRequest) (*agentpb.TimeResponse, error) {
 	return &agentpb.TimeResponse{
 		Timestamp: agentpb.NewTimeToProto(a.time),
@@ -174,6 +179,10 @@ func (a *mockedTimeAgentClient) Timeline(ctx context.Context,
 func (a *mockedTimeAgentClient) UpdateTimeline(ctx context.Context,
 	req *agentpb.UpdateRequest) (*agentpb.UpdateResponse, error) {
 	return nil, nil
+}
+
+func (a *mockedTimeAgentClient) Close() error {
+	return nil
 }
 
 func newClientsCache(c *check.C, times map[string]time.Time) *ttlmap.TTLMap {

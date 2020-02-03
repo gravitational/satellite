@@ -16,7 +16,10 @@ limitations under the License.
 
 package agent
 
-import "time"
+import (
+	"crypto/tls"
+	"time"
+)
 
 // MemberStatus describes the state of a serf node.
 type MemberStatus string
@@ -38,6 +41,11 @@ const (
 
 // Timeout values
 const (
+	// lastSeenTTL specifies the time to live for the stored lastSeen values.
+	// This ensures agents do not hold on to unused information when a member
+	// leaves the cluster.
+	lastSeenTTL = 3 * time.Minute
+
 	// timelineInitTimeout specifies the amount of time to wait for the
 	// timeline to initialize.
 	timelineInitTimeout = 5 * time.Second
@@ -78,3 +86,18 @@ const (
 // maxConcurrentCheckers specifies the maximum number of checkers active at
 // any given time.
 const maxConcurrentCheckers = 10
+
+// defaultCipherSuites specify default cipher suites  to be used when creating
+// tls config.
+// Use TLS Modern capability suites
+// https://wiki.mozilla.org/Security/Server_Side_TLS
+var defaultCipherSuites = []uint16{
+	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+	tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+	tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
+	tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
+}

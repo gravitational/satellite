@@ -14,13 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package agent
+package client
 
 import (
 	"context"
 
 	"github.com/gravitational/trace"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	grpcerrors "google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -72,7 +71,6 @@ func GRPCError(err error) error {
 	case context.DeadlineExceeded:
 		return status.Error(grpcerrors.DeadlineExceeded, "rpc deadline exceeded")
 	default:
-		log.WithError(err).Warn("Failed to convert to grpc error.")
 		return status.Error(grpcerrors.Unknown, "unknown error")
 	}
 }
