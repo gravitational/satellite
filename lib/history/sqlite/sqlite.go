@@ -20,6 +20,8 @@ package sqlite
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -92,7 +94,7 @@ func NewTimeline(ctx context.Context, config Config) (*Timeline, error) {
 	}
 
 	if err := timeline.initSQLite(ctx); err != nil {
-		return nil, trace.Wrap(err, "failed to init sqlite")
+		return nil, trace.Wrap(err, "failed to initialize sqlite database")
 	}
 
 	// if err := timeline.initPrevStatus(ctx); err != nil {
@@ -110,13 +112,18 @@ func NewTimeline(ctx context.Context, config Config) (*Timeline, error) {
 
 // initSQLite initializes connection to database and initializes `events` table.
 func (t *Timeline) initSQLite(ctx context.Context) error {
+	dir := filepath.Dir(t.config.DBPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return trace.Wrap(err, "failed to make database directory")
+	}
+
 	database, err := sqlx.ConnectContext(ctx, "sqlite3", t.config.DBPath)
 	if err != nil {
-		return trace.Wrap(err)
+		return trace.Wrap(err, "failed to connect to sqlite database at %s", t.config.DBPath)
 	}
 
 	if _, err := database.ExecContext(ctx, createTableEvents); err != nil {
-		return trace.Wrap(err)
+		return trace.Wrap(err, "failed to create sqlite tables")
 	}
 
 	t.database = database
