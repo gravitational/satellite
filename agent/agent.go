@@ -527,7 +527,7 @@ func (r *agent) recycleLoop(ctx context.Context) {
 			return
 		case <-ticker.Chan():
 			if err := r.Cache.Recycle(); err != nil {
-				log.WithError(err).Warnf("Error recycling status.")
+				log.WithError(err).Warn("Error recycling status.")
 			}
 		}
 	}
@@ -547,7 +547,7 @@ func (r *agent) statusUpdateLoop(ctx context.Context) {
 			return
 		case <-ticker.Chan():
 			if err := r.updateStatus(ctx); err != nil {
-				log.WithError(err).Warnf("Failed to updates status.")
+				log.WithError(err).Warn("Failed to updates status.")
 			}
 		}
 	}
