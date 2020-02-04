@@ -17,15 +17,15 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-	"github.com/gravitational/satellite/lib/client"
-	"github.com/gravitational/trace"
+	"github.com/gravitational/satellite/lib/rpc/client"
 
-	"golang.org/x/net/context"
+	"github.com/gravitational/trace"
 )
 
 // rpcConfig defines configuration for an RPC.

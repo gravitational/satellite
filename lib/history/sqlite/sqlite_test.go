@@ -60,6 +60,48 @@ func (s *SQLiteSuite) TearDownTest(c *C) {
 	}
 }
 
+// TestSQLiteInitialization verifies that a SQLite database can be correctly
+// initialized.
+func (s *SQLiteSuite) TestSQLiteInitialization(c *C) {
+	comment := Commentf("Expected new timeline to be initialized in a newly created directory.")
+	dbPath := "/tmp/test/dir/test.db"
+	config := Config{DBPath: dbPath}
+	test.WithTimeout(func(ctx context.Context) {
+		_, err := NewTimeline(ctx, config)
+		c.Assert(err, IsNil, comment)
+	})
+	c.Assert(os.Remove(dbPath), IsNil, comment)
+}
+
+// TestReinitialization verifies that the timeline can be reinitialized with
+// a preexisting database.
+func (s *SQLiteSuite) TestReinitialization(c *C) {
+	comment := Commentf("Expected reinitialized timeline to contain previously stored event.")
+	dbPath := "/tmp/test/dir/test.db"
+	config := Config{
+		DBPath: dbPath,
+		Clock:  s.clock,
+	}
+	events := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), "test-node")}
+	test.WithTimeout(func(ctx context.Context) {
+		timelineOld, err := NewTimeline(ctx, config)
+		c.Assert(err, IsNil)
+		c.Assert(timelineOld.RecordTimeline(ctx, events), IsNil)
+
+		actual, err := timelineOld.GetEvents(ctx, nil)
+		c.Assert(err, IsNil)
+		c.Assert(actual, test.DeepCompare, events, comment)
+
+		timelineNew, err := NewTimeline(ctx, config)
+		c.Assert(err, IsNil)
+
+		actual, err = timelineNew.GetEvents(ctx, nil)
+		c.Assert(err, IsNil)
+		c.Assert(actual, test.DeepCompare, events, comment)
+	})
+	c.Assert(os.Remove(dbPath), IsNil, comment)
+}
+
 func (s *SQLiteSuite) TestRecordStatus(c *C) {
 	var testCases = []struct {
 		comment  string

@@ -17,6 +17,7 @@ limitations under the License.
 package agent
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"io/ioutil"
@@ -24,12 +25,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
 	"github.com/gravitational/roundtrip"
 	"github.com/gravitational/trace"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -49,30 +50,25 @@ type RPCServer interface {
 // server implements RPCServer for an agent.
 type server struct {
 	*grpc.Server
-	agent       *agent
+	agent       Agent
 	httpServers []*http.Server
 }
 
 // Status reports the health status of a serf cluster by iterating over the list
 // of currently active cluster members and collecting their respective health statuses.
 func (r *server) Status(ctx context.Context, req *pb.StatusRequest) (resp *pb.StatusResponse, err error) {
-	resp = &pb.StatusResponse{}
-
-	resp.Status, err = r.agent.recentStatus()
+	status, err := r.agent.Status()
 	if err != nil {
-		return nil, trace.Wrap(err)
+		return nil, GRPCError(err)
 	}
-
-	return resp, nil
+	return &pb.StatusResponse{Status: status}, nil
 }
 
 // LocalStatus reports the health status of the local serf node.
 func (r *server) LocalStatus(ctx context.Context, req *pb.LocalStatusRequest) (resp *pb.LocalStatusResponse, err error) {
-	resp = &pb.LocalStatusResponse{}
-
-	resp.Status = r.agent.recentLocalStatus()
-
-	return resp, nil
+	return &pb.LocalStatusResponse{
+		Status: r.agent.LocalStatus(),
+	}, nil
 }
 
 // LastSeen returns the last seen timestamp for a specified member.
@@ -89,7 +85,7 @@ func (r *server) LastSeen(ctx context.Context, req *pb.LastSeenRequest) (resp *p
 // Time sends back the target node server time
 func (r *server) Time(ctx context.Context, req *pb.TimeRequest) (*pb.TimeResponse, error) {
 	return &pb.TimeResponse{
-		Timestamp: pb.NewTimeToProto(time.Now().UTC()),
+		Timestamp: pb.NewTimeToProto(r.agent.Time().UTC()),
 	}, nil
 }
 
@@ -99,10 +95,7 @@ func (r *server) Timeline(ctx context.Context, req *pb.TimelineRequest) (*pb.Tim
 	if err != nil {
 		return nil, GRPCError(err)
 	}
-
-	return &pb.TimelineResponse{
-		Events: events,
-	}, nil
+	return &pb.TimelineResponse{Events: events}, nil
 }
 
 // UpdateTimeline updates the timeline with a new event.
@@ -111,7 +104,7 @@ func (r *server) UpdateTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb
 	if err := r.agent.RecordTimeline(ctx, []*pb.TimelineEvent{req.GetEvent()}); err != nil {
 		return nil, GRPCError(err)
 	}
-	if err := r.agent.recordLastSeen(req.GetName(), req.GetEvent().GetTimestamp().ToTime()); err != nil {
+	if err := r.agent.RecordLastSeen(req.GetName(), req.GetEvent().GetTimestamp().ToTime()); err != nil {
 		return nil, GRPCError(err)
 	}
 	return &pb.UpdateResponse{}, nil
@@ -296,4 +289,34 @@ func grpcHandlerFunc(rpcServer *server, other http.Handler) http.Handler {
 			other.ServeHTTP(w, r)
 		}
 	})
+}
+
+// Agent is the interface to interact with the monitoring agent.
+type Agent interface {
+	// Start starts agent's background jobs.
+	Start() error
+	// Close stops background activity and releases resources.
+	Close() error
+	// Join makes an attempt to join a cluster specified by the list of peers.
+	Join(peers []string) error
+	// Time reports the current server time.
+	Time() time.Time
+	// LocalStatus reports the health status of the local agent node.
+	LocalStatus() *pb.NodeStatus
+	// Status reports the health status of the cluster.
+	Status() (*pb.SystemStatus, error)
+	// LastSeen returns the last seen timestamp from the specified member.
+	LastSeen(name string) (time.Time, error)
+	// RecordLastSeen records the last seen timestamp for the specified member.
+	RecordLastSeen(name string, timestamp time.Time) error
+	// GetTimeline returns the current cluster timeline.
+	GetTimeline(ctx context.Context, params map[string]string) ([]*pb.TimelineEvent, error)
+	// RecordTimeline records the events into the cluster timeline.
+	RecordTimeline(ctx context.Context, events []*pb.TimelineEvent) error
+	// IsMember returns whether this agent is already a member of serf cluster
+	IsMember() bool
+	// GetConfig returns the agent configuration.
+	GetConfig() Config
+	// CheckerRepository allows to add checks to the agent.
+	health.CheckerRepository
 }
