@@ -17,6 +17,7 @@ limitations under the License.
 package agent
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -28,10 +29,10 @@ import (
 	"github.com/gravitational/satellite/agent/cache"
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-	"github.com/gravitational/satellite/lib/client"
 	"github.com/gravitational/satellite/lib/history"
 	"github.com/gravitational/satellite/lib/history/sqlite"
 	"github.com/gravitational/satellite/lib/membership"
+	"github.com/gravitational/satellite/lib/rpc/client"
 
 	"github.com/gravitational/trace"
 	"github.com/gravitational/ttlmap"
@@ -39,7 +40,6 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
 )
 
 // Config defines satellite configuration.
@@ -656,7 +656,11 @@ func (r *agent) collectLocalStatus(ctx context.Context) (status *pb.NodeStatus, 
 // getLocalStatus obtains local node status.
 func (r *agent) getLocalStatus(ctx context.Context, respc chan<- *statusResponse) {
 	// TODO: restructure code so that local member is not needed here.
-	local, _ := r.ClusterMembership.FindMember(r.Name)
+	local, err := r.ClusterMembership.FindMember(r.Name)
+	if err != nil {
+		respc <- &statusResponse{err: err}
+		return
+	}
 
 	status, err := r.collectLocalStatus(ctx)
 	resp := &statusResponse{
