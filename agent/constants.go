@@ -45,6 +45,10 @@ const (
 	// leaves the cluster.
 	lastSeenTTL = 3 * time.Minute
 
+	// lastSeenCapacity specifies the max number of values that can be stored in
+	// the ttl map.
+	lastSeenCapacity = 1000
+
 	// timelineInitTimeout specifies the amount of time to wait for the
 	// timeline to initialize.
 	timelineInitTimeout = 5 * time.Second

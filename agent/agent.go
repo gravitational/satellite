@@ -92,9 +92,6 @@ type Config struct {
 	// Clock to be used for internal time keeping.
 	Clock clockwork.Clock
 
-	// ClusterCapacity specifies the max number of members in the cluster.
-	ClusterCapacity int
-
 	// Cache is a short-lived storage used by the agent to persist latest health stats.
 	cache.Cache
 }
@@ -124,9 +121,6 @@ func (r *Config) CheckAndSetDefaults() error {
 	}
 	if r.Clock == nil {
 		r.Clock = clockwork.NewRealClock()
-	}
-	if r.ClusterCapacity == 0 {
-		r.ClusterCapacity = 100
 	}
 	return trace.NewAggregate(errors...)
 }
@@ -208,7 +202,7 @@ func New(config *Config) (*agent, error) {
 			return nil, trace.Wrap(err, "failed to initialize timeline")
 		}
 
-		lastSeen, err = ttlmap.New(config.ClusterCapacity)
+		lastSeen, err = ttlmap.New(lastSeenCapacity)
 		if err != nil {
 			return nil, trace.Wrap(err, "failed to initialize last seen ttl map")
 		}
