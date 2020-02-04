@@ -70,7 +70,7 @@ func (s *SQLiteSuite) TestSQLiteInitialization(c *C) {
 		_, err := NewTimeline(ctx, config)
 		c.Assert(err, IsNil, comment)
 	})
-	c.Assert(os.Remove(dbPath), IsNil)
+	c.Assert(os.Remove(dbPath), IsNil, comment)
 }
 
 // TestReinitialization verifies that the timeline can be reinitialized with
@@ -99,7 +99,7 @@ func (s *SQLiteSuite) TestReinitialization(c *C) {
 		c.Assert(err, IsNil)
 		c.Assert(actual, test.DeepCompare, events, comment)
 	})
-	c.Assert(os.Remove(dbPath), IsNil)
+	c.Assert(os.Remove(dbPath), IsNil, comment)
 }
 
 func (s *SQLiteSuite) TestRecordStatus(c *C) {
