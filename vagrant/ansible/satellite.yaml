@@ -1,0 +1,90 @@
+---
+
+- hosts: nodes
+  become: yes
+  vars:
+    root_dir: "{{playbook_dir}}/../.."
+  tasks:
+
+  - name: Register node IP
+    shell: hostname -I | cut -d' ' -f2
+    register: command_output
+  - set_fact:
+      node_ip: "{{command_output.stdout}}"
+  
+  - name: Create Satellite Master Environment File
+    when: inventory_hostname in groups['first']
+    copy:
+      dest: /var/lib/satellite/env
+      content: |
+        KUBECONFIG=/home/vagrant/.kube/config
+        MONITOR_AGENT_NAME={{inventory_hostname}}
+        MONITOR_TAGS=role:master
+        MONITOR_INITIAL_CLUSTER={{inventory_hostname}}:{{node_ip}}
+        RPC_ADDR=127.0.0.1:7575,{{node_ip}}:7575
+        CA_PATH=/var/lib/satellite/creds/ca.cert
+        CERT_PATH=/var/lib/satellite/creds/server.cert
+        KEY_PATH=/var/lib/satellite/creds/server.key
+
+  - name: Create Satellite Node Environment File
+    when: inventory_hostname not in groups['first']
+    copy:
+      dest: /var/lib/satellite/env
+      content: |
+        KUBECONFIG=/home/vagrant/.kube/config
+        MONITOR_AGENT_NAME={{inventory_hostname}}
+        MONITOR_TAGS=role:node
+        MONITOR_INITIAL_CLUSTER={{inventory_hostname}}:{{node_ip}}
+        RPC_ADDR=127.0.0.1:7575,{{node_ip}}:7575
+        CA_PATH=/var/lib/satellite/creds/ca.cert
+        CERT_PATH=/var/lib/satellite/creds/server.cert
+        KEY_PATH=/var/lib/satellite/creds/server.key
+
+  - name: Create Satellite Service
+    copy:
+      dest: /etc/systemd/system/satellite.service
+      content: |
+        [Unit]
+        Description=Satellite agent
+        After=network.target
+        StartLimitIntervalSec=0
+
+        [Service]
+        Type=simple
+        Restart=always
+        RestartSec=1
+        User=vagrant
+        EnvironmentFile=/var/lib/satellite/env
+        ExecStart=/usr/local/bin/satellite agent \
+          --debug \
+          --ca-file=${CA_PATH} \
+          --cert-file=${CERT_PATH} \
+          --key-file=${KEY_PATH} \
+          --rpc-addr=${RPC_ADDR} \
+          --etcd-cafile=${CA_PATH} \
+          --etcd-certfile=${CERT_PATH} \
+          --etcd-keyfile=${KEY_PATH}
+
+        [Install]
+        WantedBy=multi-user.target
+
+  - name: Build Satellite Binary
+    become: no
+    when: inventory_hostname in groups['first']
+    delegate_to: localhost
+    shell: |
+      go run mage.go build:all
+    args:
+      chdir: "{{root_dir}}"
+
+  - name: Upload Satellite Binary
+    copy:
+      force: yes
+      mode: '755'
+      src: "{{root_dir}}/build/satellite"
+      dest: "/usr/local/bin/satellite"
+
+  - name: Start Satellite Service
+    systemd:
+      name: satellite
+      state: started

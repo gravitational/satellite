@@ -58,15 +58,14 @@ type config struct {
 
 // addCheckers adds checkers to the agent.
 func addCheckers(node agent.Agent, config *config) (err error) {
-	client, err := cmd.GetKubeClientFromPath(config.kubeconfigPath)
-	if err != nil {
-		return trace.Wrap(err)
-	}
-	kubeConfig := monitoring.KubeConfig{Client: client}
-
 	log.Debugf("Monitoring Agent started with config %#v", config)
 	switch config.role {
 	case agent.RoleMaster:
+		client, err := cmd.GetKubeClientFromPath(config.kubeconfigPath)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+		kubeConfig := monitoring.KubeConfig{Client: client}
 		err = addToMaster(node, config, kubeConfig)
 	case agent.RoleNode:
 		err = addToNode(node, config)
