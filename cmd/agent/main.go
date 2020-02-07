@@ -25,10 +25,12 @@ import (
 	"github.com/gravitational/satellite/agent/backend/inmemory"
 	"github.com/gravitational/satellite/agent/cache/multiplex"
 	"github.com/gravitational/satellite/cmd"
+	"github.com/gravitational/satellite/lib/history/sqlite"
 	"github.com/gravitational/satellite/monitoring"
 	"github.com/gravitational/trace"
 	"github.com/gravitational/version"
 
+	serf "github.com/hashicorp/serf/client"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
@@ -74,6 +76,9 @@ func run() error {
 		cagentCAFile         = cagent.Flag("ca-file", "SSL CA certificate for verifying server certificates").ExistingFile()
 		cagentCertFile       = cagent.Flag("cert-file", "SSL certificate for server RPC").ExistingFile()
 		cagentKeyFile        = cagent.Flag("key-file", "SSL certificate key for server RPC").ExistingFile()
+		// sqlite config
+		cagentTimelineDir = cagent.Flag("timeline", "Directory to be used for timeline storage").Default("/tmp/timeline").String()
+		cagentRetention   = cagent.Flag("retention", "Window to retain timeline as a Go duration").Duration()
 
 		// `status` command
 		cstatus            = app.Command("status", "Query cluster status")
@@ -83,6 +88,13 @@ func run() error {
 		cstatusCAFile      = cstatus.Flag("ca-file", "CA certificate for verifying server certificates").ExistingFile()
 		cstatusCertFile    = cstatus.Flag("client-cert-file", "mTLS client certificate file").ExistingFile()
 		cstatusKeyFile     = cstatus.Flag("client-key-file", "mTLS client key file").ExistingFile()
+
+		// `history` command
+		chistory         = app.Command("history", "Query cluster status history")
+		chistoryRPCPort  = chistory.Flag("rpc-port", "Local agent RPC port").Default("7575").Int()
+		chistoryCAFile   = chistory.Flag("ca-file", "CA certificate for verifying server certificates").ExistingFile()
+		chistoryCertFile = chistory.Flag("client-cert-file", "mTLS client certificate file").ExistingFile()
+		chistoryKeyFile  = chistory.Flag("client-key-file", "mTLS client key file").ExistingFile()
 
 		// checks command
 		cchecks = app.Command("checks", "Run local compatibility checks")
@@ -135,16 +147,24 @@ func run() error {
 			}
 			backends = append(backends, influxdb)
 		}
+
 		agentConfig := &agent.Config{
 			Name:        *cagentName,
 			RPCAddrs:    *cagentRPCAddrs,
-			SerfRPCAddr: *cagentSerfRPCAddr,
 			MetricsAddr: *cagentMetricsAddr,
 			Tags:        *cagentTags,
 			Cache:       multiplex.New(cache, backends...),
 			CAFile:      *cagentCAFile,
 			CertFile:    *cagentCertFile,
 			KeyFile:     *cagentKeyFile,
+
+			SerfConfig: serf.Config{
+				Addr: *cagentSerfRPCAddr,
+			},
+			TimelineConfig: sqlite.Config{
+				DBPath:            *cagentTimelineDir,
+				RetentionDuration: *cagentRetention,
+			},
 		}
 		monitoringConfig := &config{
 			role:                 agent.Role(agentRole),
@@ -162,7 +182,25 @@ func run() error {
 		}
 		err = runAgent(agentConfig, monitoringConfig, toAddrList(*cagentInitialCluster))
 	case cstatus.FullCommand():
-		_, err = status(*cstatusRPCPort, *cstatusLocal, *cstatusPrettyPrint, *cstatusCAFile, *cstatusCertFile, *cstatusKeyFile)
+		config := statusConfig{
+			rpcConfig: rpcConfig{
+				rpcPort:  *cstatusRPCPort,
+				caFile:   *cstatusCAFile,
+				certFile: *cstatusCertFile,
+				keyFile:  *cstatusKeyFile,
+			},
+			local:       *cstatusLocal,
+			prettyPrint: *cstatusPrettyPrint,
+		}
+		_, err = status(config)
+	case chistory.FullCommand():
+		config := rpcConfig{
+			rpcPort:  *chistoryRPCPort,
+			caFile:   *chistoryCAFile,
+			certFile: *chistoryCertFile,
+			keyFile:  *chistoryKeyFile,
+		}
+		_, err = history(config)
 	case cchecks.FullCommand():
 		err = localChecks()
 	case cversion.FullCommand():
@@ -172,6 +210,3 @@ func run() error {
 
 	return trace.Wrap(err)
 }
-
-// monitoringDbFile names the file where agent persists health status history.
-const monitoringDbFile = "monitoring.db"
