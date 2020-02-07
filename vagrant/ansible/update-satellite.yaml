@@ -1,0 +1,29 @@
+---
+
+- hosts: nodes
+  become: yes
+  vars:
+    root_dir: "{{playbook_dir}}/../.."
+  tasks:
+  
+  - name: Build Satellite Binary
+    become: no
+    when: inventory_hostname in groups['first']
+    delegate_to: localhost
+    shell: |
+      go run mage.go build:all
+    args:
+      chdir: "{{root_dir}}"
+
+  - name: Upload Satellite Binary
+    copy:
+      force: yes
+      mode: '755'
+      src: "{{root_dir}}/build/satellite"
+      dest: "/usr/local/bin/satellite"
+
+  - name: Restart Satellite Service
+    systemd:
+      name: satellite
+      daemon_reload: yes
+      state: restarted

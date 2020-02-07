@@ -25,6 +25,10 @@
   go-tests = true
 
 [[constraint]]
+  name = "github.com/mattn/go-sqlite3"
+  version = "v1.13.0"
+
+[[constraint]]
   name = "github.com/aws/aws-sdk-go"
   version = "v1.13.57"
 
@@ -70,7 +74,7 @@
 
 [[constraint]]
   name = "github.com/jonboulle/clockwork"
-  version = "0.1.0"
+  branch = "master"
 
 [[constraint]]
   name = "github.com/prometheus/client_golang"
