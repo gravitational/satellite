@@ -709,7 +709,7 @@
   version = "v2.2.1"
 
 [[projects]]
-  digest = "1:274e6b4fd11a6a01212ee6af5ba488c7623f5eaa7339d3bb5642220d96ee8744"
+  digest = "1:cd7322a2669aba7fe506383dc31ece3881fc3e39ccac5334360c50f946a8ade4"
   name = "k8s.io/api"
   packages = [
     "admissionregistration/v1",
@@ -733,8 +733,10 @@
     "coordination/v1beta1",
     "core/v1",
     "discovery/v1alpha1",
+    "discovery/v1beta1",
     "events/v1beta1",
     "extensions/v1beta1",
+    "flowcontrol/v1alpha1",
     "networking/v1",
     "networking/v1beta1",
     "node/v1alpha1",
@@ -752,11 +754,11 @@
     "storage/v1beta1",
   ]
   pruneopts = "UT"
-  revision = "35e52d86657aba06859dd22099bfa14faf1effb2"
-  version = "kubernetes-1.16.2"
+  revision = "7ea599edc7fd1198238be103353ca78eef24ae63"
+  version = "kubernetes-1.17.2"
 
 [[projects]]
-  digest = "1:1b4355fd3eddf51d86097f4b011f21f26e3a8d599e073c670435036c401fe734"
+  digest = "1:f602cb057fb253bf1c45a7071320262fc357949e17f08c37e920f2185feb84c6"
   name = "k8s.io/apimachinery"
   packages = [
     "pkg/api/errors",
@@ -800,11 +802,11 @@
     "third_party/forked/golang/reflect",
   ]
   pruneopts = "UT"
-  revision = "a2eda9f80ab8a454a81bdde16d62a1afe5f931c0"
-  version = "kubernetes-1.16.2"
+  revision = "79c2a76c473a20cdc4ce59cae4b72529b5d9d16b"
+  version = "kubernetes-1.17.2"
 
 [[projects]]
-  digest = "1:23db2a491676ec3311ac490a60f1b4ef87b7bb93d580840aa7ec93d48982b305"
+  digest = "1:d6b998d47f34de5c3137044dbd8a1a2934a58b5107eea31f054957e84e26910d"
   name = "k8s.io/client-go"
   packages = [
     "discovery",
@@ -854,10 +856,14 @@
     "kubernetes/typed/core/v1/fake",
     "kubernetes/typed/discovery/v1alpha1",
     "kubernetes/typed/discovery/v1alpha1/fake",
+    "kubernetes/typed/discovery/v1beta1",
+    "kubernetes/typed/discovery/v1beta1/fake",
     "kubernetes/typed/events/v1beta1",
     "kubernetes/typed/events/v1beta1/fake",
     "kubernetes/typed/extensions/v1beta1",
     "kubernetes/typed/extensions/v1beta1/fake",
+    "kubernetes/typed/flowcontrol/v1alpha1",
+    "kubernetes/typed/flowcontrol/v1alpha1/fake",
     "kubernetes/typed/networking/v1",
     "kubernetes/typed/networking/v1/fake",
     "kubernetes/typed/networking/v1beta1",
@@ -911,8 +917,8 @@
     "util/keyutil",
   ]
   pruneopts = "UT"
-  revision = "bec269661e48cb1e5fbb0d037f356ffe9e9978a0"
-  version = "kubernetes-1.16.2"
+  revision = "bdedab45d4f6c8f8ffacb8e269c89e9bb736320f"
+  version = "kubernetes-1.17.2"
 
 [[projects]]
   digest = "1:e2999bf1bb6eddc2a6aa03fe5e6629120a53088926520ca3b4765f77d7ff7eab"
@@ -982,13 +988,13 @@
     "github.com/prometheus/procfs",
     "github.com/sirupsen/logrus",
     "github.com/stretchr/testify/assert",
-    "golang.org/x/net/context",
     "golang.org/x/net/icmp",
     "golang.org/x/net/ipv4",
     "golang.org/x/sys/unix",
     "google.golang.org/grpc",
     "google.golang.org/grpc/codes",
     "google.golang.org/grpc/credentials",
+    "google.golang.org/grpc/status",
     "gopkg.in/alecthomas/kingpin.v2",
     "gopkg.in/check.v1",
     "k8s.io/api/core/v1",
