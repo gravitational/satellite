@@ -38,8 +38,7 @@
 
 [[override]]
   name = "github.com/mitchellh/go-ps"
-  source = "github.com/gravitational/go-ps"
-  version = "=1.0.0"
+  version = "v1.0.0"
 
 [[override]]
   name = "github.com/go-ini/ini"
