@@ -38,7 +38,7 @@
 
 [[override]]
   name = "github.com/mitchellh/go-ps"
-  branch = "master"
+  version = "v1.0.0"
 
 [[override]]
   name = "github.com/go-ini/ini"
@@ -83,7 +83,7 @@
 [[constraint]]
   name = "github.com/sirupsen/logrus"
   source = "github.com/gravitational/logrus"
-  version = "1.0.6"
+  version = "v1.4.3-alpha.1"
 
 [[constraint]]
   name = "golang.org/x/net"
