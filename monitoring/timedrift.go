@@ -44,8 +44,8 @@ const (
 	// clientsCacheCapacity is the capacity of the TTL map that holds
 	// clients to satellite agents on other cluster nodes.
 	clientsCacheCapacity = 1000
-	// latencyStatsTTL specifies in seconds how long clients information will be kept before being dropped
-	clientsCacheTTL = 3600
+	// clientCacheTTLSeconds specifies how long clients information will be kept before being dropped
+	clientsCacheTTLSeconds = 3600 // 1 hour
 )
 
 // timeDriftChecker is a checker that verifies that the time difference between
@@ -280,7 +280,7 @@ func (c *timeDriftChecker) getAgentClient(ctx context.Context, node serf.Member)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	if err := c.clients.Set(node.Addr.String(), client, clientsCacheTTL); err != nil {
+	if err := c.clients.Set(node.Addr.String(), client, clientsCacheTTLSeconds); err != nil {
 		return nil, trace.Wrap(err)
 	}
 	return client, nil

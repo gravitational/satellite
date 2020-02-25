@@ -369,7 +369,7 @@ func (r *agent) LastSeen(name string) (lastSeen time.Time, err error) {
 
 	// Reset ttl if successfully retrieved lastSeen.
 	// Initialize value if lastSeen had not been previously stored.
-	if err := r.lastSeen.Set(name, time.Time{}, lastSeenTTL); err != nil {
+	if err := r.lastSeen.Set(name, time.Time{}, lastSeenTTLSeconds); err != nil {
 		return lastSeen, trace.Wrap(err, fmt.Sprintf("failed to initialize timestamp for %s", name))
 	}
 
@@ -399,7 +399,7 @@ func (r *agent) RecordLastSeen(name string, timestamp time.Time) error {
 		return nil
 	}
 
-	return r.lastSeen.Set(name, timestamp, lastSeenTTL)
+	return r.lastSeen.Set(name, timestamp, lastSeenTTLSeconds)
 }
 
 // runChecks executes the monitoring tests configured for this agent in parallel.

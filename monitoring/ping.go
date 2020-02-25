@@ -39,8 +39,8 @@ import (
 const (
 	// pingCheckerID specifies the check name
 	pingCheckerID = "ping-checker"
-	// latencyStatsTTL specifies in seconds how long check results will be kept before being dropped
-	latencyStatsTTL = 3600
+	// latencyStatsTTLSeconds specifies how long check results will be kept before being dropped
+	latencyStatsTTLSeconds = 3600 // 1 hour
 	// latencyStatsCapacity sets the number of TTLMaps that can be stored; this will be the size of the cluster -1
 	latencyStatsCapacity = 1000
 	// latencyStatsSlidingWindowSize specifies the number of retained check results
@@ -258,7 +258,7 @@ func (c *pingChecker) saveLatencyStats(pingLatency int64, node serf.Member) (lat
 	latencies = append(latencies, pingLatency)
 	c.logger.Debugf("%d recorded ping values for node %s => %v", len(latencies), node.Name, latencies)
 
-	err = c.latencyStats.Set(node.Name, latencies, latencyStatsTTL)
+	err = c.latencyStats.Set(node.Name, latencies, latencyStatsTTLSeconds)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
