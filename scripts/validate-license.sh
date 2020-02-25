@@ -16,7 +16,7 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-find_files() {
+find_files_without_license() {
   find . -not \( \
     \( \
       -wholename './vendor' \
@@ -25,14 +25,14 @@ find_files() {
       -o -wholename '*.pb.go' \
     \) -prune \
   \) \
-  \( -name '*.go' -o -name '*.sh' -o -name 'Dockerfile' \)
+  \( -name '*.go' -o -name '*.sh' -o -name 'Dockerfile' \) \
+  -exec grep -L 'Licensed under the Apache License, Version 2.0 (the "License");' {} \;
 }
 
-failed=($(find_files | xargs grep -L 'Licensed under the Apache License, Version 2.0 (the "License");'))
-if (( ${#failed[@]} > 0 )); then
-  echo "Some source files are missing license headers."
-  for f in "${failed[@]}"; do
-    echo "  $f"
-  done
-  exit 1
-fi
+if [[ $(find_files_without_license | wc -l) -eq 0 ]]; then exit 0; fi
+
+find_files_without_license | while read line; do
+  echo "Source file is missing license headers: $line"
+done
+
+exit 1
