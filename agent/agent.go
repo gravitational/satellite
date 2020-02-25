@@ -35,9 +35,9 @@ import (
 	"github.com/gravitational/satellite/lib/rpc/client"
 
 	"github.com/gravitational/trace"
-	"github.com/gravitational/ttlmap"
 	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
+	"github.com/mailgun/holster"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 )
@@ -154,7 +154,7 @@ type agent struct {
 	// specific cluster member.
 	// The last seen timestamp can be queried by a member and be used to
 	// filter out events that have already been recorded by this agent.
-	lastSeen *ttlmap.TTLMap
+	lastSeen *holster.TTLMap
 
 	// Config is the agent configuration.
 	Config
@@ -195,17 +195,14 @@ func New(config *Config) (*agent, error) {
 
 	// Only initialize cluster timeline for master nodes.
 	var timeline history.Timeline
-	var lastSeen *ttlmap.TTLMap
+	var lastSeen *holster.TTLMap
 	if role, ok := config.Tags["role"]; ok && Role(role) == RoleMaster {
 		timeline, err = initTimeline(config.TimelineConfig, "cluster.db")
 		if err != nil {
 			return nil, trace.Wrap(err, "failed to initialize timeline")
 		}
 
-		lastSeen, err = ttlmap.New(lastSeenCapacity)
-		if err != nil {
-			return nil, trace.Wrap(err, "failed to initialize last seen ttl map")
-		}
+		lastSeen = holster.NewTTLMap(lastSeenCapacity)
 	}
 
 	agent := &agent{

@@ -130,6 +130,14 @@
   version = "v4.2.0"
 
 [[projects]]
+  digest = "1:af43bdaaf86655a2343f113e9b293bbc16b12099eaeb223982bbe4d4c22ba14d"
+  name = "github.com/fatih/structs"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "4966fc68f5b7593aafa6cbbba2d65ec6e1416047"
+  version = "v1.1.0"
+
+[[projects]]
   digest = "1:fb46255681497314debedde38b64be32a75bae50bad107586c22f1662bf2d352"
   name = "github.com/go-ini/ini"
   packages = ["."]
@@ -215,14 +223,6 @@
   pruneopts = "UT"
   revision = "a535a178675fb4a11ba74818491754a8c5575dd6"
   version = "1.1.8"
-
-[[projects]]
-  digest = "1:841d5835e94129658adabece66a4cc54d2cec9a40fa8b51743ea35d0519dd6c2"
-  name = "github.com/gravitational/ttlmap"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "91fd36b9004c1ee5a778739752ea1aba5638c03a"
-  version = "0.0.1"
 
 [[projects]]
   digest = "1:01cb46669ee737a700ca9a0968ffe2aa820f262e5f49e1e54f8bfc441650ea8e"
@@ -384,12 +384,12 @@
   version = "v1.8.0"
 
 [[projects]]
-  branch = "master"
-  digest = "1:1f97d3c252bf9bda0869c228d0ec84a440f1590d6e33e83221c0dff185caad1f"
-  name = "github.com/mailgun/minheap"
+  digest = "1:b787518ff1745b6710250b526c50cb32fa3322127d144bebc3602a606cbe332a"
+  name = "github.com/mailgun/holster"
   packages = ["."]
   pruneopts = "UT"
-  revision = "3dbe6c6bf55f94c5efcf460dc7f86830c21a90b2"
+  revision = "2296d2fb30b143ac13780cb07dd5e75b22d044b1"
+  version = "v3.8.0"
 
 [[projects]]
   digest = "1:f4d329a16a6f1a7f694148ec7531f85d62cfa6a79bb8200ca612667e40d09923"
@@ -969,7 +969,6 @@
     "github.com/gravitational/configure/cstrings",
     "github.com/gravitational/roundtrip",
     "github.com/gravitational/trace",
-    "github.com/gravitational/ttlmap",
     "github.com/gravitational/version",
     "github.com/hashicorp/serf/client",
     "github.com/hashicorp/serf/coordinate",
@@ -980,6 +979,7 @@
     "github.com/magefile/mage/mage",
     "github.com/magefile/mage/mg",
     "github.com/magefile/mage/sh",
+    "github.com/mailgun/holster",
     "github.com/mattn/go-sqlite3",
     "github.com/miekg/dns",
     "github.com/mitchellh/go-ps",

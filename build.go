@@ -29,7 +29,7 @@ import (
 
 var (
 	// buildContainer is a docker container used to build go binaries
-	buildContainer = "golang:1.12.9"
+	buildContainer = "golang:1.12.17"
 
 	// golangciVersion is the version of golangci-lint to use for linting
 	// https://github.com/golangci/golangci-lint/releases

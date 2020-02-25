@@ -118,7 +118,7 @@ required = [
 
 [[constraint]]
   branch = "master"
-  name = "github.com/cloudfoundry/gosigar"
+name = "github.com/cloudfoundry/gosigar"
 
 [[override]]
   name = "github.com/json-iterator/go"
@@ -127,10 +127,6 @@ required = [
 [[constraint]]
   branch = "master"
   name = "github.com/codahale/hdrhistogram"
-
-[[constraint]]
-  version = "0.0.1"
-  name = "github.com/gravitational/ttlmap"
 
 [[override]]
 name = "github.com/gogo/protobuf"

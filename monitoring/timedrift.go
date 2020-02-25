@@ -29,9 +29,9 @@ import (
 	"github.com/gravitational/satellite/lib/rpc/client"
 
 	"github.com/gravitational/trace"
-	"github.com/gravitational/ttlmap"
 	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
+	"github.com/mailgun/holster"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -44,6 +44,8 @@ const (
 	// clientsCacheCapacity is the capacity of the TTL map that holds
 	// clients to satellite agents on other cluster nodes.
 	clientsCacheCapacity = 1000
+	// latencyStatsTTL specifies in seconds how long clients information will be kept before being dropped
+	clientsCacheTTL = 3600
 )
 
 // timeDriftChecker is a checker that verifies that the time difference between
@@ -56,7 +58,7 @@ type timeDriftChecker struct {
 	// mu protects the clients map.
 	mu sync.Mutex
 	// clients contains RPC clients for other cluster nodes.
-	clients *ttlmap.TTLMap
+	clients *holster.TTLMap
 }
 
 // TimeDriftCheckerConfig stores configuration for the time drift check.
@@ -108,10 +110,9 @@ func NewTimeDriftChecker(conf TimeDriftCheckerConfig) (c health.Checker, err err
 	if err := conf.CheckAndSetDefaults(); err != nil {
 		return nil, trace.Wrap(err)
 	}
-	clientsCache, err := ttlmap.New(clientsCacheCapacity)
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
+
+	clientsCache := holster.NewTTLMap(clientsCacheCapacity)
+
 	return &timeDriftChecker{
 		TimeDriftCheckerConfig: conf,
 		FieldLogger:            log.WithField(trace.Component, timeDriftCheckerID),
@@ -279,7 +280,9 @@ func (c *timeDriftChecker) getAgentClient(ctx context.Context, node serf.Member)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	c.clients.Set(node.Addr.String(), client, time.Hour)
+	if err := c.clients.Set(node.Addr.String(), client, clientsCacheTTL); err != nil {
+		return nil, trace.Wrap(err)
+	}
 	return client, nil
 }
 

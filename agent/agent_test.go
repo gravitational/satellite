@@ -38,8 +38,8 @@ import (
 	"github.com/hashicorp/serf/coordinate"
 
 	"github.com/gravitational/trace"
-	"github.com/gravitational/ttlmap"
 	"github.com/jonboulle/clockwork"
+	"github.com/mailgun/holster"
 	log "github.com/sirupsen/logrus"
 	. "gopkg.in/check.v1"
 )
@@ -574,13 +574,9 @@ func (r *AgentSuite) newAgent(config testAgentConfig) (*agent, error) {
 		Tags:  tags{"role": string(config.role)},
 	}
 
-	var lastSeen *ttlmap.TTLMap
-	var err error
+	var lastSeen *holster.TTLMap
 	if config.role == RoleMaster {
-		lastSeen, err = ttlmap.New(clusterCapacity)
-		if err != nil {
-			return nil, trace.Wrap(err)
-		}
+		lastSeen = holster.NewTTLMap(clusterCapacity)
 	}
 
 	clusterMembership := newMockClusterMembership()
