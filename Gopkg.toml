@@ -128,10 +128,6 @@ required = [
   branch = "master"
   name = "github.com/codahale/hdrhistogram"
 
-[[constraint]]
-  version = "0.0.1"
-  name = "github.com/gravitational/ttlmap"
-
 [[override]]
-name = "github.com/gogo/protobuf"
-revision = "65acae22fc9d1fe290b33faa2bd64cdc20a463a0"
+  name = "github.com/gogo/protobuf"
+  revision = "65acae22fc9d1fe290b33faa2bd64cdc20a463a0"

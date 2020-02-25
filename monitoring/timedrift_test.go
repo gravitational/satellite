@@ -26,9 +26,9 @@ import (
 	"github.com/gravitational/satellite/agent/proto/agentpb"
 
 	"github.com/gravitational/trace"
-	"github.com/gravitational/ttlmap"
 	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
+	"github.com/mailgun/holster"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/check.v1"
 )
@@ -118,6 +118,8 @@ func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 		},
 	}
 	for _, test := range tests {
+		clientsCache, err := newClientsCache(test.times)
+		c.Assert(err, check.IsNil)
 		checker := &timeDriftChecker{
 			TimeDriftCheckerConfig: TimeDriftCheckerConfig{
 				SerfClient: agent.NewMockSerfClient(test.nodes, nil),
@@ -125,7 +127,7 @@ func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 				Clock:      s.clock,
 			},
 			FieldLogger: logrus.WithField(trace.Component, "test"),
-			clients:     newClientsCache(c, test.times),
+			clients:     clientsCache,
 		}
 		var probes health.Probes
 		checker.Check(context.TODO(), &probes)
@@ -185,16 +187,18 @@ func (a *mockedTimeAgentClient) Close() error {
 	return nil
 }
 
-func newClientsCache(c *check.C, times map[string]time.Time) *ttlmap.TTLMap {
-	clients, err := ttlmap.New(10)
-	c.Assert(err, check.IsNil)
+func newClientsCache(times map[string]time.Time) (*holster.TTLMap, error) {
+	clients := holster.NewTTLMap(10)
 	for nodeName, nodeTime := range times {
-		clients.Set(
+		err := clients.Set(
 			nodes[nodeName].Addr.String(),
 			newMockedTimeAgentClient(nodeTime),
-			time.Hour)
+			clientsCacheTTLSeconds)
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
 	}
-	return clients
+	return clients, nil
 }
 
 var (
