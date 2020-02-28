@@ -40,9 +40,11 @@ type NethealthConfig struct {
 	// Should match the k8s node name.
 	NodeName string
 
-	// NethealthServiceAddr specifies the nethealth service address used to
-	// to collect network metrics.
-	NethealthServiceAddr string
+	// NethealthIP specifies the IP address of the nethealth pod.
+	NethealthIP string
+
+	// NethealthPort specifies the port that nethealth is listening on.
+	NethealthPort int
 
 	// SeriesCapacity specifies the max number of data points to store in a time
 	// series interval.
@@ -56,8 +58,14 @@ func (c *NethealthConfig) CheckAndSetDefaults() error {
 	if c.NodeName == "" {
 		errors = append(errors, trace.BadParameter("node name must be provided"))
 	}
-	if c.NethealthServiceAddr == "" {
-		errors = append(errors, trace.BadParameter("nethealth service address must be provided"))
+	if c.NethealthIP == "" {
+		errors = append(errors, trace.BadParameter("nethealth ip address must be provided"))
+	}
+	if c.NethealthPort == 0 {
+		c.NethealthPort = defaultNethealthPort
+	}
+	if c.SeriesCapacity < 0 {
+		errors = append(errors, trace.BadParameter("timeout series capacity cannot be < 0"))
 	}
 	if c.SeriesCapacity == 0 {
 		c.SeriesCapacity = defaultSeriesCapacity
@@ -81,6 +89,10 @@ type nethealthChecker struct {
 
 // NewNethealthChecker returns a new nethealth checker.
 func NewNethealthChecker(config NethealthConfig) (*nethealthChecker, error) {
+	if err := config.CheckAndSetDefaults(); err != nil {
+		return nil, trace.Wrap(err)
+	}
+
 	return &nethealthChecker{
 		timeoutStats:    holster.NewTTLMap(timeoutStatsCapacity),
 		NethealthConfig: config,
@@ -104,7 +116,7 @@ func (c *nethealthChecker) Check(ctx context.Context, reporter health.Reporter) 
 }
 
 func (c *nethealthChecker) check(ctx context.Context) error {
-	b, err := fetchMetrics(ctx, c.NethealthServiceAddr)
+	b, err := fetchMetrics(ctx, c.NethealthIP, c.NethealthPort)
 	if err != nil {
 		return trace.Wrap(err, "failed to fetch metrics")
 	}
@@ -131,14 +143,9 @@ func (c *nethealthChecker) check(ctx context.Context) error {
 func (c *nethealthChecker) updateStats(metrics []*dto.Metric) (updated []string, err error) {
 	var errors []error
 	for _, metric := range metrics {
-		nodeName, peerName, err := getNames(metric.GetLabel())
+		peerName, err := getPeerName(metric.GetLabel())
 		if err != nil {
 			errors = append(errors, trace.Wrap(err))
-			continue
-		}
-
-		// Only update metrics relevant to this node.
-		if c.NodeName != nodeName {
 			continue
 		}
 
@@ -149,7 +156,7 @@ func (c *nethealthChecker) updateStats(metrics []*dto.Metric) (updated []string,
 		}
 
 		// Keep only the last `seriesCapacity` number of data points.
-		if len(series) >= c.SeriesCapacity {
+		if len(series) >= c.SeriesCapacity && len(series) > 0 {
 			series = series[1:]
 		}
 		series = append(series, int64(metric.GetCounter().GetValue()))
@@ -158,7 +165,7 @@ func (c *nethealthChecker) updateStats(metrics []*dto.Metric) (updated []string,
 			errors = append(errors, trace.Wrap(err))
 		}
 
-		// Record updated nodes to be returned for use in later network verification step.
+		// Record updated nodes to be returned for use in later nethealth verification step.
 		updated = append(updated, peerName)
 	}
 	return updated, trace.NewAggregate(errors...)
@@ -221,8 +228,8 @@ func (c *nethealthChecker) setTimeoutSeries(name string, series []int64) error {
 
 // fetchMetrics collects the network metrics from the nethealth service.
 // Metrics are returned as an array of bytes.
-func fetchMetrics(ctx context.Context, addr string) ([]byte, error) {
-	addr = "http://" + addr
+func fetchMetrics(ctx context.Context, ip string, port int) ([]byte, error) {
+	addr := fmt.Sprintf("http://%s:%d", ip, port)
 
 	client, err := roundtrip.NewClient(addr, "/metrics", roundtrip.HTTPClient(&http.Client{}))
 	if err != nil {
@@ -255,32 +262,26 @@ func parseMetrics(input io.Reader) ([]*dto.Metric, error) {
 	return nil, trace.NotFound("%s metrics not found", requestTimeoutName)
 }
 
-// getNames extracts the 'node_name' and 'peer_name' values from the provided
-// labels.
-func getNames(labels []*dto.LabelPair) (node, peer string, err error) {
+// getPeerName extracts the 'peer_name' value from the provided labels.
+func getPeerName(labels []*dto.LabelPair) (peer string, err error) {
 	for _, label := range labels {
-		name := label.GetName()
-		if peerLabel == name {
-			peer = label.GetValue()
-		}
-		if nodeLabel == name {
-			node = label.GetValue()
-		}
-		if node != "" && peer != "" {
-			return node, peer, nil
+		if peerLabel == label.GetName() {
+			return label.GetValue(), nil
 		}
 	}
-	return "", "", trace.NotFound("unable to find required labels")
+	return "", trace.NotFound("unable to find required peer label")
 }
 
 const (
 	nethealthCheckerID = "nethealth-checker"
 	peerLabel          = "peer_name"
-	nodeLabel          = "node_name"
 
-	// defaultSeriesCapacity  defines the default capacity of a time series
+	// defaultSeriesCapacity defines the default capacity of a time series
 	// interval.
 	defaultSeriesCapacity = 10
+
+	// defaultNethealthPort defines the default nethealth port.
+	defaultNethealthPort = 9801
 
 	// timeoutStatsCapacity sets the number of TTLMaps that can be stored.
 	// This will be the size of the cluster -1.
