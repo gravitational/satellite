@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 
 	"github.com/gravitational/satellite/agent/health"
@@ -32,34 +33,29 @@ import (
 	"github.com/mailgun/holster"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
+	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // NethealthConfig specifies configuration for a nethealth checker.
 type NethealthConfig struct {
-	// NodeName specifies the name of the node this checker is running on.
-	// Should match the k8s node name.
-	NodeName string
-
-	// NethealthIP specifies the IP address of the nethealth pod.
-	NethealthIP string
-
+	// HostIP specifies the advertised ip address of the host running this checker.
+	HostIP string
 	// NethealthPort specifies the port that nethealth is listening on.
 	NethealthPort int
-
 	// SeriesCapacity specifies the max number of data points to store in a time
 	// series interval.
 	SeriesCapacity int
+	// KubeConfig specifies kubernetes access information.
+	KubeConfig
 }
 
 // CheckAndSetDefaults validates that this configuration is correct and sets
 // value defaults where necessary.
 func (c *NethealthConfig) CheckAndSetDefaults() error {
 	var errors []error
-	if c.NodeName == "" {
-		errors = append(errors, trace.BadParameter("node name must be provided"))
-	}
-	if c.NethealthIP == "" {
-		errors = append(errors, trace.BadParameter("nethealth ip address must be provided"))
+	if c.HostIP == "" {
+		errors = append(errors, trace.BadParameter("host ip must be provided"))
 	}
 	if c.NethealthPort == 0 {
 		c.NethealthPort = defaultNethealthPort
@@ -70,6 +66,9 @@ func (c *NethealthConfig) CheckAndSetDefaults() error {
 	if c.SeriesCapacity == 0 {
 		c.SeriesCapacity = defaultSeriesCapacity
 	}
+	if c.KubeConfig == (KubeConfig{}) {
+		errors = append(errors, trace.BadParameter("kubernetes access config must be provided"))
+	}
 	return trace.NewAggregate(errors...)
 }
 
@@ -77,11 +76,9 @@ func (c *NethealthConfig) CheckAndSetDefaults() error {
 type nethealthChecker struct {
 	// lock access to timeoutStats
 	sync.Mutex
-
 	// timeoutStats maps a peer to a time series data interval containing the
 	// number of echo timeouts received by the specific peer for a set interval.
 	timeoutStats *holster.TTLMap
-
 	// NethealthConfig contains caller specified nethealth checker configuration
 	// values.
 	NethealthConfig
@@ -116,14 +113,9 @@ func (c *nethealthChecker) Check(ctx context.Context, reporter health.Reporter) 
 }
 
 func (c *nethealthChecker) check(ctx context.Context) error {
-	b, err := fetchMetrics(ctx, c.NethealthIP, c.NethealthPort)
+	metrics, err := c.getMetrics(ctx)
 	if err != nil {
-		return trace.Wrap(err, "failed to fetch metrics")
-	}
-
-	metrics, err := parseMetrics(bytes.NewReader(b))
-	if err != nil {
-		return trace.Wrap(err, "failed to parse metrics")
+		return trace.Wrap(err, "failed to get nethealth metrics")
 	}
 
 	updated, err := c.updateStats(metrics)
@@ -131,11 +123,28 @@ func (c *nethealthChecker) check(ctx context.Context) error {
 		return trace.Wrap(err, "failed to update nethealth timeout stats")
 	}
 
-	if err := c.verifyNethealth(updated); err != nil {
-		return trace.Wrap(err)
+	return c.verifyNethealth(updated)
+}
+
+// getMetrics returns the network metrics from the local nethealth pod.
+func (c *nethealthChecker) getMetrics(ctx context.Context) ([]*dto.Metric, error) {
+	addr, err := c.getNethealthAddr()
+	if err != nil {
+		return nil, trace.Wrap(err, "failed to get local nethealth address")
 	}
 
-	return nil
+	b, err := fetchMetrics(ctx, addr)
+	if err != nil {
+		log.WithError(err).Warnf("Failed to fetch metrics from %s", addr)
+		return nil, trace.Wrap(err, "failed to fetch metrics")
+	}
+
+	metrics, err := parseMetrics(bytes.NewReader(b))
+	if err != nil {
+		return nil, trace.Wrap(err, "failed to parse metrics")
+	}
+
+	return metrics, nil
 }
 
 // updateStats updates the timeout data with new data points collected in
@@ -226,11 +235,28 @@ func (c *nethealthChecker) setTimeoutSeries(name string, series []int64) error {
 	return c.timeoutStats.Set(name, series, timeoutStatsTTLSeconds)
 }
 
-// fetchMetrics collects the network metrics from the nethealth service.
-// Metrics are returned as an array of bytes.
-func fetchMetrics(ctx context.Context, ip string, port int) ([]byte, error) {
-	addr := fmt.Sprintf("http://%s:%d", ip, port)
+// getNethealthAddr returns the address of the local nethealth pod.
+func (c *nethealthChecker) getNethealthAddr() (string, error) {
+	pods, err := c.Client.CoreV1().Pods(monitoringNamespace).List(metav1.ListOptions{})
+	if err != nil {
+		return "", trace.Wrap(err)
+	}
 
+	// Find nethealth pod with matching host ip address.
+	for _, pod := range pods.Items {
+		if !strings.Contains(pod.GetName(), nethealthName) {
+			continue
+		}
+		if pod.Status.HostIP == c.HostIP {
+			return fmt.Sprintf("http://%s:%d", pod.Status.PodIP, c.NethealthPort), nil
+		}
+	}
+	return "", trace.NotFound("unable to find local nethealth pod")
+}
+
+// fetchMetrics collects the network metrics from the nethealth pod.
+// Metrics are returned as an array of bytes.
+func fetchMetrics(ctx context.Context, addr string) ([]byte, error) {
 	client, err := roundtrip.NewClient(addr, "/metrics", roundtrip.HTTPClient(&http.Client{}))
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -273,8 +299,10 @@ func getPeerName(labels []*dto.LabelPair) (peer string, err error) {
 }
 
 const (
-	nethealthCheckerID = "nethealth-checker"
-	peerLabel          = "peer_name"
+	nethealthCheckerID  = "nethealth-checker"
+	peerLabel           = "peer_name"
+	monitoringNamespace = "monitoring"
+	nethealthName       = "nethealth"
 
 	// defaultSeriesCapacity defines the default capacity of a time series
 	// interval.

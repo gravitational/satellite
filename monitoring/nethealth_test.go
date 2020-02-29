@@ -19,6 +19,7 @@ package monitoring
 import (
 	"github.com/gravitational/satellite/lib/test"
 
+	"github.com/mailgun/holster"
 	dto "github.com/prometheus/client_model/go"
 	. "gopkg.in/check.v1"
 )
@@ -108,20 +109,22 @@ func (s *NethealthSuite) TestNethealthVerification(c *C) {
 // newNethealthChecker returns a new nethealth checker to be used for testing.
 func (s *NethealthSuite) newNethealthChecker() (*nethealthChecker, error) {
 	config := NethealthConfig{
-		NodeName:       testNode,
-		NethealthName:  "mock-service-addr",
 		SeriesCapacity: testCapacity,
 	}
-	return NewNethealthChecker(config)
+
+	return &nethealthChecker{
+		timeoutStats:    holster.NewTTLMap(testCapacity),
+		NethealthConfig: config,
+	}, nil
 }
 
-// netMetricsWithCount creates new metrics with the provided count.
+// newMetricsWithCount creates new metrics with the provided count.
 func (s *NethealthSuite) newMetricsWithCount(count float64) []*dto.Metric {
-	return s.newMetrics(testNode, testNode, count)
+	return s.newMetrics(testNode, count)
 }
 
 // newMetrics creates new metrics with the provided values.
-func (s *NethealthSuite) newMetrics(nodeValue, peerValue string, count float64) []*dto.Metric {
+func (s *NethealthSuite) newMetrics(peerValue string, count float64) []*dto.Metric {
 	peer := peerLabel
 
 	return []*dto.Metric{
