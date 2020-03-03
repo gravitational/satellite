@@ -21,9 +21,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
-	"strings"
 	"sync"
 
 	"github.com/gravitational/satellite/agent/health"
@@ -74,14 +72,14 @@ func (c *NethealthConfig) CheckAndSetDefaults() error {
 
 // nethealthChecker checks network communication between peers.
 type nethealthChecker struct {
-	// lock access to timeoutStats
-	sync.Mutex
-	// timeoutStats maps a peer to a time series data interval containing the
-	// number of echo timeouts received by the specific peer for a set interval.
-	timeoutStats *holster.TTLMap
 	// NethealthConfig contains caller specified nethealth checker configuration
 	// values.
 	NethealthConfig
+	// lock access to timeoutStats
+	sync.Mutex
+	// timeoutStats maps a peer to a time series data interval containing the
+	// number of echo timeouts received by the specific peer for the set interval.
+	timeoutStats *holster.TTLMap
 }
 
 // NewNethealthChecker returns a new nethealth checker.
@@ -237,14 +235,14 @@ func (c *nethealthChecker) setTimeoutSeries(name string, series []int64) error {
 
 // getNethealthAddr returns the address of the local nethealth pod.
 func (c *nethealthChecker) getNethealthAddr() (string, error) {
-	pods, err := c.Client.CoreV1().Pods(monitoringNamespace).List(metav1.ListOptions{})
+	pods, err := c.Client.CoreV1().Pods(nethealthNamespace).List(metav1.ListOptions{})
 	if err != nil {
 		return "", trace.Wrap(err)
 	}
 
 	// Find nethealth pod with matching host ip address.
 	for _, pod := range pods.Items {
-		if !strings.Contains(pod.GetName(), nethealthName) {
+		if pod.GetLabels()[nethealthLabel] != nethealthValue {
 			continue
 		}
 		if pod.Status.HostIP == c.HostIP {
@@ -257,14 +255,14 @@ func (c *nethealthChecker) getNethealthAddr() (string, error) {
 // fetchMetrics collects the network metrics from the nethealth pod.
 // Metrics are returned as an array of bytes.
 func fetchMetrics(ctx context.Context, addr string) ([]byte, error) {
-	client, err := roundtrip.NewClient(addr, "/metrics", roundtrip.HTTPClient(&http.Client{}))
+	client, err := roundtrip.NewClient(addr, "")
 	if err != nil {
-		return nil, trace.Wrap(err)
+		return nil, trace.Wrap(err, "failed to connect to nethealth service at %s.", addr)
 	}
 
-	resp, err := client.Get(ctx, fmt.Sprintf("%s/%s", addr, "metrics"), url.Values{})
+	resp, err := client.Get(ctx, client.Endpoint("metrics"), url.Values{})
 	if err != nil {
-		return nil, trace.Wrap(err)
+		return nil, trace.ConvertSystemError(err)
 	}
 
 	return resp.Bytes(), nil
@@ -299,10 +297,11 @@ func getPeerName(labels []*dto.LabelPair) (peer string, err error) {
 }
 
 const (
-	nethealthCheckerID  = "nethealth-checker"
-	peerLabel           = "peer_name"
-	monitoringNamespace = "monitoring"
-	nethealthName       = "nethealth"
+	nethealthCheckerID = "nethealth-checker"
+	peerLabel          = "peer_name"
+	nethealthNamespace = "monitoring"
+	nethealthLabel     = "k8s-app"
+	nethealthValue     = "nethealth"
 
 	// defaultSeriesCapacity defines the default capacity of a time series
 	// interval.
