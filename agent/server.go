@@ -22,6 +22,7 @@ import (
 	"crypto/x509"
 	"io/ioutil"
 	"net/http"
+	"net/http/pprof"
 	"strings"
 	"time"
 
@@ -39,7 +40,7 @@ import (
 type RPCServer interface {
 	Status(context.Context, *pb.StatusRequest) (*pb.StatusResponse, error)
 	LocalStatus(context.Context, *pb.LocalStatusRequest) (*pb.LocalStatusResponse, error)
-	// LastSeen returns the last seen timestamp for a specified member.
+	// LastSeen returns the last seen timestamp for the specified member.
 	LastSeen(context.Context, *pb.LastSeenRequest) (*pb.LastSeenResponse, error)
 	Time(context.Context, *pb.TimeRequest) (*pb.TimeResponse, error)
 	Timeline(context.Context, *pb.TimelineRequest) (*pb.TimelineResponse, error)
@@ -218,64 +219,68 @@ func newHTTPServer(address string, tlsConfig *tls.Config, handler http.Handler) 
 
 // newHealthHandler creates a http.Handler that returns cluster status
 // from an HTTPS endpoint listening on the same RPC port as the agent.
-func newHealthHandler(s *server) http.HandlerFunc {
+func newHealthHandler(s *server) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", handleStatus(s))
+
+	localStatusHandler := handleLocalStatus(s)
+	mux.HandleFunc("/local", localStatusHandler)
+	mux.HandleFunc("/local/", localStatusHandler)
+
+	historyHandler := handleHistory(s)
+	mux.HandleFunc("/history", historyHandler)
+	mux.HandleFunc("/history/", historyHandler)
+
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
+	return mux
+}
+
+func handleLocalStatus(s *server) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-
-		ctx := context.TODO()
-		if r.URL.Path == "/local" || r.URL.Path == "/local/" {
-			handleLocalStatus(ctx, s, w, r)
-			return
-		}
-
-		if r.URL.Path == "/history" || r.URL.Path == "/history/" {
-			handleHistory(ctx, s, w, r)
-			return
-		}
-
-		status, err := s.Status(ctx, nil)
+		status, err := s.LocalStatus(r.Context(), nil)
 		if err != nil {
 			roundtrip.ReplyJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
 			return
 		}
-
 		httpStatus := http.StatusOK
-		if isDegraded(*status.GetStatus()) {
+		if isNodeDegraded(*status.GetStatus()) {
 			httpStatus = http.StatusServiceUnavailable
 		}
-
 		roundtrip.ReplyJSON(w, httpStatus, status.GetStatus())
 	}
 }
 
-func handleLocalStatus(ctx context.Context, s *server, w http.ResponseWriter, r *http.Request) {
-	status, err := s.LocalStatus(ctx, nil)
-	if err != nil {
-		roundtrip.ReplyJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
-		return
+func handleStatus(s *server) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		status, err := s.Status(r.Context(), nil)
+		if err != nil {
+			roundtrip.ReplyJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+			return
+		}
+		httpStatus := http.StatusOK
+		if isDegraded(*status.GetStatus()) {
+			httpStatus = http.StatusServiceUnavailable
+		}
+		roundtrip.ReplyJSON(w, httpStatus, status.GetStatus())
 	}
-
-	httpStatus := http.StatusOK
-	if isNodeDegraded(*status.GetStatus()) {
-		httpStatus = http.StatusServiceUnavailable
-	}
-
-	roundtrip.ReplyJSON(w, httpStatus, status.GetStatus())
 }
 
 // handleHistory handles status history API call.
-func handleHistory(ctx context.Context, s *server, w http.ResponseWriter, r *http.Request) {
-	timeline, err := s.Timeline(ctx, nil)
-	if err != nil {
-		roundtrip.ReplyJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
-		return
+func handleHistory(s *server) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		timeline, err := s.Timeline(r.Context(), nil)
+		if err != nil {
+			roundtrip.ReplyJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+			return
+		}
+		httpStatus := http.StatusOK
+		roundtrip.ReplyJSON(w, httpStatus, timeline)
 	}
-
-	httpStatus := http.StatusOK
-	roundtrip.ReplyJSON(w, httpStatus, timeline)
 }
 
 // grpcHandlerFunc returns an http.Handler that delegates to

@@ -185,7 +185,7 @@ func New(config *Config) (*agent, error) {
 	// Move to Start?
 	metricsListener, err := net.Listen("tcp", config.MetricsAddr)
 	if err != nil {
-		return nil, trace.Wrap(err, "failed to serve prometheus metrics")
+		return nil, trace.Wrap(err, "failed to bind on %v to serve metrics", config.MetricsAddr)
 	}
 
 	localTimeline, err := initTimeline(config.TimelineConfig, "local.db")
@@ -273,17 +273,13 @@ func (r *agent) Start() error {
 // serveMetrics registers the prometheus metrics handler and starts accepting
 // connections on the metrics listener.
 func (r *agent) serveMetrics() {
-	if r.metricsListener == nil {
-		return
-	}
-
 	http.Handle("/metrics", promhttp.Handler())
 	err := http.Serve(r.metricsListener, nil)
 	if err == http.ErrServerClosed {
-		log.WithError(err).Debug("Metrics listener has been shutdown/closed.")
+		log.WithError(err).Debug("Metrics listener has been shut down.")
 	}
 	if err != nil {
-		log.WithError(err).Errorf("Failed to server metrics.")
+		log.WithError(err).Error("Failed to serve metrics.")
 	}
 }
 
@@ -330,7 +326,9 @@ func (r *agent) Close() (err error) {
 	}
 
 	r.rpc.Stop()
-	close(r.done)
+	if r.done != nil {
+		close(r.done)
+	}
 
 	err = r.ClusterMembership.Close()
 	if err != nil {
