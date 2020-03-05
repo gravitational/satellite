@@ -180,11 +180,7 @@ func (c *nethealthChecker) verifyNethealth(names []string, reporter health.Repor
 		}
 
 		if !c.isHealthy(series) {
-			reporter.Add(NewProbeFromErr(
-				c.Name(),
-				fmt.Sprintf("overlay network communication failure with %s", name),
-				trace.Wrap(err),
-			))
+			reporter.Add(NewProbeFromErr(c.Name(), nethealthDetail(name), nil))
 		}
 	}
 	return nil
@@ -302,6 +298,11 @@ func getPeerName(labels []*dto.LabelPair) (peer string, err error) {
 		}
 	}
 	return "", trace.NotFound("unable to find required peer label")
+}
+
+// nethealthDetail returns a failed probe detail message.
+func nethealthDetail(name string) string {
+	return fmt.Sprintf("overlay network communication failure with %s", name)
 }
 
 type nethealthMetric struct {

@@ -17,10 +17,10 @@ limitations under the License.
 package monitoring
 
 import (
+	"github.com/gravitational/satellite/agent/health"
 	"github.com/gravitational/satellite/lib/test"
 
 	"github.com/mailgun/holster"
-	dto "github.com/prometheus/client_model/go"
 	. "gopkg.in/check.v1"
 )
 
@@ -34,17 +34,17 @@ func (s *NethealthSuite) TestUpdateTimeoutStats(c *C) {
 	var testCases = []struct {
 		comment  CommentInterface
 		expected []int64
-		data     []float64
+		data     []int64
 	}{
 		{
 			comment:  Commentf("Expected all data points to be recorded."),
 			expected: []int64{0, 0, 0, 0, 0},
-			data:     []float64{0, 0, 0, 0, 0},
+			data:     []int64{0, 0, 0, 0, 0},
 		},
 		{
 			comment:  Commentf("Expected oldest data point to be removed"),
 			expected: []int64{0, 0, 0, 0, 0},
-			data:     []float64{1, 0, 0, 0, 0, 0},
+			data:     []int64{1, 0, 0, 0, 0, 0},
 		},
 	}
 
@@ -71,27 +71,27 @@ func (s *NethealthSuite) TestUpdateTimeoutStats(c *C) {
 func (s *NethealthSuite) TestNethealthVerification(c *C) {
 	var testCases = []struct {
 		comment  CommentInterface
-		expected Checker
+		expected health.Reporter
 		data     []int64
 	}{
 		{
-			comment:  Commentf("Expected healthy network check. Not enough data points."),
-			expected: IsNil,
+			comment:  Commentf("Expected no failed probes. Not enough data points."),
+			expected: &health.Probes{},
 			data:     []int64{0, 1, 2},
 		},
 		{
-			comment:  Commentf("Expected healthy network check. No timeouts."),
-			expected: IsNil,
+			comment:  Commentf("Expected no failed probes. No timeouts."),
+			expected: &health.Probes{},
 			data:     []int64{0, 0, 0, 0, 0},
 		},
 		{
-			comment:  Commentf("Expected healthy network check. Timeouts do not increase for a long enough duration"),
-			expected: IsNil,
+			comment:  Commentf("Expected no failed probes. Timeouts do not increase for a long enough duration"),
+			expected: &health.Probes{},
 			data:     []int64{0, 1, 2, 3, 3},
 		},
 		{
-			comment:  Commentf("Expected unhealthy network check. Timeouts increase at each interval."),
-			expected: Not(IsNil),
+			comment:  Commentf("Expected failed probe. Timeouts increase at each interval."),
+			expected: &health.Probes{NewProbeFromErr(nethealthCheckerID, nethealthDetail(testNode), nil)},
 			data:     []int64{0, 1, 2, 3, 4},
 		},
 	}
@@ -101,8 +101,11 @@ func (s *NethealthSuite) TestNethealthVerification(c *C) {
 
 	for _, testCase := range testCases {
 		testCase := testCase
+		reporter := &health.Probes{}
+
 		c.Assert(checker.setTimeoutSeries(testNode, testCase.data), IsNil, testCase.comment)
-		c.Assert(checker.verifyNethealth([]string{testNode}), testCase.expected, testCase.comment)
+		c.Assert(checker.verifyNethealth([]string{testNode}, reporter), IsNil, testCase.comment)
+		c.Assert(reporter, test.DeepCompare, testCase.expected, testCase.comment)
 	}
 }
 
@@ -119,20 +122,16 @@ func (s *NethealthSuite) newNethealthChecker() (*nethealthChecker, error) {
 }
 
 // newMetricsWithCount creates new metrics with the provided count.
-func (s *NethealthSuite) newMetricsWithCount(count float64) []*dto.Metric {
+func (s *NethealthSuite) newMetricsWithCount(count int64) []nethealthMetric {
 	return s.newMetrics(testNode, count)
 }
 
 // newMetrics creates new metrics with the provided values.
-func (s *NethealthSuite) newMetrics(peerValue string, count float64) []*dto.Metric {
-	peer := peerLabel
-
-	return []*dto.Metric{
-		&dto.Metric{
-			Label: []*dto.LabelPair{
-				&dto.LabelPair{Name: &peer, Value: &peerValue},
-			},
-			Counter: &dto.Counter{Value: &count},
+func (s *NethealthSuite) newMetrics(peerName string, count int64) []nethealthMetric {
+	return []nethealthMetric{
+		nethealthMetric{
+			peerName:     peerName,
+			totalTimeout: count,
 		},
 	}
 }
