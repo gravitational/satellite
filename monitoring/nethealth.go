@@ -103,14 +103,14 @@ func (c *nethealthChecker) Name() string {
 // Check verifies the network is healthy.
 // Implements health.Checker
 func (c *nethealthChecker) Check(ctx context.Context, reporter health.Reporter) {
-	if err := c.check(ctx); err != nil {
-		reporter.Add(NewProbeFromErr(c.Name(), "failed nethealth test", trace.Wrap(err)))
+	if err := c.check(ctx, reporter); err != nil {
+		log.WithError(err).Error("Unable to verify nethealth.")
 		return
 	}
 	reporter.Add(NewSuccessProbe(c.Name()))
 }
 
-func (c *nethealthChecker) check(ctx context.Context) error {
+func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) error {
 	metrics, err := c.getMetrics(ctx)
 	if err != nil {
 		return trace.Wrap(err, "failed to get nethealth metrics")
@@ -121,7 +121,7 @@ func (c *nethealthChecker) check(ctx context.Context) error {
 		return trace.Wrap(err, "failed to update nethealth timeout stats")
 	}
 
-	return c.verifyNethealth(updated)
+	return c.verifyNethealth(updated, reporter)
 }
 
 // getMetrics returns the network metrics from the local nethealth pod.
@@ -148,12 +148,10 @@ func (c *nethealthChecker) getMetrics(ctx context.Context) ([]nethealthMetric, e
 // updateStats updates the timeout data with new data points collected in
 // the provided metrics. Returns a list containing the updated keys.
 func (c *nethealthChecker) updateStats(metrics []nethealthMetric) (updated []string, err error) {
-	var errors []error
 	for _, metric := range metrics {
 		series, err := c.getTimeoutSeries(metric.peerName)
 		if err != nil {
-			errors = append(errors, trace.Wrap(err))
-			continue
+			return updated, trace.Wrap(err)
 		}
 
 		// Keep only the last `seriesCapacity` number of data points.
@@ -163,31 +161,33 @@ func (c *nethealthChecker) updateStats(metrics []nethealthMetric) (updated []str
 		series = append(series, metric.totalTimeout)
 
 		if err := c.setTimeoutSeries(metric.peerName, series); err != nil {
-			errors = append(errors, trace.Wrap(err))
+			return updated, trace.Wrap(err)
 		}
 
 		// Record updated nodes to be returned for use in later nethealth verification step.
 		updated = append(updated, metric.peerName)
 	}
-	return updated, trace.NewAggregate(errors...)
+	return updated, nil
 }
 
 // verifyNethealth verifies that the network communication is healthy for the
 // nodes specified by the provided list of names.
-func (c *nethealthChecker) verifyNethealth(names []string) error {
-	var errors []error
+func (c *nethealthChecker) verifyNethealth(names []string, reporter health.Reporter) error {
 	for _, name := range names {
 		series, err := c.getTimeoutSeries(name)
 		if err != nil {
-			errors = append(errors, trace.Wrap(err))
-			continue
+			return trace.Wrap(err)
 		}
 
 		if !c.isHealthy(series) {
-			errors = append(errors, trace.BadParameter("overlay network communication failure with %s", name))
+			reporter.Add(NewProbeFromErr(
+				c.Name(),
+				fmt.Sprintf("overlay network communication failure with %s", name),
+				trace.Wrap(err),
+			))
 		}
 	}
-	return trace.NewAggregate(errors...)
+	return nil
 }
 
 // isHealthy returns false if the number of timeouts increases at each data point.
