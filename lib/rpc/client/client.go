@@ -208,7 +208,6 @@ type DialRPC func(context.Context, *serf.Member) (Client, error)
 // DefaultDialRPC is a default RPC client factory function.
 // It creates a new client based on address details from the specific serf member.
 func DefaultDialRPC(caFile, certFile, keyFile string) DialRPC {
-
 	return func(ctx context.Context, member *serf.Member) (Client, error) {
 		config := Config{
 			Address:  fmt.Sprintf("%s:%d", member.Addr.String(), rpc.Port),

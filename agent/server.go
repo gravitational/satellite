@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/pprof"
 	"strings"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/lib/rpc"
 
 	"github.com/gravitational/roundtrip"
 	"github.com/gravitational/trace"
@@ -144,6 +146,11 @@ func (r *server) stopHTTPServers(ctx context.Context) error {
 
 // newRPCServer creates an agent RPC endpoint for each provided listener.
 func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []string) (*server, error) {
+	addrs, err := splitAddrs(rpcAddrs)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
 	creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to read certificate/key from %v/%v", certFile, keyFile)
@@ -180,15 +187,16 @@ func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []str
 	server := &server{agent: agent, Server: backend}
 	pb.RegisterAgentServer(backend, server)
 
-	healthzHandler := newHealthHandler(server)
-
-	// handler is a multiplexer for both gRPC and HTTPS queries.
+	// handler is a convenience multiplexer for both gRPC and HTTPS queries.
 	// The HTTPS endpoint returns the cluster status as JSON
-	// TODO: why does server need to handle both gRPC and HTTPS queries?
-	handler := grpcHandlerFunc(server, healthzHandler)
+	healthHandler := grpcHandlerFunc(server, newHealthHandler(server))
 
-	for _, addr := range rpcAddrs {
-		srv := newHTTPServer(addr, tlsConfig, handler)
+	for _, addr := range addrs {
+		handler := healthHandler
+		if addr.IP.IsLoopback() {
+			handler = grpcHandlerFunc(server, newHealthHandlerWithDebug(server))
+		}
+		srv := newHTTPServer(addr.String(), tlsConfig, handler)
 		server.httpServers = append(server.httpServers, srv)
 
 		// TODO: separate Start function to start listening.
@@ -217,10 +225,29 @@ func newHTTPServer(address string, tlsConfig *tls.Config, handler http.Handler) 
 	return server
 }
 
-// newHealthHandler creates a http.Handler that returns cluster status
+// newHealthHandler creates an http.Handler that returns cluster status
 // from an HTTPS endpoint listening on the same RPC port as the agent.
 func newHealthHandler(s *server) http.Handler {
 	mux := http.NewServeMux()
+	handlerMux(mux, s)
+	return mux
+}
+
+// newHealthHandlerWithDebug creates an http.Handler that returns cluster status
+// from an HTTPS endpoint listening on the same RPC port as the agent.
+// Additionally, it provides debug endpoints if debugging is enabled
+func newHealthHandlerWithDebug(s *server) http.Handler {
+	mux := http.NewServeMux()
+	handlerMux(mux, s)
+	mux.HandleFunc("/debug/pprof/", debugHandler(pprof.Index))
+	mux.HandleFunc("/debug/pprof/cmdline", debugHandler(pprof.Cmdline))
+	mux.HandleFunc("/debug/pprof/profile", debugHandler(pprof.Profile))
+	mux.HandleFunc("/debug/pprof/symbol", debugHandler(pprof.Symbol))
+	mux.HandleFunc("/debug/pprof/trace", debugHandler(pprof.Trace))
+	return mux
+}
+
+func handlerMux(mux *http.ServeMux, s *server) {
 	mux.HandleFunc("/", handleStatus(s))
 
 	localStatusHandler := handleLocalStatus(s)
@@ -230,14 +257,6 @@ func newHealthHandler(s *server) http.Handler {
 	historyHandler := handleHistory(s)
 	mux.HandleFunc("/history", historyHandler)
 	mux.HandleFunc("/history/", historyHandler)
-
-	mux.HandleFunc("/debug/pprof/", pprof.Index)
-	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
-
-	return mux
 }
 
 func handleLocalStatus(s *server) http.HandlerFunc {
@@ -281,6 +300,36 @@ func handleHistory(s *server) http.HandlerFunc {
 		httpStatus := http.StatusOK
 		roundtrip.ReplyJSON(w, httpStatus, timeline)
 	}
+}
+
+func debugHandler(handler http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !debugEndpoint {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		handler(w, r)
+	}
+}
+
+// DebugRPC controls whether the debugging HTTP endpoint is active
+func DebugRPC(on bool) {
+	debugEndpoint = on
+}
+
+var debugEndpoint = false
+
+func splitAddrs(addrs []string) (result []net.TCPAddr, err error) {
+	result = make([]net.TCPAddr, 0, len(addrs))
+	for _, addr := range addrs {
+		tcpAddr, err := rpc.SplitHostPort(addr, rpc.Port)
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
+		result = append(result, *tcpAddr)
+
+	}
+	return result, nil
 }
 
 // grpcHandlerFunc returns an http.Handler that delegates to
