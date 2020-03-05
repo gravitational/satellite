@@ -37,23 +37,23 @@ import (
 
 // NethealthConfig specifies configuration for a nethealth checker.
 type NethealthConfig struct {
-	// HostIP specifies the advertised ip address of the host running this checker.
-	HostIP string
+	// AdvertiseIP specifies the advertised ip address of the host running this checker.
+	AdvertiseIP string
 	// NethealthPort specifies the port that nethealth is listening on.
 	NethealthPort int
 	// SeriesCapacity specifies the max number of data points to store in a time
 	// series interval.
 	SeriesCapacity int
 	// KubeConfig specifies kubernetes access information.
-	KubeConfig
+	*KubeConfig
 }
 
 // CheckAndSetDefaults validates that this configuration is correct and sets
 // value defaults where necessary.
 func (c *NethealthConfig) CheckAndSetDefaults() error {
 	var errors []error
-	if c.HostIP == "" {
-		errors = append(errors, trace.BadParameter("host ip must be provided"))
+	if c.AdvertiseIP == "" {
+		errors = append(errors, trace.BadParameter("host advertise ip must be provided"))
 	}
 	if c.NethealthPort == 0 {
 		c.NethealthPort = defaultNethealthPort
@@ -64,7 +64,7 @@ func (c *NethealthConfig) CheckAndSetDefaults() error {
 	if c.SeriesCapacity == 0 {
 		c.SeriesCapacity = defaultSeriesCapacity
 	}
-	if c.KubeConfig == (KubeConfig{}) {
+	if c.KubeConfig == nil {
 		errors = append(errors, trace.BadParameter("kubernetes access config must be provided"))
 	}
 	return trace.NewAggregate(errors...)
@@ -163,7 +163,7 @@ func (c *nethealthChecker) updateStats(metrics []*dto.Metric) (updated []string,
 		}
 
 		// Keep only the last `seriesCapacity` number of data points.
-		if len(series) >= c.SeriesCapacity && len(series) > 0 {
+		if len(series) >= c.SeriesCapacity {
 			series = series[1:]
 		}
 		series = append(series, int64(metric.GetCounter().GetValue()))
@@ -190,7 +190,7 @@ func (c *nethealthChecker) verifyNethealth(names []string) error {
 		}
 
 		if !c.isHealthy(series) {
-			errors = append(errors, trace.BadParameter("network communication failure with %s", name))
+			errors = append(errors, trace.BadParameter("overlay network communication failure with %s", name))
 		}
 	}
 	return trace.NewAggregate(errors...)
@@ -245,7 +245,7 @@ func (c *nethealthChecker) getNethealthAddr() (string, error) {
 		if pod.GetLabels()[nethealthLabel] != nethealthValue {
 			continue
 		}
-		if pod.Status.HostIP == c.HostIP {
+		if pod.Status.HostIP == c.AdvertiseIP {
 			return fmt.Sprintf("http://%s:%d", pod.Status.PodIP, c.NethealthPort), nil
 		}
 	}
