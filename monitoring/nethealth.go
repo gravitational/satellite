@@ -193,7 +193,10 @@ func (c *nethealthChecker) isHealthy(series []int64) bool {
 		return true
 	}
 
-	// Increase in number of timeouts at each data point indicates network issue.
+	// series contains time series data of the running total of timeouts for a peer.
+	// If the counter is increasing at each data point, that means requests to
+	// this peer have been timing consistently throughout this interval. This
+	// should indicate that there is a network issue.
 	for i := 0; i < c.SeriesCapacity-1; i++ {
 		if series[i] >= series[i+1] {
 			return true
