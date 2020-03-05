@@ -125,7 +125,7 @@ func (c *nethealthChecker) check(ctx context.Context) error {
 }
 
 // getMetrics returns the network metrics from the local nethealth pod.
-func (c *nethealthChecker) getMetrics(ctx context.Context) ([]*dto.Metric, error) {
+func (c *nethealthChecker) getMetrics(ctx context.Context) ([]nethealthMetric, error) {
 	addr, err := c.getNethealthAddr()
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to get local nethealth address")
@@ -147,16 +147,10 @@ func (c *nethealthChecker) getMetrics(ctx context.Context) ([]*dto.Metric, error
 
 // updateStats updates the timeout data with new data points collected in
 // the provided metrics. Returns a list containing the updated keys.
-func (c *nethealthChecker) updateStats(metrics []*dto.Metric) (updated []string, err error) {
+func (c *nethealthChecker) updateStats(metrics []nethealthMetric) (updated []string, err error) {
 	var errors []error
 	for _, metric := range metrics {
-		peerName, err := getPeerName(metric.GetLabel())
-		if err != nil {
-			errors = append(errors, trace.Wrap(err))
-			continue
-		}
-
-		series, err := c.getTimeoutSeries(peerName)
+		series, err := c.getTimeoutSeries(metric.peerName)
 		if err != nil {
 			errors = append(errors, trace.Wrap(err))
 			continue
@@ -166,14 +160,14 @@ func (c *nethealthChecker) updateStats(metrics []*dto.Metric) (updated []string,
 		if len(series) >= c.SeriesCapacity {
 			series = series[1:]
 		}
-		series = append(series, int64(metric.GetCounter().GetValue()))
+		series = append(series, metric.totalTimeout)
 
-		if err := c.setTimeoutSeries(peerName, series); err != nil {
+		if err := c.setTimeoutSeries(metric.peerName, series); err != nil {
 			errors = append(errors, trace.Wrap(err))
 		}
 
 		// Record updated nodes to be returned for use in later nethealth verification step.
-		updated = append(updated, peerName)
+		updated = append(updated, metric.peerName)
 	}
 	return updated, trace.NewAggregate(errors...)
 }
@@ -270,7 +264,7 @@ func fetchMetrics(ctx context.Context, addr string) ([]byte, error) {
 
 // parseMetrics parses input from the provided reader and returns the metrics
 // for the 'nethealth_echo_timeout_total' counter.
-func parseMetrics(input io.Reader) ([]*dto.Metric, error) {
+func parseMetrics(input io.Reader) ([]nethealthMetric, error) {
 	// requestTimeoutName defines the metric family name of the relevant nethealth counter
 	const requestTimeoutName = "nethealth_echo_timeout_total"
 
@@ -280,10 +274,24 @@ func parseMetrics(input io.Reader) ([]*dto.Metric, error) {
 		return nil, trace.Wrap(err)
 	}
 
-	if mf, ok := metricsFamilies[requestTimeoutName]; ok {
-		return mf.GetMetric(), nil
+	mf, ok := metricsFamilies[requestTimeoutName]
+	if !ok {
+		return nil, trace.NotFound("%s metrics not found", requestTimeoutName)
 	}
-	return nil, trace.NotFound("%s metrics not found", requestTimeoutName)
+
+	metrics := make([]nethealthMetric, 0, len(mf.GetMetric()))
+	for _, m := range mf.GetMetric() {
+		peerName, err := getPeerName(m.GetLabel())
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
+
+		metrics = append(metrics, nethealthMetric{
+			peerName:     peerName,
+			totalTimeout: int64(m.GetCounter().GetValue()),
+		})
+	}
+	return metrics, nil
 }
 
 // getPeerName extracts the 'peer_name' value from the provided labels.
@@ -294,6 +302,13 @@ func getPeerName(labels []*dto.LabelPair) (peer string, err error) {
 		}
 	}
 	return "", trace.NotFound("unable to find required peer label")
+}
+
+type nethealthMetric struct {
+	// peerName is the node name of the peer.
+	peerName string
+	// totalTimeout is the running total of requests to the peer that have timed out.
+	totalTimeout int64
 }
 
 const (
