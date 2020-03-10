@@ -456,6 +456,55 @@ func (m *ProbeFailed) GetProbe() string {
 	return ""
 }
 
+// LeaderElected represents a change in cluster leadership.
+type LeaderElected struct {
+	// Node specifies the node name.
+	Node                 string   `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *LeaderElected) Reset()         { *m = LeaderElected{} }
+func (m *LeaderElected) String() string { return proto.CompactTextString(m) }
+func (*LeaderElected) ProtoMessage()    {}
+func (*LeaderElected) Descriptor() ([]byte, []int) {
+	return fileDescriptor_2d17a9d3f0ddf27e, []int{9}
+}
+func (m *LeaderElected) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *LeaderElected) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_LeaderElected.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *LeaderElected) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_LeaderElected.Merge(m, src)
+}
+func (m *LeaderElected) XXX_Size() int {
+	return m.Size()
+}
+func (m *LeaderElected) XXX_DiscardUnknown() {
+	xxx_messageInfo_LeaderElected.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_LeaderElected proto.InternalMessageInfo
+
+func (m *LeaderElected) GetNode() string {
+	if m != nil {
+		return m.Node
+	}
+	return ""
+}
+
 func init() {
 	proto.RegisterType((*ClusterRecovered)(nil), "agentpb.ClusterRecovered")
 	proto.RegisterType((*ClusterDegraded)(nil), "agentpb.ClusterDegraded")
@@ -466,12 +515,13 @@ func init() {
 	proto.RegisterType((*NodeDegraded)(nil), "agentpb.NodeDegraded")
 	proto.RegisterType((*ProbeSucceeded)(nil), "agentpb.ProbeSucceeded")
 	proto.RegisterType((*ProbeFailed)(nil), "agentpb.ProbeFailed")
+	proto.RegisterType((*LeaderElected)(nil), "agentpb.LeaderElected")
 }
 
 func init() { proto.RegisterFile("event.proto", fileDescriptor_2d17a9d3f0ddf27e) }
 
 var fileDescriptor_2d17a9d3f0ddf27e = []byte{
-	// 217 bytes of a gzipped FileDescriptorProto
+	// 233 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x4e, 0x2d, 0x4b, 0xcd,
 	0x2b, 0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x4f, 0x4c, 0x4f, 0xcd, 0x2b, 0x29, 0x48,
 	0x52, 0x12, 0xe2, 0x12, 0x70, 0xce, 0x29, 0x2d, 0x2e, 0x49, 0x2d, 0x0a, 0x4a, 0x4d, 0xce, 0x2f,
@@ -483,9 +533,10 @@ var fileDescriptor_2d17a9d3f0ddf27e = []byte{
 	0x52, 0xe2, 0xe2, 0x01, 0x29, 0x82, 0x39, 0x05, 0xab, 0x1a, 0x2b, 0x2e, 0xbe, 0x80, 0xa2, 0xfc,
 	0xa4, 0xd4, 0xe0, 0xd2, 0xe4, 0xe4, 0xd4, 0x54, 0x1c, 0xaa, 0x84, 0x44, 0xb8, 0x58, 0x0b, 0x40,
 	0xaa, 0x24, 0x98, 0xc0, 0x82, 0x10, 0x8e, 0x92, 0x39, 0x17, 0x37, 0x58, 0xaf, 0x5b, 0x62, 0x66,
-	0x0e, 0x29, 0x1a, 0x9d, 0x04, 0x4e, 0x3c, 0x92, 0x63, 0xbc, 0xf0, 0x48, 0x8e, 0xf1, 0xc1, 0x23,
-	0x39, 0xc6, 0x19, 0x8f, 0xe5, 0x18, 0x92, 0xd8, 0xc0, 0x81, 0x6b, 0x0c, 0x08, 0x00, 0x00, 0xff,
-	0xff, 0xc7, 0xb6, 0x5e, 0xfe, 0x6b, 0x01, 0x00, 0x00,
+	0x0e, 0x49, 0x1a, 0x95, 0xb9, 0x78, 0x7d, 0x52, 0x13, 0x53, 0x52, 0x8b, 0x5c, 0x73, 0x52, 0x93,
+	0x4b, 0xb0, 0x6b, 0x75, 0x12, 0x38, 0xf1, 0x48, 0x8e, 0xf1, 0xc2, 0x23, 0x39, 0xc6, 0x07, 0x8f,
+	0xe4, 0x18, 0x67, 0x3c, 0x96, 0x63, 0x48, 0x62, 0x03, 0xc7, 0x80, 0x31, 0x20, 0x00, 0x00, 0xff,
+	0xff, 0xd2, 0xa4, 0xc9, 0xbf, 0x90, 0x01, 0x00, 0x00,
 }
 
 func (m *ClusterRecovered) Marshal() (dAtA []byte, err error) {
@@ -725,6 +776,33 @@ func (m *ProbeFailed) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
+func (m *LeaderElected) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *LeaderElected) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if len(m.Node) > 0 {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintEvent(dAtA, i, uint64(len(m.Node)))
+		i += copy(dAtA[i:], m.Node)
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
 func encodeVarintEvent(dAtA []byte, offset int, v uint64) int {
 	for v >= 1<<7 {
 		dAtA[offset] = uint8(v&0x7f | 0x80)
@@ -865,6 +943,22 @@ func (m *ProbeFailed) Size() (n int) {
 		n += 1 + l + sovEvent(uint64(l))
 	}
 	l = len(m.Probe)
+	if l > 0 {
+		n += 1 + l + sovEvent(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *LeaderElected) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Node)
 	if l > 0 {
 		n += 1 + l + sovEvent(uint64(l))
 	}
@@ -1603,6 +1697,92 @@ func (m *ProbeFailed) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Probe = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipEvent(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *LeaderElected) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowEvent
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: LeaderElected: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: LeaderElected: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Node", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowEvent
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthEvent
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthEvent
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Node = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

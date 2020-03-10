@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,81 +14,119 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package sqlite
+package memory
 
 import (
 	"context"
-	"database/sql"
+	"strings"
 	"time"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/history"
 
 	"github.com/gravitational/trace"
-	"github.com/jmoiron/sqlx"
 )
 
-// sqlEvent defines an sql event row.
-type sqlEvent struct {
-	// ID specifies sqlite id.
-	ID int `db:"id"`
-	// Timestamp specifies event timestamp.
-	Timestamp time.Time `db:"timestamp"`
-	// EventType specifies event type.
-	EventType string `db:"type"`
-	// Node specifies name of node.
-	Node sql.NullString `db:"node"`
-	// Probe specifies name of probe.
-	Probe sql.NullString `db:"probe"`
-	// Old specifies previous probe state.
-	Old sql.NullString `db:"oldState"`
-	// New specifies new probe state.
-	New sql.NullString `db:"newState"`
+// memEvent defines an event in a comparable struct.
+// Used when filtering duplicate events.
+type memEvent struct {
+	timestamp time.Time
+	eventType history.EventType
+	node      string
+	probe     string
+	old       string
+	new       string
 }
 
-// ProtoBuf returns the sql event row as a protobuf message.
-func (r sqlEvent) ProtoBuf() (event *pb.TimelineEvent, err error) {
-	switch history.EventType(r.EventType) {
+// ProtoBuf returns the event as a protobuf message.
+func (r memEvent) ProtoBuf() (event *pb.TimelineEvent, err error) {
+	switch r.eventType {
 	case history.ClusterDegraded:
-		return pb.NewClusterDegraded(r.Timestamp), nil
+		return pb.NewClusterDegraded(r.timestamp), nil
 	case history.ClusterRecovered:
-		return pb.NewClusterRecovered(r.Timestamp), nil
+		return pb.NewClusterRecovered(r.timestamp), nil
 	case history.NodeAdded:
-		return pb.NewNodeAdded(r.Timestamp, r.Node.String), nil
+		return pb.NewNodeAdded(r.timestamp, r.node), nil
 	case history.NodeRemoved:
-		return pb.NewNodeRemoved(r.Timestamp, r.Node.String), nil
+		return pb.NewNodeRemoved(r.timestamp, r.node), nil
 	case history.NodeDegraded:
-		return pb.NewNodeDegraded(r.Timestamp, r.Node.String), nil
+		return pb.NewNodeDegraded(r.timestamp, r.node), nil
 	case history.NodeRecovered:
-		return pb.NewNodeRecovered(r.Timestamp, r.Node.String), nil
+		return pb.NewNodeRecovered(r.timestamp, r.node), nil
 	case history.ProbeFailed:
-		return pb.NewProbeFailed(r.Timestamp, r.Node.String, r.Probe.String), nil
+		return pb.NewProbeFailed(r.timestamp, r.node, r.probe), nil
 	case history.ProbeSucceeded:
-		return pb.NewProbeSucceeded(r.Timestamp, r.Node.String, r.Probe.String), nil
+		return pb.NewProbeSucceeded(r.timestamp, r.node, r.probe), nil
 	case history.LeaderElected:
-		return pb.NewLeaderElected(r.Timestamp, r.Node.String), nil
+		return pb.NewLeaderElected(r.timestamp, r.node), nil
 	default:
-		return event, trace.BadParameter("unknown event type %s", r.EventType)
+		return event, trace.BadParameter("unknown event type %s", r.eventType)
 	}
 }
 
-// sqlExecer executes sql statements.
-type sqlExecer struct {
-	db *sqlx.DB
+// memExecer inserts events into memory.
+//
+// Implements history.Execer
+type memExecer struct {
+	events *[]memEvent
 }
 
-// newSQLExecer constructs a new sqlExecer with the provided database.
-func newSQLExecer(db *sqlx.DB) *sqlExecer {
-	return &sqlExecer{db: db}
+// newMemExecer constructs a new memExecer with the provided array.
+func newMemExecer(events *[]memEvent) *memExecer {
+	return &memExecer{events: events}
 }
 
 // Exec executes the provided stmt with the provided args.
-func (r *sqlExecer) Exec(ctx context.Context, stmt string, args ...interface{}) error {
-	_, err := r.db.ExecContext(ctx, stmt, args...)
-	return trace.Wrap(err)
+// stmt is a comma separated list of tokens e.g. "timestamp,type,node".
+func (r *memExecer) Exec(_ context.Context, stmt string, args ...interface{}) error {
+	if len(stmt) == 0 {
+		return trace.BadParameter("received empty statement")
+	}
+
+	tokens := strings.Split(stmt, ",")
+	if len(tokens) != len(args) {
+		return trace.BadParameter("expected %d args, received %d", len(tokens), len(args))
+	}
+
+	var event memEvent
+	var ok bool
+
+	for i, token := range tokens {
+		switch token {
+		case "timestamp":
+			if event.timestamp, ok = args[i].(time.Time); !ok {
+				return trace.BadParameter("expected time.Time, received %T for arg %d", args[i], i)
+			}
+		case "type":
+			if event.eventType, ok = args[i].(history.EventType); !ok {
+				return trace.BadParameter("expected history.EventType, received %T for arg %d", args[i], i)
+			}
+		case "node":
+			if event.node, ok = args[i].(string); !ok {
+				return trace.BadParameter("expected string, received %T for arg %d", args[i], i)
+			}
+		case "probe":
+			if event.probe, ok = args[i].(string); !ok {
+				return trace.BadParameter("expected string, received %T for arg %d", args[i], i)
+			}
+		case "old":
+			if event.old, ok = args[i].(string); !ok {
+				return trace.BadParameter("expected string, received %T for arg %d", args[i], i)
+			}
+		case "new":
+			if event.new, ok = args[i].(string); !ok {
+				return trace.BadParameter("expected string, received %T for arg %d", args[i], i)
+			}
+		default:
+			return trace.BadParameter("received unknown token %s", token)
+		}
+	}
+
+	*r.events = append(*r.events, event)
+	return nil
 }
 
-// newDataInserter constructs a new DataInserter from the provided event.
+// newDataInserter returns the event as a history.DataInserter.
 func newDataInserter(event *pb.TimelineEvent) (row history.DataInserter, err error) {
 	switch t := event.GetData().(type) {
 	case *pb.TimelineEvent_ClusterDegraded:
@@ -122,7 +160,7 @@ type clusterDegraded struct {
 }
 
 func (r *clusterDegraded) Insert(ctx context.Context, execer history.Execer) error {
-	const insertStmt = "INSERT INTO events (timestamp, type) VALUES (?,?)"
+	const insertStmt = "timestamp,type"
 	args := []interface{}{r.GetTimestamp().ToTime(), history.ClusterDegraded}
 	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
 }
@@ -135,7 +173,7 @@ type clusterRecovered struct {
 }
 
 func (r *clusterRecovered) Insert(ctx context.Context, execer history.Execer) error {
-	const insertStmt = "INSERT INTO events (timestamp, type) VALUES (?,?)"
+	const insertStmt = "timestamp,type"
 	args := []interface{}{r.GetTimestamp().ToTime(), history.ClusterRecovered}
 	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
 }
@@ -148,7 +186,7 @@ type nodeAdded struct {
 }
 
 func (r *nodeAdded) Insert(ctx context.Context, execer history.Execer) error {
-	const insertStmt = "INSERT INTO events (timestamp, type, node) VALUES (?,?,?)"
+	const insertStmt = "timestamp,type,node"
 	e := r.GetNodeAdded()
 	if e == nil {
 		return trace.BadParameter("expected NodeAdded, got nil")
@@ -165,7 +203,7 @@ type nodeRemoved struct {
 }
 
 func (r *nodeRemoved) Insert(ctx context.Context, execer history.Execer) error {
-	const insertStmt = "INSERT INTO events (timestamp, type, node) VALUES (?,?,?)"
+	const insertStmt = "timestamp,type,node"
 	e := r.GetNodeRemoved()
 	if e == nil {
 		return trace.BadParameter("expected NodeRemoved, got nil")
@@ -182,7 +220,7 @@ type nodeDegraded struct {
 }
 
 func (r *nodeDegraded) Insert(ctx context.Context, execer history.Execer) error {
-	const insertStmt = "INSERT INTO events (timestamp, type, node) VALUES (?,?,?)"
+	const insertStmt = "timestamp,type,node"
 	e := r.GetNodeDegraded()
 	if e == nil {
 		return trace.BadParameter("expected NodeDegraded, got nil")
@@ -199,7 +237,7 @@ type nodeRecovered struct {
 }
 
 func (r *nodeRecovered) Insert(ctx context.Context, execer history.Execer) error {
-	const insertStmt = "INSERT INTO events (timestamp, type, node) VALUES (?,?,?)"
+	const insertStmt = "timestamp,type,node"
 	e := r.GetNodeRecovered()
 	if e == nil {
 		return trace.BadParameter("expected NodeRecovered, got nil")
@@ -216,7 +254,7 @@ type probeFailed struct {
 }
 
 func (r *probeFailed) Insert(ctx context.Context, execer history.Execer) error {
-	const insertStmt = "INSERT INTO events (timestamp, type, node, probe) VALUES (?,?,?,?)"
+	const insertStmt = "timestamp,type,node,probe"
 	e := r.GetProbeFailed()
 	if e == nil {
 		return trace.BadParameter("expected ProbeFailed, got nil")
@@ -233,7 +271,7 @@ type probeSucceeded struct {
 }
 
 func (r *probeSucceeded) Insert(ctx context.Context, execer history.Execer) error {
-	const insertStmt = "INSERT INTO events (timestamp, type, node, probe) VALUES (?,?,?,?)"
+	const insertStmt = "timestamp,type,node,probe"
 	e := r.GetProbeSucceeded()
 	if e == nil {
 		return trace.BadParameter("expected ProbeSucceeded, got nil")
@@ -250,7 +288,7 @@ type leaderElected struct {
 }
 
 func (r *leaderElected) Insert(ctx context.Context, execer history.Execer) error {
-	const insertStmt = "INSERT INTO events (timestamp, type, node) VALUES (?,?,?)"
+	const insertStmt = "timestamp,type,node"
 	e := r.GetLeaderElected()
 	if e == nil {
 		return trace.BadParameter("expected LeaderElected, got nil")

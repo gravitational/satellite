@@ -73,6 +73,20 @@ func (s *SQLiteSuite) TestSQLiteInitialization(c *C) {
 	c.Assert(os.Remove(dbPath), IsNil, comment)
 }
 
+// TestRecordEvents tests that new events can be inserted into the timeline.
+func (s *SQLiteSuite) TestRecordEvents(c *C) {
+	comment := Commentf("Expected events to be recorded.")
+	events := []*pb.TimelineEvent{pb.NewNodeDegraded(s.clock.Now(), "test-node")}
+
+	test.WithTimeout(func(ctx context.Context) {
+		c.Assert(s.timeline.RecordEvents(ctx, events), IsNil)
+
+		actual, err := s.timeline.GetEvents(ctx, nil)
+		c.Assert(err, IsNil)
+		c.Assert(actual, test.DeepCompare, events, comment)
+	})
+}
+
 // TestReinitialization verifies that the timeline can be reinitialized with
 // a preexisting database.
 func (s *SQLiteSuite) TestReinitialization(c *C) {
@@ -82,11 +96,11 @@ func (s *SQLiteSuite) TestReinitialization(c *C) {
 		DBPath: dbPath,
 		Clock:  s.clock,
 	}
-	events := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), "test-node")}
+	events := []*pb.TimelineEvent{pb.NewNodeDegraded(s.clock.Now(), "test-node")}
 	test.WithTimeout(func(ctx context.Context) {
 		timelineOld, err := NewTimeline(ctx, config)
 		c.Assert(err, IsNil)
-		c.Assert(timelineOld.RecordTimeline(ctx, events), IsNil)
+		c.Assert(timelineOld.RecordEvents(ctx, events), IsNil)
 
 		actual, err := timelineOld.GetEvents(ctx, nil)
 		c.Assert(err, IsNil)
@@ -102,87 +116,15 @@ func (s *SQLiteSuite) TestReinitialization(c *C) {
 	c.Assert(os.Remove(dbPath), IsNil, comment)
 }
 
-func (s *SQLiteSuite) TestRecordStatus(c *C) {
-	var testCases = []struct {
-		comment  string
-		statuses []*pb.NodeStatus
-		expected []*pb.TimelineEvent
-	}{
-		{
-			comment: "Expected the status to be recorded.",
-			statuses: []*pb.NodeStatus{
-				&pb.NodeStatus{Name: "node-1", Status: pb.NodeStatus_Running},
-			},
-			expected: []*pb.TimelineEvent{history.NewNodeRecovered(s.clock.Now(), "node-1")},
-		},
-		{
-			comment: "Expected only the first status to be recorded.",
-			statuses: []*pb.NodeStatus{
-				&pb.NodeStatus{Name: "node-1", Status: pb.NodeStatus_Running},
-				&pb.NodeStatus{Name: "node-1", Status: pb.NodeStatus_Running},
-			},
-			expected: []*pb.TimelineEvent{history.NewNodeRecovered(s.clock.Now(), "node-1")},
-		},
-		{
-			comment: "Expected events recovered then degraded.",
-			statuses: []*pb.NodeStatus{
-				&pb.NodeStatus{Name: "node-1", Status: pb.NodeStatus_Running},
-				&pb.NodeStatus{Name: "node-1", Status: pb.NodeStatus_Degraded},
-			},
-			expected: []*pb.TimelineEvent{
-				history.NewNodeRecovered(s.clock.Now(), "node-1"),
-				history.NewNodeDegraded(s.clock.Now().Add(time.Second), "node-1"),
-			},
-		},
-		{
-			comment: "Expected failed probe.",
-			statuses: []*pb.NodeStatus{
-				&pb.NodeStatus{
-					Name:   "node-1",
-					Status: pb.NodeStatus_Running,
-					Probes: []*pb.Probe{healthyProbe},
-				},
-				&pb.NodeStatus{
-					Name:   "node-1",
-					Status: pb.NodeStatus_Degraded,
-					Probes: []*pb.Probe{failedProbe},
-				},
-			},
-			expected: []*pb.TimelineEvent{
-				history.NewNodeRecovered(s.clock.Now(), "node-1"),
-				history.NewNodeDegraded(s.clock.Now().Add(time.Second), "node-1"),
-				history.NewProbeFailed(s.clock.Now().Add(time.Second), "node-1", failedProbe.GetChecker()),
-			},
-		},
-	}
-
-	for _, testCase := range testCases {
-		clock := clockwork.NewFakeClock()
-		timeline, err := s.newTimelineWithClock(clock)
-		c.Assert(err, IsNil)
-
-		test.WithTimeout(func(ctx context.Context) {
-			for _, status := range testCase.statuses {
-				c.Assert(timeline.RecordStatus(ctx, status), IsNil)
-				clock.Advance(time.Second) // Advance clock so events can be ordered
-			}
-
-			actual, err := timeline.GetEvents(ctx, nil)
-			c.Assert(err, IsNil)
-			c.Assert(actual, test.DeepCompare, testCase.expected, Commentf(testCase.comment))
-		})
-	}
-}
-
 // TestEviction tests timeline correctly implements an eviction policy.
 func (s *SQLiteSuite) TestEviction(c *C) {
 	comment := Commentf("Expected all events to be evicted.")
 	node := "test-node"
-	status := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
+	events := []*pb.TimelineEvent{pb.NewNodeRecovered(s.clock.Now(), node)}
 	var expected []*pb.TimelineEvent
 
 	test.WithTimeout(func(ctx context.Context) {
-		c.Assert(s.timeline.RecordStatus(ctx, status), IsNil)
+		c.Assert(s.timeline.RecordEvents(ctx, events), IsNil)
 
 		// Advance clock and evict all events before this time.
 		s.clock.Advance(time.Second)
@@ -198,50 +140,44 @@ func (s *SQLiteSuite) TestEviction(c *C) {
 func (s *SQLiteSuite) TestFilterEvents(c *C) {
 	var testCases = []struct {
 		comment  string
-		statuses []*pb.NodeStatus
+		events   []*pb.TimelineEvent
 		params   map[string]string
 		expected []*pb.TimelineEvent
 	}{
 		{
-			comment: "Expected one matching event.",
-			statuses: []*pb.NodeStatus{
-				&pb.NodeStatus{Name: "node-1", Status: pb.NodeStatus_Running},
-			},
-			params:   map[string]string{"type": nodeRecoveredType, "node": "node-1"},
-			expected: []*pb.TimelineEvent{history.NewNodeRecovered(s.clock.Now(), "node-1")},
+			comment:  "Expected one matching event.",
+			events:   []*pb.TimelineEvent{pb.NewNodeRecovered(s.clock.Now(), "node-1")},
+			params:   map[string]string{"type": string(history.NodeRecovered), "node": "node-1"},
+			expected: []*pb.TimelineEvent{pb.NewNodeRecovered(s.clock.Now(), "node-1")},
 		},
 		{
-			comment: "Expected no matching events.",
-			statuses: []*pb.NodeStatus{
-				&pb.NodeStatus{Name: "node-1", Status: pb.NodeStatus_Running},
-			},
-			params:   map[string]string{"type": nodeDegradedType, "node": "node-1"},
+			comment:  "Expected no matching events.",
+			events:   []*pb.TimelineEvent{pb.NewNodeRecovered(s.clock.Now(), "node-1")},
+			params:   map[string]string{"type": string(history.NodeDegraded), "node": "node-1"},
 			expected: nil,
 		},
 		{
 			comment: "Expected two matching events.",
-			statuses: []*pb.NodeStatus{
-				&pb.NodeStatus{Name: "node-1", Status: pb.NodeStatus_Running},
-				&pb.NodeStatus{Name: "node-1", Status: pb.NodeStatus_Degraded},
+			events: []*pb.TimelineEvent{
+				pb.NewNodeRecovered(s.clock.Now(), "node-1"),
+				pb.NewNodeDegraded(s.clock.Now().Add(time.Second), "node-1"),
 			},
 			params: map[string]string{"node": "node-1"},
 			expected: []*pb.TimelineEvent{
-				history.NewNodeRecovered(s.clock.Now(), "node-1"),
-				history.NewNodeDegraded(s.clock.Now().Add(time.Second), "node-1"),
+				pb.NewNodeRecovered(s.clock.Now(), "node-1"),
+				pb.NewNodeDegraded(s.clock.Now().Add(time.Second), "node-1"),
 			},
 		},
 	}
 
 	for _, testCase := range testCases {
+		testCase := testCase
 		clock := clockwork.NewFakeClock()
 		timeline, err := s.newTimelineWithClock(clock)
 		c.Assert(err, IsNil)
 
 		test.WithTimeout(func(ctx context.Context) {
-			for _, status := range testCase.statuses {
-				c.Assert(timeline.RecordStatus(ctx, status), IsNil)
-				clock.Advance(time.Second) // Advance clock so events can be ordered
-			}
+			c.Assert(timeline.RecordEvents(ctx, testCase.events), IsNil)
 
 			actual, err := timeline.GetEvents(ctx, testCase.params)
 			c.Assert(err, IsNil)
@@ -250,32 +186,17 @@ func (s *SQLiteSuite) TestFilterEvents(c *C) {
 	}
 }
 
-// TestMergeEvents tests that another timeline can be merged into the existing
-// timeline.
-func (s *SQLiteSuite) TestMergeEvents(c *C) {
-	comment := Commentf("Expected events to be recorded.")
-	events := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), "test-node")}
-
-	test.WithTimeout(func(ctx context.Context) {
-		c.Assert(s.timeline.RecordTimeline(ctx, events), IsNil)
-
-		actual, err := s.timeline.GetEvents(ctx, nil)
-		c.Assert(err, IsNil)
-		c.Assert(actual, test.DeepCompare, events, comment)
-	})
-}
-
 // TestIgnoreDuplicateEvents tests that duplicate events will not be recoreded.
 func (s *SQLiteSuite) TestIgnoreDuplicateEvents(c *C) {
 	comment := Commentf("Expected duplicate event to be ignored.")
 	events := []*pb.TimelineEvent{
-		history.NewNodeDegraded(s.clock.Now(), "test-node"),
-		history.NewNodeDegraded(s.clock.Now(), "test-node"),
+		pb.NewNodeDegraded(s.clock.Now(), "test-node"),
+		pb.NewNodeDegraded(s.clock.Now(), "test-node"),
 	}
-	expected := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), "test-node")}
+	expected := []*pb.TimelineEvent{pb.NewNodeDegraded(s.clock.Now(), "test-node")}
 
 	test.WithTimeout(func(ctx context.Context) {
-		c.Assert(s.timeline.RecordTimeline(ctx, events), IsNil)
+		c.Assert(s.timeline.RecordEvents(ctx, events), IsNil)
 
 		actual, err := s.timeline.GetEvents(ctx, nil)
 		c.Assert(err, IsNil)
@@ -293,25 +214,26 @@ func (s *SQLiteSuite) TestIgnoreExpiredEvents(c *C) {
 	}{
 		{
 			comment:  "Expected expired event to be ignored.",
-			events:   []*pb.TimelineEvent{history.NewNodeRecovered(expiredTimestamp, "node-1")},
+			events:   []*pb.TimelineEvent{pb.NewNodeRecovered(expiredTimestamp, "node-1")},
 			expected: nil,
 		},
 		{
 			comment: "Expected one event to be recoreded.",
 			events: []*pb.TimelineEvent{
-				history.NewNodeRecovered(expiredTimestamp, "node-1"),
-				history.NewNodeRecovered(s.clock.Now(), "node-2"),
+				pb.NewNodeRecovered(expiredTimestamp, "node-1"),
+				pb.NewNodeRecovered(s.clock.Now(), "node-2"),
 			},
-			expected: []*pb.TimelineEvent{history.NewNodeRecovered(s.clock.Now(), "node-2")},
+			expected: []*pb.TimelineEvent{pb.NewNodeRecovered(s.clock.Now(), "node-2")},
 		},
 	}
 
 	for _, testCase := range testCases {
+		testCase := testCase
 		timeline, err := s.newDefaultTimeline()
 		c.Assert(err, IsNil)
 
 		test.WithTimeout(func(ctx context.Context) {
-			c.Assert(timeline.RecordTimeline(ctx, testCase.events), IsNil)
+			c.Assert(timeline.RecordEvents(ctx, testCase.events), IsNil)
 
 			actual, err := timeline.GetEvents(ctx, nil)
 			c.Assert(err, IsNil)

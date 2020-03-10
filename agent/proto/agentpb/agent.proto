@@ -181,6 +181,8 @@ message TimelineEvent {
     ProbeSucceeded probeSucceeded = 9;
     ProbeFailed probeFailed = 10;
 
+    LeaderElected LeaderElected = 11;
+
     // TODO: Additional events
   }
 }

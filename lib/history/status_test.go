@@ -43,13 +43,13 @@ func (s *StatusSuite) TestClusterStatusDiff(c *C) {
 		{
 			oldCluster: &pb.SystemStatus{Status: pb.SystemStatus_Degraded},
 			newCluster: &pb.SystemStatus{Status: pb.SystemStatus_Running},
-			diff:       []*pb.TimelineEvent{NewClusterRecovered(s.clock.Now())},
+			diff:       []*pb.TimelineEvent{pb.NewClusterRecovered(s.clock.Now())},
 			comment:    "Test cluster recovered",
 		},
 		{
 			oldCluster: &pb.SystemStatus{Status: pb.SystemStatus_Running},
 			newCluster: &pb.SystemStatus{Status: pb.SystemStatus_Degraded},
-			diff:       []*pb.TimelineEvent{NewClusterDegraded(s.clock.Now())},
+			diff:       []*pb.TimelineEvent{pb.NewClusterDegraded(s.clock.Now())},
 			comment:    "Test cluster degraded",
 		},
 	}
@@ -72,7 +72,7 @@ func (s *StatusSuite) TestAddOrRemoveNode(c *C) {
 			newCluster: &pb.SystemStatus{
 				Nodes: []*pb.NodeStatus{&pb.NodeStatus{Name: "node-added"}},
 			},
-			diff:    []*pb.TimelineEvent{NewNodeAdded(s.clock.Now(), "node-added")},
+			diff:    []*pb.TimelineEvent{pb.NewNodeAdded(s.clock.Now(), "node-added")},
 			comment: "Test node added",
 		},
 		{
@@ -81,7 +81,7 @@ func (s *StatusSuite) TestAddOrRemoveNode(c *C) {
 				Nodes: []*pb.NodeStatus{&pb.NodeStatus{Name: "node-removed"}},
 			},
 			newCluster: &pb.SystemStatus{},
-			diff:       []*pb.TimelineEvent{NewNodeRemoved(s.clock.Now(), "node-removed")},
+			diff:       []*pb.TimelineEvent{pb.NewNodeRemoved(s.clock.Now(), "node-removed")},
 			comment:    "Test node removed",
 		},
 	}
@@ -102,13 +102,13 @@ func (s *StatusSuite) TestNodeStatusDiff(c *C) {
 		{
 			oldNode: &pb.NodeStatus{Name: "node-recovered", Status: pb.NodeStatus_Degraded},
 			newNode: &pb.NodeStatus{Name: "node-recovered", Status: pb.NodeStatus_Running},
-			diff:    []*pb.TimelineEvent{NewNodeRecovered(s.clock.Now(), "node-recovered")},
+			diff:    []*pb.TimelineEvent{pb.NewNodeRecovered(s.clock.Now(), "node-recovered")},
 			comment: "Test node recovered",
 		},
 		{
 			oldNode: &pb.NodeStatus{Name: "node-degraded", Status: pb.NodeStatus_Running},
 			newNode: &pb.NodeStatus{Name: "node-degraded", Status: pb.NodeStatus_Degraded},
-			diff:    []*pb.TimelineEvent{NewNodeDegraded(s.clock.Now(), "node-degraded")},
+			diff:    []*pb.TimelineEvent{pb.NewNodeDegraded(s.clock.Now(), "node-degraded")},
 			comment: "Test node degraded",
 		},
 	}
@@ -131,14 +131,14 @@ func (s *StatusSuite) TestProbeDiff(c *C) {
 			nodeName: "test-node",
 			oldProbe: &pb.Probe{Checker: "probe-successful", Status: pb.Probe_Failed},
 			newProbe: &pb.Probe{Checker: "probe-successful", Status: pb.Probe_Running},
-			diff:     []*pb.TimelineEvent{NewProbeSucceeded(s.clock.Now(), "test-node", "probe-successful")},
+			diff:     []*pb.TimelineEvent{pb.NewProbeSucceeded(s.clock.Now(), "test-node", "probe-successful")},
 			comment:  "Test successful probe event",
 		},
 		{
 			nodeName: "test-node",
 			oldProbe: &pb.Probe{Checker: "probe-failure", Status: pb.Probe_Running},
 			newProbe: &pb.Probe{Checker: "probe-failure", Status: pb.Probe_Failed},
-			diff:     []*pb.TimelineEvent{NewProbeFailed(s.clock.Now(), "test-node", "probe-failure")},
+			diff:     []*pb.TimelineEvent{pb.NewProbeFailed(s.clock.Now(), "test-node", "probe-failure")},
 			comment:  "Test failure probe event",
 		},
 	}

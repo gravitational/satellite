@@ -18,7 +18,6 @@ package history
 
 import (
 	"context"
-	"time"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 )
@@ -41,94 +40,19 @@ type ProtoBuffer interface {
 	ProtoBuf() (*pb.TimelineEvent, error)
 }
 
-// newTimelineEvent constructs a new TimelineEvent with the provided timestamp.
-func newTimelineEvent(timestamp time.Time) *pb.TimelineEvent {
-	return &pb.TimelineEvent{
-		Timestamp: &pb.Timestamp{
-			Seconds:     timestamp.Unix(),
-			Nanoseconds: int32(timestamp.Nanosecond()),
-		},
-	}
-}
+// EventType specifies the type of event.
+type EventType string
 
-// NewClusterRecovered constructs a new ClusterRecovered event with the
-// provided data.
-func NewClusterRecovered(timestamp time.Time) *pb.TimelineEvent {
-	event := newTimelineEvent(timestamp)
-	event.Data = &pb.TimelineEvent_ClusterRecovered{
-		ClusterRecovered: &pb.ClusterRecovered{},
-	}
-	return event
-}
-
-// NewClusterDegraded constructs a new ClusterDegraded event with the provided
-// data.
-func NewClusterDegraded(timestamp time.Time) *pb.TimelineEvent {
-	event := newTimelineEvent(timestamp)
-	event.Data = &pb.TimelineEvent_ClusterDegraded{
-		ClusterDegraded: &pb.ClusterDegraded{},
-	}
-	return event
-}
-
-// NewNodeAdded constructs a new NodeAdded event with the provided data.
-func NewNodeAdded(timestamp time.Time, node string) *pb.TimelineEvent {
-	event := newTimelineEvent(timestamp)
-	event.Data = &pb.TimelineEvent_NodeAdded{
-		NodeAdded: &pb.NodeAdded{Node: node},
-	}
-	return event
-}
-
-// NewNodeRemoved constructs a new NodeRemoved event with the provided data.
-func NewNodeRemoved(timestamp time.Time, node string) *pb.TimelineEvent {
-	event := newTimelineEvent(timestamp)
-	event.Data = &pb.TimelineEvent_NodeRemoved{
-		NodeRemoved: &pb.NodeRemoved{Node: node},
-	}
-	return event
-}
-
-// NewNodeRecovered constructs a new NodeRecovered event with the provided data.
-func NewNodeRecovered(timestamp time.Time, node string) *pb.TimelineEvent {
-	event := newTimelineEvent(timestamp)
-	event.Data = &pb.TimelineEvent_NodeRecovered{
-		NodeRecovered: &pb.NodeRecovered{Node: node},
-	}
-	return event
-}
-
-// NewNodeDegraded constructs a new NodeDegraded event with the provided data.
-func NewNodeDegraded(timestamp time.Time, node string) *pb.TimelineEvent {
-	event := newTimelineEvent(timestamp)
-	event.Data = &pb.TimelineEvent_NodeDegraded{
-		NodeDegraded: &pb.NodeDegraded{Node: node},
-	}
-	return event
-}
-
-// NewProbeSucceeded constructs a new ProbeSucceeded event with the provided
-// data.
-func NewProbeSucceeded(timestamp time.Time, node, probe string) *pb.TimelineEvent {
-	event := newTimelineEvent(timestamp)
-	event.Data = &pb.TimelineEvent_ProbeSucceeded{
-		ProbeSucceeded: &pb.ProbeSucceeded{
-			Node:  node,
-			Probe: probe,
-		},
-	}
-	return event
-
-}
-
-// NewProbeFailed constructs a new ProbeFailed event with the provided data.
-func NewProbeFailed(timestamp time.Time, node, probe string) *pb.TimelineEvent {
-	event := newTimelineEvent(timestamp)
-	event.Data = &pb.TimelineEvent_ProbeFailed{
-		ProbeFailed: &pb.ProbeFailed{
-			Node:  node,
-			Probe: probe,
-		},
-	}
-	return event
-}
+// Defines event types
+const (
+	ClusterDegraded  EventType = "ClusterDegraded"
+	ClusterRecovered EventType = "ClusterRecovered"
+	NodeAdded        EventType = "NodeAdded"
+	NodeRemoved      EventType = "NodeRemoved"
+	NodeRecovered    EventType = "NodeRecovered"
+	NodeDegraded     EventType = "NodeDegraded"
+	ProbeSucceeded   EventType = "ProbeSucceeded"
+	ProbeFailed      EventType = "ProbeFailed"
+	LeaderElected    EventType = "LeaderElected"
+	UnknownEvent     EventType = "Unknown"
+)

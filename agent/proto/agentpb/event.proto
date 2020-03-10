@@ -68,3 +68,9 @@ message ProbeFailed {
     // Probe specifies the probe name.
     string probe = 2;
 }
+
+// LeaderElected represents a change in cluster leadership.
+message LeaderElected {
+    // Node specifies the node name.
+    string node = 1;
+}
