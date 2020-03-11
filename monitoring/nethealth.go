@@ -32,6 +32,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	log "github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -103,46 +104,48 @@ func (c *nethealthChecker) Name() string {
 // Check verifies the network is healthy.
 // Implements health.Checker
 func (c *nethealthChecker) Check(ctx context.Context, reporter health.Reporter) {
-	if err := c.check(ctx, reporter); err != nil {
+	probes, err := c.check(ctx)
+	if err != nil {
 		log.WithError(err).Error("Unable to verify nethealth.")
+	}
+
+	if probes.NumProbes() != 0 {
+		health.AddFrom(reporter, probes)
 		return
 	}
 	reporter.Add(NewSuccessProbe(c.Name()))
 }
 
-func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) error {
-	metrics, err := c.getMetrics(ctx)
+func (c *nethealthChecker) check(ctx context.Context) (health.Reporter, error) {
+	reporter := new(health.Probes)
+	pods, err := c.Client.CoreV1().Pods(nethealthNamespace).List(metav1.ListOptions{})
 	if err != nil {
-		return trace.Wrap(err, "failed to get nethealth metrics")
+		reporter.Add(NewProbeFromErr(c.Name(), "failed to retrieve k8s pods", err))
+		return reporter, trace.Wrap(err)
 	}
 
-	updated, err := c.updateStats(metrics)
+	addr, err := c.getNethealthAddr(pods)
 	if err != nil {
-		return trace.Wrap(err, "failed to update nethealth timeout stats")
-	}
-
-	return c.verifyNethealth(updated, reporter)
-}
-
-// getMetrics returns the network metrics from the local nethealth pod.
-func (c *nethealthChecker) getMetrics(ctx context.Context) ([]nethealthMetric, error) {
-	addr, err := c.getNethealthAddr()
-	if err != nil {
-		return nil, trace.Wrap(err, "failed to get local nethealth address")
+		return reporter, trace.Wrap(err, "failed to get local nethealth address")
 	}
 
 	b, err := fetchMetrics(ctx, addr)
 	if err != nil {
-		log.WithError(err).Warnf("Failed to fetch metrics from %s", addr)
-		return nil, trace.Wrap(err, "failed to fetch metrics")
+		reporter.Add(NewProbeFromErr(c.Name(), "unable to nethealth metrics", err))
+		return reporter, trace.Wrap(err, "failed to fetch metrics from %s", addr)
 	}
 
 	metrics, err := parseMetrics(bytes.NewReader(b))
 	if err != nil {
-		return nil, trace.Wrap(err, "failed to parse metrics")
+		return reporter, trace.Wrap(err, "failed to parse metrics")
 	}
 
-	return metrics, nil
+	updated, err := c.updateStats(metrics)
+	if err != nil {
+		return reporter, trace.Wrap(err, "failed to update nethealth timeout stats")
+	}
+
+	return c.verifyNethealth(updated)
 }
 
 // updateStats updates the timeout data with new data points collected in
@@ -172,18 +175,19 @@ func (c *nethealthChecker) updateStats(metrics []nethealthMetric) (updated []str
 
 // verifyNethealth verifies that the network communication is healthy for the
 // nodes specified by the provided list of names.
-func (c *nethealthChecker) verifyNethealth(names []string, reporter health.Reporter) error {
+func (c *nethealthChecker) verifyNethealth(names []string) (health.Reporter, error) {
+	reporter := new(health.Probes)
 	for _, name := range names {
 		series, err := c.getTimeoutSeries(name)
 		if err != nil {
-			return trace.Wrap(err)
+			return reporter, trace.Wrap(err)
 		}
 
 		if !c.isHealthy(series) {
 			reporter.Add(NewProbeFromErr(c.Name(), nethealthDetail(name), nil))
 		}
 	}
-	return nil
+	return reporter, nil
 }
 
 // isHealthy returns false if the number of timeouts increases at each data point.
@@ -227,12 +231,7 @@ func (c *nethealthChecker) setTimeoutSeries(name string, series []int64) error {
 }
 
 // getNethealthAddr returns the address of the local nethealth pod.
-func (c *nethealthChecker) getNethealthAddr() (string, error) {
-	pods, err := c.Client.CoreV1().Pods(nethealthNamespace).List(metav1.ListOptions{})
-	if err != nil {
-		return "", trace.Wrap(err)
-	}
-
+func (c *nethealthChecker) getNethealthAddr(pods *v1.PodList) (string, error) {
 	// Find nethealth pod with matching host ip address.
 	for _, pod := range pods.Items {
 		if pod.GetLabels()[nethealthLabel] != nethealthValue {
@@ -336,5 +335,5 @@ const (
 	// timeoutStatsTTLSeconds defines the time to live in seconds for the
 	// stored timeout stats. This ensures the checker does not hold on to
 	// unsed information when a member leaves the cluster.
-	timeoutStatsTTLSeconds = 5 * 60 // 5 minutes
+	timeoutStatsTTLSeconds = 60 * 60 * 24 // 1 day
 )

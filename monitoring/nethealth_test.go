@@ -76,17 +76,17 @@ func (s *NethealthSuite) TestNethealthVerification(c *C) {
 	}{
 		{
 			comment:  Commentf("Expected no failed probes. Not enough data points."),
-			expected: &health.Probes{},
+			expected: new(health.Probes),
 			data:     []int64{0, 1, 2},
 		},
 		{
 			comment:  Commentf("Expected no failed probes. No timeouts."),
-			expected: &health.Probes{},
+			expected: new(health.Probes),
 			data:     []int64{0, 0, 0, 0, 0},
 		},
 		{
 			comment:  Commentf("Expected no failed probes. Timeouts do not increase for a long enough duration"),
-			expected: &health.Probes{},
+			expected: new(health.Probes),
 			data:     []int64{0, 1, 2, 3, 3},
 		},
 		{
@@ -101,10 +101,11 @@ func (s *NethealthSuite) TestNethealthVerification(c *C) {
 
 	for _, testCase := range testCases {
 		testCase := testCase
-		reporter := &health.Probes{}
 
 		c.Assert(checker.setTimeoutSeries(testNode, testCase.data), IsNil, testCase.comment)
-		c.Assert(checker.verifyNethealth([]string{testNode}, reporter), IsNil, testCase.comment)
+
+		reporter, err := checker.verifyNethealth([]string{testNode})
+		c.Assert(err, IsNil, testCase.comment)
 		c.Assert(reporter, test.DeepCompare, testCase.expected, testCase.comment)
 	}
 }
