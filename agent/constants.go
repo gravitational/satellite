@@ -51,7 +51,7 @@ const (
 
 	// timelineInitTimeout specifies the amount of time to wait for the
 	// timeline to initialize.
-	timelineInitTimeout = 5 * time.Second
+	timelineInitTimeout = time.Minute
 
 	// updateTimelineTimeout specifies the amount of time to wait for events
 	// to be stored into the timeline.
