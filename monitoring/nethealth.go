@@ -17,13 +17,14 @@ limitations under the License.
 package monitoring
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
+	"math"
 	"net/url"
 	"sync"
+	"time"
 
+	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/agent/health"
 
 	"github.com/gravitational/roundtrip"
@@ -42,9 +43,8 @@ type NethealthConfig struct {
 	AdvertiseIP string
 	// NethealthPort specifies the port that nethealth is listening on.
 	NethealthPort int
-	// SeriesCapacity specifies the max number of data points to store in a time
-	// series interval.
-	SeriesCapacity int
+	// NetStatsInterval specifies the duration to store net stats.
+	NetStatsInterval time.Duration
 	// KubeConfig specifies kubernetes access information.
 	*KubeConfig
 }
@@ -59,11 +59,8 @@ func (c *NethealthConfig) CheckAndSetDefaults() error {
 	if c.NethealthPort == 0 {
 		c.NethealthPort = defaultNethealthPort
 	}
-	if c.SeriesCapacity < 0 {
-		errors = append(errors, trace.BadParameter("timeout series capacity cannot be < 0"))
-	}
-	if c.SeriesCapacity == 0 {
-		c.SeriesCapacity = defaultSeriesCapacity
+	if c.NetStatsInterval == time.Duration(0) {
+		c.NetStatsInterval = defaultNetStatsInterval
 	}
 	if c.KubeConfig == nil {
 		errors = append(errors, trace.BadParameter("kubernetes access config must be provided"))
@@ -76,11 +73,13 @@ type nethealthChecker struct {
 	// NethealthConfig contains caller specified nethealth checker configuration
 	// values.
 	NethealthConfig
+	// seriesCapacity specifies the number of data points to store in a series.
+	seriesCapacity int
 	// lock access to timeoutStats
 	sync.Mutex
-	// timeoutStats maps a peer to a time series data interval containing the
-	// number of echo timeouts received by the specific peer for the set interval.
-	timeoutStats *holster.TTLMap
+	// netStats maps a peer to a series data interval containing the packet loss
+	// percentage per peer for the set interval.
+	netStats *holster.TTLMap
 }
 
 // NewNethealthChecker returns a new nethealth checker.
@@ -89,8 +88,13 @@ func NewNethealthChecker(config NethealthConfig) (*nethealthChecker, error) {
 		return nil, trace.Wrap(err)
 	}
 
+	// seriesCapacity is determined by the NetStatsInterval / StatusUpdateTimeout
+	// rounded up to the nearest integer
+	seriesCapacity := math.Ceil(float64(config.NetStatsInterval) / float64(agent.StatusUpdateTimeout))
+
 	return &nethealthChecker{
-		timeoutStats:    holster.NewTTLMap(timeoutStatsCapacity),
+		netStats:        holster.NewTTLMap(netStatsCapacity),
+		seriesCapacity:  int(seriesCapacity),
 		NethealthConfig: config,
 	}, nil
 }
@@ -129,105 +133,105 @@ func (c *nethealthChecker) check(ctx context.Context) (health.Reporter, error) {
 		return reporter, trace.Wrap(err, "failed to get local nethealth address")
 	}
 
-	b, err := fetchMetrics(ctx, addr)
+	mf, err := fetchMetrics(ctx, addr)
 	if err != nil {
 		reporter.Add(NewProbeFromErr(c.Name(), "unable to nethealth metrics", err))
 		return reporter, trace.Wrap(err, "failed to fetch metrics from %s", addr)
 	}
 
-	metrics, err := parseMetrics(bytes.NewReader(b))
+	packetLossPercentages, err := parseMetrics(mf)
 	if err != nil {
 		return reporter, trace.Wrap(err, "failed to parse metrics")
 	}
 
-	updated, err := c.updateStats(metrics)
-	if err != nil {
+	if err := c.updateStats(packetLossPercentages); err != nil {
 		return reporter, trace.Wrap(err, "failed to update nethealth timeout stats")
 	}
 
-	return c.verifyNethealth(updated)
+	return c.verifyNethealth(packetLossPercentages.getPeers())
 }
 
-// updateStats updates the timeout data with new data points collected in
-// the provided metrics. Returns a list containing the updated keys.
-func (c *nethealthChecker) updateStats(metrics []nethealthMetric) (updated []string, err error) {
-	for _, metric := range metrics {
-		series, err := c.getTimeoutSeries(metric.peerName)
+// updateStats updates netStats with new data points.
+func (c *nethealthChecker) updateStats(packetLossPercentages nethealthData) (err error) {
+	for peer, percent := range packetLossPercentages {
+		series, err := c.getNetStats(peer)
 		if err != nil {
-			return updated, trace.Wrap(err)
+			return trace.Wrap(err)
 		}
 
 		// Keep only the last `seriesCapacity` number of data points.
-		if len(series) >= c.SeriesCapacity {
+		if len(series) >= c.seriesCapacity {
 			series = series[1:]
 		}
-		series = append(series, metric.totalTimeout)
+		series = append(series, percent)
 
-		if err := c.setTimeoutSeries(metric.peerName, series); err != nil {
-			return updated, trace.Wrap(err)
+		if err := c.setNetStats(peer, series); err != nil {
+			return trace.Wrap(err)
 		}
-
-		// Record updated nodes to be returned for use in later nethealth verification step.
-		updated = append(updated, metric.peerName)
 	}
-	return updated, nil
+	return nil
 }
 
-// verifyNethealth verifies that the network communication is healthy for the
-// nodes specified by the provided list of names.
-func (c *nethealthChecker) verifyNethealth(names []string) (health.Reporter, error) {
+// verifyNethealth verifies that the overlay network communication is healthy
+// for the nodes specified by the provided list of peers. Failed probes will be
+// reported for unhealthy peers.
+func (c *nethealthChecker) verifyNethealth(peers []string) (health.Reporter, error) {
 	reporter := new(health.Probes)
-	for _, name := range names {
-		series, err := c.getTimeoutSeries(name)
+	for _, peer := range peers {
+		healthy, err := c.isHealthy(peer)
 		if err != nil {
 			return reporter, trace.Wrap(err)
 		}
-
-		if !c.isHealthy(series) {
-			reporter.Add(NewProbeFromErr(c.Name(), nethealthDetail(name), nil))
+		if !healthy {
+			reporter.Add(NewProbeFromErr(c.Name(), nethealthDetail(peer), nil))
 		}
 	}
 	return reporter, nil
 }
 
-// isHealthy returns false if the number of timeouts increases at each data point.
-func (c *nethealthChecker) isHealthy(series []int64) bool {
-	// Checker has not collected enough data yet to check network health.
-	if len(series) < c.SeriesCapacity {
-		return true
+// isHealthy returns true if the overlay network is healthy for the specified
+// peer.
+func (c *nethealthChecker) isHealthy(peer string) (healthy bool, err error) {
+	series, err := c.getNetStats(peer)
+	if err != nil {
+		return false, trace.Wrap(err)
 	}
 
-	// series contains time series data of the running total of timeouts for a peer.
-	// If the counter is increasing at each data point, that means requests to
-	// this peer have been timing consistently throughout this interval. This
-	// should indicate that there is a network issue.
-	for i := 0; i < c.SeriesCapacity-1; i++ {
-		if series[i] >= series[i+1] {
-			return true
+	// Checker has not collected enough data yet to check network health.
+	if len(series) < c.seriesCapacity {
+		return true, nil
+	}
+
+	// series contains time series data of the packet loss percentage for a peer.
+	// If the percentage is above `packetLossTreshhold` throughout the entire
+	// interval, the overlay network communication to that peer will be
+	// considered unhealthy.
+	for i := 0; i < c.seriesCapacity; i++ {
+		if series[i] <= packetLossThreshold {
+			return true, nil
 		}
 	}
-
-	return false
+	return false, nil
 }
 
-// getTimeoutSeries returns the time series data mapped to the specified name.
-// Returns an empty slice if name was not previously mapped.
-func (c *nethealthChecker) getTimeoutSeries(name string) (series []int64, err error) {
+// getNetStats returns the time series data mapped to the specified peer.
+// Returns an empty slice if peer was not previously mapped.
+func (c *nethealthChecker) getNetStats(peer string) (series []float64, err error) {
 	c.Lock()
 	defer c.Unlock()
-	if value, ok := c.timeoutStats.Get(name); ok {
-		if series, ok = value.([]int64); !ok {
-			return series, trace.BadParameter("couldn't parse time series as []int64; got type %T", value)
+	if value, ok := c.netStats.Get(peer); ok {
+		if series, ok = value.([]float64); !ok {
+			return series, trace.BadParameter("expected %T, got %T", series, value)
 		}
 	}
 	return series, nil
 }
 
-// setTimeoutSeries maps the name to the timeout series.
-func (c *nethealthChecker) setTimeoutSeries(name string, series []int64) error {
+// setNetStats maps the peer to the series data.
+func (c *nethealthChecker) setNetStats(peer string, series []float64) error {
 	c.Lock()
 	defer c.Unlock()
-	return c.timeoutStats.Set(name, series, timeoutStatsTTLSeconds)
+	return c.netStats.Set(peer, series, netStatsTTLSeconds)
 }
 
 // getNethealthAddr returns the address of the local nethealth pod.
@@ -245,8 +249,7 @@ func (c *nethealthChecker) getNethealthAddr(pods *v1.PodList) (string, error) {
 }
 
 // fetchMetrics collects the network metrics from the nethealth pod.
-// Metrics are returned as an array of bytes.
-func fetchMetrics(ctx context.Context, addr string) ([]byte, error) {
+func fetchMetrics(ctx context.Context, addr string) (metricFamilies map[string]*dto.MetricFamily, err error) {
 	client, err := roundtrip.NewClient(addr, "")
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to connect to nethealth service at %s.", addr)
@@ -257,39 +260,65 @@ func fetchMetrics(ctx context.Context, addr string) ([]byte, error) {
 		return nil, trace.ConvertSystemError(err)
 	}
 
-	return resp.Bytes(), nil
-}
-
-// parseMetrics parses input from the provided reader and returns the metrics
-// for the 'nethealth_echo_timeout_total' counter.
-func parseMetrics(input io.Reader) ([]nethealthMetric, error) {
-	// requestTimeoutName defines the metric family name of the relevant nethealth counter
-	const requestTimeoutName = "nethealth_echo_timeout_total"
-
 	var parser expfmt.TextParser
-	metricsFamilies, err := parser.TextToMetricFamilies(input)
+	metricsFamilies, err := parser.TextToMetricFamilies(resp.Reader())
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
 
-	mf, ok := metricsFamilies[requestTimeoutName]
-	if !ok {
-		return nil, trace.NotFound("%s metrics not found", requestTimeoutName)
+	return metricsFamilies, nil
+}
+
+// parseMetrics parses input from the provided reader and returns the packet
+// loss percentage per peer.
+func parseMetrics(metricFamilies map[string]*dto.MetricFamily) (packetLossPercentages nethealthData, err error) {
+	// echoTimeoutLabel defines the metric family label for the echo timeout counter
+	const echoTimeoutLabel = "nethealth_echo_timeout_total"
+	// echoRequestLabel defines the metric family label for the cho request counter
+	const echoRequestLabel = "nethealth_echo_request_total"
+
+	echoTimeouts, err := parseCounter(metricFamilies, echoTimeoutLabel)
+	if err != nil {
+		return nil, trace.Wrap(err)
 	}
 
-	metrics := make([]nethealthMetric, 0, len(mf.GetMetric()))
+	echoRequests, err := parseCounter(metricFamilies, echoRequestLabel)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	if len(echoTimeouts) != len(echoRequests) {
+		return nil, trace.BadParameter("recieved %d timeout counters and %d request counters",
+			len(echoTimeouts), len(echoRequests))
+	}
+
+	for _, peer := range echoTimeouts.getPeers() {
+		totalTimeouts := echoTimeouts[peer]
+		totalRequests, ok := echoRequests[peer]
+		if !ok {
+			return nil, trace.NotFound("echo timeout data not available for %s", peer)
+		}
+		packetLossPercentages[peer] = totalTimeouts / totalRequests
+	}
+	return packetLossPercentages, nil
+}
+
+// parseCounter parses the provided metricFamilies and returns a map of counters
+// for the desired metrics specified by label.
+func parseCounter(metricFamilies map[string]*dto.MetricFamily, label string) (counters nethealthData, err error) {
+	mf, ok := metricFamilies[label]
+	if !ok {
+		return nil, trace.NotFound("%s metrics not found", label)
+	}
+
 	for _, m := range mf.GetMetric() {
 		peerName, err := getPeerName(m.GetLabel())
 		if err != nil {
 			return nil, trace.Wrap(err)
 		}
-
-		metrics = append(metrics, nethealthMetric{
-			peerName:     peerName,
-			totalTimeout: int64(m.GetCounter().GetValue()),
-		})
+		counters[peerName] = m.GetCounter().GetValue()
 	}
-	return metrics, nil
+	return counters, nil
 }
 
 // getPeerName extracts the 'peer_name' value from the provided labels.
@@ -307,11 +336,16 @@ func nethealthDetail(name string) string {
 	return fmt.Sprintf("overlay network communication failure with %s", name)
 }
 
-type nethealthMetric struct {
-	// peerName is the node name of the peer.
-	peerName string
-	// totalTimeout is the running total of requests to the peer that have timed out.
-	totalTimeout int64
+// nethealthData is used to map a peer to a counter or it's packet loss percentage.
+type nethealthData map[string]float64
+
+// getPeers returns the list of peers
+func (r nethealthData) getPeers() (peers []string) {
+	peers = make([]string, 0, len(r))
+	for peer := range r {
+		peers = append(peers, peer)
+	}
+	return peers
 }
 
 const (
@@ -321,19 +355,22 @@ const (
 	nethealthLabel     = "k8s-app"
 	nethealthValue     = "nethealth"
 
-	// defaultSeriesCapacity defines the default capacity of a time series
-	// interval.
-	defaultSeriesCapacity = 10
-
 	// defaultNethealthPort defines the default nethealth port.
 	defaultNethealthPort = 9801
 
-	// timeoutStatsCapacity sets the number of TTLMaps that can be stored.
-	// This will be the size of the cluster -1.
-	timeoutStatsCapacity = 1000
+	// defaultNetStatsInterval defines the default interval duration for the netStats.
+	defaultNetStatsInterval = 5 * time.Minute
 
-	// timeoutStatsTTLSeconds defines the time to live in seconds for the
-	// stored timeout stats. This ensures the checker does not hold on to
-	// unsed information when a member leaves the cluster.
-	timeoutStatsTTLSeconds = 60 * 60 * 24 // 1 day
+	// netStatsCapacity sets the number of TTLMaps that can be stored.
+	// This will be the size of the cluster -1.
+	netStatsCapacity = 1000
+
+	// netStatsTTLSeconds defines the time to live in seconds for the stored
+	// netStats. This ensure the checker does not hold on to unused data when
+	// a member leaves the cluster.
+	netStatsTTLSeconds = 60 * 60 * 24 // 1 day
+
+	// packetLossThreshold defines the packet loss percentage used to determine
+	// if overlay network communication with a peer is unhealthy.
+	packetLossThreshold = 0.20 // packet loss > 20% is unhealthy
 )
