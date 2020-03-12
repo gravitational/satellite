@@ -33,18 +33,18 @@ var _ = Suite(&NethealthSuite{})
 func (s *NethealthSuite) TestUpdateTimeoutStats(c *C) {
 	var testCases = []struct {
 		comment  CommentInterface
-		expected []int64
-		data     []int64
+		expected []float64
+		data     []float64
 	}{
 		{
 			comment:  Commentf("Expected all data points to be recorded."),
-			expected: []int64{0, 0, 0, 0, 0},
-			data:     []int64{0, 0, 0, 0, 0},
+			expected: []float64{0, 0, 0, 0, 0},
+			data:     []float64{0, 0, 0, 0, 0},
 		},
 		{
 			comment:  Commentf("Expected oldest data point to be removed"),
-			expected: []int64{0, 0, 0, 0, 0},
-			data:     []int64{1, 0, 0, 0, 0, 0},
+			expected: []float64{0, 0, 0, 0, 0},
+			data:     []float64{1, 0, 0, 0, 0, 0},
 		},
 	}
 
@@ -55,12 +55,10 @@ func (s *NethealthSuite) TestUpdateTimeoutStats(c *C) {
 		c.Assert(err, IsNil)
 
 		for _, count := range testCase.data {
-			updated, err := checker.updateStats(s.newMetricsWithCount(count))
-			c.Assert(err, IsNil, testCase.comment)
-			c.Assert(updated, test.DeepCompare, []string{testNode}, testCase.comment)
+			c.Assert(checker.updateStats(s.newMetricsWithCount(count)), IsNil, testCase.comment)
 		}
 
-		series, err := checker.getTimeoutSeries(testNode)
+		series, err := checker.getNetStats(testNode)
 		c.Assert(err, IsNil, testCase.comment)
 		c.Assert(series, test.DeepCompare, testCase.expected, testCase.comment)
 	}
@@ -69,30 +67,36 @@ func (s *NethealthSuite) TestUpdateTimeoutStats(c *C) {
 // TestNethealthChecker verifies nethealth checker can properly detect
 // healthy/unhealthy network.
 func (s *NethealthSuite) TestNethealthVerification(c *C) {
+
 	var testCases = []struct {
 		comment  CommentInterface
 		expected health.Reporter
-		data     []int64
+		data     []float64
 	}{
 		{
 			comment:  Commentf("Expected no failed probes. Not enough data points."),
 			expected: new(health.Probes),
-			data:     []int64{0, 1, 2},
+			data:     []float64{abovePLT, abovePLT, abovePLT},
 		},
 		{
 			comment:  Commentf("Expected no failed probes. No timeouts."),
 			expected: new(health.Probes),
-			data:     []int64{0, 0, 0, 0, 0},
+			data:     []float64{0, 0, 0, 0, 0},
 		},
 		{
-			comment:  Commentf("Expected no failed probes. Timeouts do not increase for a long enough duration"),
+			comment:  Commentf("Expected no failed probes. Data points do not exceed threshold."),
 			expected: new(health.Probes),
-			data:     []int64{0, 1, 2, 3, 3},
+			data:     []float64{plt, plt, plt, plt, plt},
+		},
+		{
+			comment:  Commentf("Expected no failed probes. Does not exceed threshold throughout entire interval."),
+			expected: new(health.Probes),
+			data:     []float64{abovePLT, abovePLT, abovePLT, abovePLT, plt},
 		},
 		{
 			comment:  Commentf("Expected failed probe. Timeouts increase at each interval."),
 			expected: &health.Probes{NewProbeFromErr(nethealthCheckerID, nethealthDetail(testNode), nil)},
-			data:     []int64{0, 1, 2, 3, 4},
+			data:     []float64{abovePLT, abovePLT, abovePLT, abovePLT, abovePLT},
 		},
 	}
 
@@ -102,7 +106,7 @@ func (s *NethealthSuite) TestNethealthVerification(c *C) {
 	for _, testCase := range testCases {
 		testCase := testCase
 
-		c.Assert(checker.setTimeoutSeries(testNode, testCase.data), IsNil, testCase.comment)
+		c.Assert(checker.setNetStats(testNode, testCase.data), IsNil, testCase.comment)
 
 		reporter, err := checker.verifyNethealth([]string{testNode})
 		c.Assert(err, IsNil, testCase.comment)
@@ -112,29 +116,22 @@ func (s *NethealthSuite) TestNethealthVerification(c *C) {
 
 // newNethealthChecker returns a new nethealth checker to be used for testing.
 func (s *NethealthSuite) newNethealthChecker() (*nethealthChecker, error) {
-	config := NethealthConfig{
-		SeriesCapacity: testCapacity,
-	}
-
 	return &nethealthChecker{
-		timeoutStats:    holster.NewTTLMap(testCapacity),
-		NethealthConfig: config,
+		netStats:       holster.NewTTLMap(netStatsCapacity),
+		seriesCapacity: testCapacity,
 	}, nil
 }
 
-// newMetricsWithCount creates new metrics with the provided count.
-func (s *NethealthSuite) newMetricsWithCount(count int64) []nethealthMetric {
-	return s.newMetrics(testNode, count)
+// newMetricsWithCount creates new metrics with the provided val.
+func (s *NethealthSuite) newMetricsWithCount(val float64) (packetLossPercentages nethealthData) {
+	return s.newMetrics(testNode, val)
 }
 
 // newMetrics creates new metrics with the provided values.
-func (s *NethealthSuite) newMetrics(peerName string, count int64) []nethealthMetric {
-	return []nethealthMetric{
-		nethealthMetric{
-			peerName:     peerName,
-			totalTimeout: count,
-		},
-	}
+func (s *NethealthSuite) newMetrics(peer string, val float64) (packetLossPercentages nethealthData) {
+	packetLossPercentages = make(nethealthData)
+	packetLossPercentages[peer] = val
+	return packetLossPercentages
 }
 
 const (
@@ -142,4 +139,8 @@ const (
 	testNode = "test-node"
 	// testCapacity specifies the time series capacity used for test cases.
 	testCapacity = 5
+	// plt is packetLossThreshold alias
+	plt = packetLossThreshold
+	// abovePLT is arbitrary percentage above the packetLossThreshold
+	abovePLT = packetLossThreshold + 0.01
 )

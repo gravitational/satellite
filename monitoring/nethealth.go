@@ -292,6 +292,7 @@ func parseMetrics(metricFamilies map[string]*dto.MetricFamily) (packetLossPercen
 			len(echoTimeouts), len(echoRequests))
 	}
 
+	packetLossPercentages = make(nethealthData)
 	for _, peer := range echoTimeouts.getPeers() {
 		totalTimeouts := echoTimeouts[peer]
 		totalRequests, ok := echoRequests[peer]
@@ -311,6 +312,7 @@ func parseCounter(metricFamilies map[string]*dto.MetricFamily, label string) (co
 		return nil, trace.NotFound("%s metrics not found", label)
 	}
 
+	counters = make(nethealthData)
 	for _, m := range mf.GetMetric() {
 		peerName, err := getPeerName(m.GetLabel())
 		if err != nil {
