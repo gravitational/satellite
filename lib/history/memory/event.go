@@ -187,11 +187,12 @@ type nodeAdded struct {
 
 func (r *nodeAdded) Insert(ctx context.Context, execer history.Execer) error {
 	const insertStmt = "timestamp,type,node"
-	e := r.GetNodeAdded()
-	if e == nil {
-		return trace.BadParameter("expected NodeAdded, got nil")
+	data, ok := r.GetData().(*pb.TimelineEvent_NodeAdded)
+	if !ok {
+		return trace.BadParameter("expected %T, got %T", data, r.GetData())
 	}
-	args := []interface{}{r.GetTimestamp().ToTime(), history.NodeAdded, e.GetNode()}
+	event := data.NodeAdded
+	args := []interface{}{r.GetTimestamp().ToTime(), history.NodeAdded, event.GetNode()}
 	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
 }
 
@@ -204,11 +205,12 @@ type nodeRemoved struct {
 
 func (r *nodeRemoved) Insert(ctx context.Context, execer history.Execer) error {
 	const insertStmt = "timestamp,type,node"
-	e := r.GetNodeRemoved()
-	if e == nil {
-		return trace.BadParameter("expected NodeRemoved, got nil")
+	data, ok := r.GetData().(*pb.TimelineEvent_NodeRemoved)
+	if !ok {
+		return trace.BadParameter("expected %T, got %T", data, r.GetData())
 	}
-	args := []interface{}{r.GetTimestamp().ToTime(), history.NodeRemoved, e.GetNode()}
+	event := data.NodeRemoved
+	args := []interface{}{r.GetTimestamp().ToTime(), history.NodeRemoved, event.GetNode()}
 	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
 }
 
@@ -221,11 +223,12 @@ type nodeDegraded struct {
 
 func (r *nodeDegraded) Insert(ctx context.Context, execer history.Execer) error {
 	const insertStmt = "timestamp,type,node"
-	e := r.GetNodeDegraded()
-	if e == nil {
-		return trace.BadParameter("expected NodeDegraded, got nil")
+	data, ok := r.GetData().(*pb.TimelineEvent_NodeDegraded)
+	if !ok {
+		return trace.BadParameter("expected %T, got %T", data, r.GetData())
 	}
-	args := []interface{}{r.GetTimestamp().ToTime(), history.NodeDegraded, e.GetNode()}
+	event := data.NodeDegraded
+	args := []interface{}{r.GetTimestamp().ToTime(), history.NodeDegraded, event.GetNode()}
 	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
 }
 
@@ -238,11 +241,12 @@ type nodeRecovered struct {
 
 func (r *nodeRecovered) Insert(ctx context.Context, execer history.Execer) error {
 	const insertStmt = "timestamp,type,node"
-	e := r.GetNodeRecovered()
-	if e == nil {
-		return trace.BadParameter("expected NodeRecovered, got nil")
+	data, ok := r.GetData().(*pb.TimelineEvent_NodeRecovered)
+	if !ok {
+		return trace.BadParameter("expected %T, got %T", data, r.GetData())
 	}
-	args := []interface{}{r.GetTimestamp().ToTime(), history.NodeRecovered, e.GetNode()}
+	event := data.NodeRecovered
+	args := []interface{}{r.GetTimestamp().ToTime(), history.NodeRecovered, event.GetNode()}
 	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
 }
 
@@ -255,11 +259,12 @@ type probeFailed struct {
 
 func (r *probeFailed) Insert(ctx context.Context, execer history.Execer) error {
 	const insertStmt = "timestamp,type,node,probe"
-	e := r.GetProbeFailed()
-	if e == nil {
-		return trace.BadParameter("expected ProbeFailed, got nil")
+	data, ok := r.GetData().(*pb.TimelineEvent_ProbeFailed)
+	if !ok {
+		return trace.BadParameter("expected %T, got %T", data, r.GetData())
 	}
-	args := []interface{}{r.GetTimestamp().ToTime(), history.ProbeFailed, e.GetNode(), e.GetProbe()}
+	event := data.ProbeFailed
+	args := []interface{}{r.GetTimestamp().ToTime(), history.ProbeFailed, event.GetNode(), event.GetProbe()}
 	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
 }
 
@@ -272,11 +277,12 @@ type probeSucceeded struct {
 
 func (r *probeSucceeded) Insert(ctx context.Context, execer history.Execer) error {
 	const insertStmt = "timestamp,type,node,probe"
-	e := r.GetProbeSucceeded()
-	if e == nil {
-		return trace.BadParameter("expected ProbeSucceeded, got nil")
+	data, ok := r.GetData().(*pb.TimelineEvent_ProbeSucceeded)
+	if !ok {
+		return trace.BadParameter("expected %T, got %T", data, r.GetData())
 	}
-	args := []interface{}{r.GetTimestamp().ToTime(), history.ProbeSucceeded, e.GetNode(), e.GetProbe()}
+	event := data.ProbeSucceeded
+	args := []interface{}{r.GetTimestamp().ToTime(), history.ProbeSucceeded, event.GetNode(), event.GetProbe()}
 	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
 }
 
@@ -289,10 +295,11 @@ type leaderElected struct {
 
 func (r *leaderElected) Insert(ctx context.Context, execer history.Execer) error {
 	const insertStmt = "timestamp,type,node"
-	e := r.GetLeaderElected()
-	if e == nil {
-		return trace.BadParameter("expected LeaderElected, got nil")
+	data, ok := r.GetData().(*pb.TimelineEvent_LeaderElected)
+	if !ok {
+		return trace.BadParameter("expected %T, got %T", data, r.GetData())
 	}
-	args := []interface{}{r.GetTimestamp().ToTime(), history.LeaderElected, e.GetNode()}
+	event := data.LeaderElected
+	args := []interface{}{r.GetTimestamp().ToTime(), history.LeaderElected, event.GetNode()}
 	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
 }
