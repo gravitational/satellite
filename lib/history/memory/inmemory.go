@@ -40,7 +40,7 @@ type Timeline struct {
 	clock clockwork.Clock
 	// capacity specifies the max number of events stored in the timeline.
 	capacity int
-	// lock access to events
+	// Mutex locks access to events
 	sync.Mutex
 	// events holds the latest status events.
 	events []memEvent

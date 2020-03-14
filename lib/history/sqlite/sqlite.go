@@ -185,6 +185,7 @@ func (t *Timeline) insertEvents(ctx context.Context, events []*pb.TimelineEvent)
 		// Unique constraint error indicates duplicate row.
 		// Just ignore duplicates and continue.
 		if isErrConstraintUnique(err) {
+			log.WithField("row", row).Debug("Attempting to insert duplicate row.")
 			continue
 		}
 		if err != nil {

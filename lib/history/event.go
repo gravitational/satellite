@@ -45,14 +45,24 @@ type EventType string
 
 // Defines event types
 const (
-	ClusterDegraded  EventType = "ClusterDegraded"
+	// ClusterDegraded indicates the overall cluster is in a degraded state.
+	ClusterDegraded EventType = "ClusterDegraded"
+	// ClusterRecovered indicates the overall cluster is in a healthy state.
 	ClusterRecovered EventType = "ClusterRecovered"
-	NodeAdded        EventType = "NodeAdded"
-	NodeRemoved      EventType = "NodeRemoved"
-	NodeRecovered    EventType = "NodeRecovered"
-	NodeDegraded     EventType = "NodeDegraded"
-	ProbeSucceeded   EventType = "ProbeSucceeded"
-	ProbeFailed      EventType = "ProbeFailed"
-	LeaderElected    EventType = "LeaderElected"
-	UnknownEvent     EventType = "Unknown"
+	// NodeAdded indicates a node was added to the cluster.
+	NodeAdded EventType = "NodeAdded"
+	// NodeRemoved indicates a node was removed from the cluster.
+	NodeRemoved EventType = "NodeRemoved"
+	// NodeDegraded indicates a node is in a degraded state.
+	NodeDegraded EventType = "NodeDegraded"
+	// NodeRecovered indicates a node is in a healthy state.
+	NodeRecovered EventType = "NodeRecovered"
+	// ProbeFailed indicates a checker has failed.
+	ProbeFailed EventType = "ProbeFailed"
+	// ProbeSucceeded indicates a checker has succeeded.
+	ProbeSucceeded EventType = "ProbeSucceeded"
+	// LeaderElected indicates a node was elected to leader.
+	LeaderElected EventType = "LeaderElected"
+	// UnknownEvent specifies an unknown event type.
+	UnknownEvent EventType = "Unknown"
 )
