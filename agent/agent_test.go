@@ -304,7 +304,7 @@ func (r *AgentSuite) TestRecordLocalTimeline(c *C) {
 	}{
 		{
 			comment:    Commentf("Expected master to record local events."),
-			expected:   []*pb.TimelineEvent{pb.NewNodeRecovered(r.clock.Now(), "master-1")},
+			expected:   []*pb.TimelineEvent{pb.NewNodeHealthy(r.clock.Now(), "master-1")},
 			membership: newMockClusterMembership(),
 			agentConfig: testAgentConfig{
 				node: "master-1",
@@ -313,7 +313,7 @@ func (r *AgentSuite) TestRecordLocalTimeline(c *C) {
 		},
 		{
 			comment:    Commentf("Expected non master to record local events."),
-			expected:   []*pb.TimelineEvent{pb.NewNodeRecovered(r.clock.Now(), "node-1")},
+			expected:   []*pb.TimelineEvent{pb.NewNodeHealthy(r.clock.Now(), "node-1")},
 			membership: newMockClusterMembership(),
 			agentConfig: testAgentConfig{
 				node: "node-1",
@@ -351,13 +351,13 @@ func (r *AgentSuite) TestRecordTimeline(c *C) {
 	}{
 		{
 			comment:    Commentf("Expected master-1 to record events to cluster timeline."),
-			expected:   []*pb.TimelineEvent{pb.NewNodeRecovered(r.clock.Now(), "master-1")},
+			expected:   []*pb.TimelineEvent{pb.NewNodeHealthy(r.clock.Now(), "master-1")},
 			membership: newMockClusterMembership(),
 			agentConfig: testAgentConfig{
 				node: "master-1",
 				role: RoleMaster,
 			},
-			events: []*pb.TimelineEvent{pb.NewNodeRecovered(r.clock.Now(), "master-1")},
+			events: []*pb.TimelineEvent{pb.NewNodeHealthy(r.clock.Now(), "master-1")},
 		},
 	}
 
@@ -442,7 +442,7 @@ func (r *AgentSuite) TestProvidesTimeline(c *C) {
 	}{
 		{
 			comment:    Commentf("Expected master to push local events to it's own cluster timeline."),
-			expected:   []*pb.TimelineEvent{pb.NewNodeRecovered(r.clock.Now(), "master-1")},
+			expected:   []*pb.TimelineEvent{pb.NewNodeHealthy(r.clock.Now(), "master-1")},
 			membership: newMockClusterMembership(),
 			masterConfigs: []testAgentConfig{
 				{
@@ -454,8 +454,8 @@ func (r *AgentSuite) TestProvidesTimeline(c *C) {
 		{
 			comment: Commentf("Expected node to push push it's local events to the master."),
 			expected: []*pb.TimelineEvent{
-				pb.NewNodeRecovered(r.clock.Now(), "master-1"),
-				pb.NewNodeRecovered(r.clock.Now(), "node-1"),
+				pb.NewNodeHealthy(r.clock.Now(), "master-1"),
+				pb.NewNodeHealthy(r.clock.Now(), "node-1"),
 			},
 			membership: newMockClusterMembership(),
 			masterConfigs: []testAgentConfig{
@@ -474,9 +474,9 @@ func (r *AgentSuite) TestProvidesTimeline(c *C) {
 		{
 			comment: Commentf("Expected master nodes to notify each other of local events."),
 			expected: []*pb.TimelineEvent{
-				pb.NewNodeRecovered(r.clock.Now(), "master-1"),
-				pb.NewNodeRecovered(r.clock.Now(), "master-2"),
-				pb.NewNodeRecovered(r.clock.Now(), "master-3"),
+				pb.NewNodeHealthy(r.clock.Now(), "master-1"),
+				pb.NewNodeHealthy(r.clock.Now(), "master-2"),
+				pb.NewNodeHealthy(r.clock.Now(), "master-3"),
 			},
 			membership: newMockClusterMembership(),
 			masterConfigs: []testAgentConfig{

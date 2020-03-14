@@ -30,12 +30,12 @@ func newTimelineEvent(timestamp time.Time) *TimelineEvent {
 	}
 }
 
-// NewClusterRecovered constructs a new ClusterRecovered event with the
-// provided data.
-func NewClusterRecovered(timestamp time.Time) *TimelineEvent {
+// NewClusterHealthy constructs a new ClusterHealthy event with the provided
+// data.
+func NewClusterHealthy(timestamp time.Time) *TimelineEvent {
 	event := newTimelineEvent(timestamp)
-	event.Data = &TimelineEvent_ClusterRecovered{
-		ClusterRecovered: &ClusterRecovered{},
+	event.Data = &TimelineEvent_ClusterHealthy{
+		ClusterHealthy: &ClusterHealthy{},
 	}
 	return event
 }
@@ -68,11 +68,11 @@ func NewNodeRemoved(timestamp time.Time, node string) *TimelineEvent {
 	return event
 }
 
-// NewNodeRecovered constructs a new NodeRecovered event with the provided data.
-func NewNodeRecovered(timestamp time.Time, node string) *TimelineEvent {
+// NewNodeHealthy constructs a new NodeHealthy event with the provided data.
+func NewNodeHealthy(timestamp time.Time, node string) *TimelineEvent {
 	event := newTimelineEvent(timestamp)
-	event.Data = &TimelineEvent_NodeRecovered{
-		NodeRecovered: &NodeRecovered{Node: node},
+	event.Data = &TimelineEvent_NodeHealthy{
+		NodeHealthy: &NodeHealthy{Node: node},
 	}
 	return event
 }

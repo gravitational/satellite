@@ -46,8 +46,8 @@ func (s *InMemorySuite) SetUpSuite(c *C) {
 // event.
 func (s *InMemorySuite) TestRecordEvents(c *C) {
 	timeline := s.newTimeline()
-	events := []*pb.TimelineEvent{pb.NewNodeRecovered(s.clock.Now(), node)}
-	expected := []*pb.TimelineEvent{pb.NewNodeRecovered(s.clock.Now(), node)}
+	events := []*pb.TimelineEvent{pb.NewNodeHealthy(s.clock.Now(), node)}
+	expected := []*pb.TimelineEvent{pb.NewNodeHealthy(s.clock.Now(), node)}
 	comment := Commentf("Expected the a node recovered event to be recorded.")
 
 	test.WithTimeout(func(ctx context.Context) {
@@ -65,7 +65,7 @@ func (s *InMemorySuite) TestFIFOEviction(c *C) {
 	// Necessary to easily test if events are evicted if max capacity is reached.
 	timeline := s.newLimitedTimeline(1)
 	events := []*pb.TimelineEvent{
-		pb.NewNodeRecovered(s.clock.Now().Add(-time.Second), node), // older event should be evicted first
+		pb.NewNodeHealthy(s.clock.Now().Add(-time.Second), node), // older event should be evicted first
 		pb.NewNodeDegraded(s.clock.Now(), node),
 	}
 	expected := []*pb.TimelineEvent{pb.NewNodeDegraded(s.clock.Now(), node)}

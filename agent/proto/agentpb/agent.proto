@@ -167,7 +167,7 @@ message TimelineEvent {
   
   // Data contains event specific data.
   oneof data {
-    ClusterRecovered clusterRecovered = 2;
+    ClusterHealthy clusterHealthy = 2;
     ClusterDegraded clusterDegraded = 3;
 
     ClusterUpgrade clusterUpgrade = 4;
@@ -175,7 +175,7 @@ message TimelineEvent {
     NodeAdded nodeAdded = 5;
     NodeRemoved nodeRemoved = 6;
     
-    NodeRecovered nodeRecovered = 7;
+    NodeHealthy nodeHealthy = 7;
     NodeDegraded nodeDegraded = 8;
     
     ProbeSucceeded probeSucceeded = 9;

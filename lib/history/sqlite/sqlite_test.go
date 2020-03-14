@@ -120,7 +120,7 @@ func (s *SQLiteSuite) TestReinitialization(c *C) {
 func (s *SQLiteSuite) TestEviction(c *C) {
 	comment := Commentf("Expected all events to be evicted.")
 	node := "test-node"
-	events := []*pb.TimelineEvent{pb.NewNodeRecovered(s.clock.Now(), node)}
+	events := []*pb.TimelineEvent{pb.NewNodeHealthy(s.clock.Now(), node)}
 	var expected []*pb.TimelineEvent
 
 	test.WithTimeout(func(ctx context.Context) {
@@ -146,25 +146,25 @@ func (s *SQLiteSuite) TestFilterEvents(c *C) {
 	}{
 		{
 			comment:  "Expected one matching event.",
-			events:   []*pb.TimelineEvent{pb.NewNodeRecovered(s.clock.Now(), "node-1")},
-			params:   map[string]string{"type": string(history.NodeRecovered), "node": "node-1"},
-			expected: []*pb.TimelineEvent{pb.NewNodeRecovered(s.clock.Now(), "node-1")},
+			events:   []*pb.TimelineEvent{pb.NewNodeHealthy(s.clock.Now(), "node-1")},
+			params:   map[string]string{"type": string(history.NodeHealthy), "node": "node-1"},
+			expected: []*pb.TimelineEvent{pb.NewNodeHealthy(s.clock.Now(), "node-1")},
 		},
 		{
 			comment:  "Expected no matching events.",
-			events:   []*pb.TimelineEvent{pb.NewNodeRecovered(s.clock.Now(), "node-1")},
+			events:   []*pb.TimelineEvent{pb.NewNodeHealthy(s.clock.Now(), "node-1")},
 			params:   map[string]string{"type": string(history.NodeDegraded), "node": "node-1"},
 			expected: nil,
 		},
 		{
 			comment: "Expected two matching events.",
 			events: []*pb.TimelineEvent{
-				pb.NewNodeRecovered(s.clock.Now(), "node-1"),
+				pb.NewNodeHealthy(s.clock.Now(), "node-1"),
 				pb.NewNodeDegraded(s.clock.Now().Add(time.Second), "node-1"),
 			},
 			params: map[string]string{"node": "node-1"},
 			expected: []*pb.TimelineEvent{
-				pb.NewNodeRecovered(s.clock.Now(), "node-1"),
+				pb.NewNodeHealthy(s.clock.Now(), "node-1"),
 				pb.NewNodeDegraded(s.clock.Now().Add(time.Second), "node-1"),
 			},
 		},
@@ -214,16 +214,16 @@ func (s *SQLiteSuite) TestIgnoreExpiredEvents(c *C) {
 	}{
 		{
 			comment:  "Expected expired event to be ignored.",
-			events:   []*pb.TimelineEvent{pb.NewNodeRecovered(expiredTimestamp, "node-1")},
+			events:   []*pb.TimelineEvent{pb.NewNodeHealthy(expiredTimestamp, "node-1")},
 			expected: nil,
 		},
 		{
 			comment: "Expected one event to be recoreded.",
 			events: []*pb.TimelineEvent{
-				pb.NewNodeRecovered(expiredTimestamp, "node-1"),
-				pb.NewNodeRecovered(s.clock.Now(), "node-2"),
+				pb.NewNodeHealthy(expiredTimestamp, "node-1"),
+				pb.NewNodeHealthy(s.clock.Now(), "node-2"),
 			},
-			expected: []*pb.TimelineEvent{pb.NewNodeRecovered(s.clock.Now(), "node-2")},
+			expected: []*pb.TimelineEvent{pb.NewNodeHealthy(s.clock.Now(), "node-2")},
 		},
 	}
 

@@ -51,16 +51,16 @@ func (r sqlEvent) ProtoBuf() (event *pb.TimelineEvent, err error) {
 	switch history.EventType(r.EventType) {
 	case history.ClusterDegraded:
 		return pb.NewClusterDegraded(r.Timestamp), nil
-	case history.ClusterRecovered:
-		return pb.NewClusterRecovered(r.Timestamp), nil
+	case history.ClusterHealthy:
+		return pb.NewClusterHealthy(r.Timestamp), nil
 	case history.NodeAdded:
 		return pb.NewNodeAdded(r.Timestamp, r.Node.String), nil
 	case history.NodeRemoved:
 		return pb.NewNodeRemoved(r.Timestamp, r.Node.String), nil
 	case history.NodeDegraded:
 		return pb.NewNodeDegraded(r.Timestamp, r.Node.String), nil
-	case history.NodeRecovered:
-		return pb.NewNodeRecovered(r.Timestamp, r.Node.String), nil
+	case history.NodeHealthy:
+		return pb.NewNodeHealthy(r.Timestamp, r.Node.String), nil
 	case history.ProbeFailed:
 		return pb.NewProbeFailed(r.Timestamp, r.Node.String, r.Probe.String), nil
 	case history.ProbeSucceeded:
@@ -93,14 +93,14 @@ func newDataInserter(event *pb.TimelineEvent) (row history.DataInserter, err err
 	switch t := event.GetData().(type) {
 	case *pb.TimelineEvent_ClusterDegraded:
 		return &clusterDegraded{TimelineEvent: event}, nil
-	case *pb.TimelineEvent_ClusterRecovered:
-		return &clusterRecovered{TimelineEvent: event}, nil
+	case *pb.TimelineEvent_ClusterHealthy:
+		return &clusterHealthy{TimelineEvent: event}, nil
 	case *pb.TimelineEvent_NodeAdded:
 		return &nodeAdded{TimelineEvent: event}, nil
 	case *pb.TimelineEvent_NodeRemoved:
 		return &nodeRemoved{TimelineEvent: event}, nil
-	case *pb.TimelineEvent_NodeRecovered:
-		return &nodeRecovered{TimelineEvent: event}, nil
+	case *pb.TimelineEvent_NodeHealthy:
+		return &nodeHealthy{TimelineEvent: event}, nil
 	case *pb.TimelineEvent_NodeDegraded:
 		return &nodeDegraded{TimelineEvent: event}, nil
 	case *pb.TimelineEvent_ProbeSucceeded:
@@ -127,16 +127,16 @@ func (r *clusterDegraded) Insert(ctx context.Context, execer history.Execer) err
 	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
 }
 
-// clusterRecovered represents a cluster recovered event.
+// clusterHealthy represents a cluster healthy event.
 //
 // Implements history.DataInserter.
-type clusterRecovered struct {
+type clusterHealthy struct {
 	*pb.TimelineEvent
 }
 
-func (r *clusterRecovered) Insert(ctx context.Context, execer history.Execer) error {
+func (r *clusterHealthy) Insert(ctx context.Context, execer history.Execer) error {
 	const insertStmt = "INSERT INTO events (timestamp, type) VALUES (?,?)"
-	args := []interface{}{r.GetTimestamp().ToTime(), history.ClusterRecovered}
+	args := []interface{}{r.GetTimestamp().ToTime(), history.ClusterHealthy}
 	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
 }
 
@@ -194,21 +194,21 @@ func (r *nodeDegraded) Insert(ctx context.Context, execer history.Execer) error 
 	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
 }
 
-// nodeRecovered represents a node recovered event.
+// nodeHealthy represents a node healthy event.
 //
 // Implements history.DataInserter.
-type nodeRecovered struct {
+type nodeHealthy struct {
 	*pb.TimelineEvent
 }
 
-func (r *nodeRecovered) Insert(ctx context.Context, execer history.Execer) error {
+func (r *nodeHealthy) Insert(ctx context.Context, execer history.Execer) error {
 	const insertStmt = "INSERT INTO events (timestamp, type, node) VALUES (?,?,?)"
-	data, ok := r.GetData().(*pb.TimelineEvent_NodeRecovered)
+	data, ok := r.GetData().(*pb.TimelineEvent_NodeHealthy)
 	if !ok {
 		return trace.BadParameter("expected %T, got %T", data, r.GetData())
 	}
-	event := data.NodeRecovered
-	args := []interface{}{r.GetTimestamp().ToTime(), history.NodeRecovered, event.GetNode()}
+	event := data.NodeHealthy
+	args := []interface{}{r.GetTimestamp().ToTime(), history.NodeHealthy, event.GetNode()}
 	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
 }
 

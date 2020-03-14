@@ -43,7 +43,7 @@ func (s *StatusSuite) TestClusterStatusDiff(c *C) {
 		{
 			oldCluster: &pb.SystemStatus{Status: pb.SystemStatus_Degraded},
 			newCluster: &pb.SystemStatus{Status: pb.SystemStatus_Running},
-			diff:       []*pb.TimelineEvent{pb.NewClusterRecovered(s.clock.Now())},
+			diff:       []*pb.TimelineEvent{pb.NewClusterHealthy(s.clock.Now())},
 			comment:    "Test cluster recovered",
 		},
 		{
@@ -102,7 +102,7 @@ func (s *StatusSuite) TestNodeStatusDiff(c *C) {
 		{
 			oldNode: &pb.NodeStatus{Name: "node-recovered", Status: pb.NodeStatus_Degraded},
 			newNode: &pb.NodeStatus{Name: "node-recovered", Status: pb.NodeStatus_Running},
-			diff:    []*pb.TimelineEvent{pb.NewNodeRecovered(s.clock.Now(), "node-recovered")},
+			diff:    []*pb.TimelineEvent{pb.NewNodeHealthy(s.clock.Now(), "node-recovered")},
 			comment: "Test node recovered",
 		},
 		{

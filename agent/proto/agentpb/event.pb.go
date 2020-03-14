@@ -21,25 +21,25 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-// ClusterRecovered represents a change in cluster state to a healthy state.
-type ClusterRecovered struct {
+// ClusterHealthy represents a change in cluster state to a healthy state.
+type ClusterHealthy struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *ClusterRecovered) Reset()         { *m = ClusterRecovered{} }
-func (m *ClusterRecovered) String() string { return proto.CompactTextString(m) }
-func (*ClusterRecovered) ProtoMessage()    {}
-func (*ClusterRecovered) Descriptor() ([]byte, []int) {
+func (m *ClusterHealthy) Reset()         { *m = ClusterHealthy{} }
+func (m *ClusterHealthy) String() string { return proto.CompactTextString(m) }
+func (*ClusterHealthy) ProtoMessage()    {}
+func (*ClusterHealthy) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2d17a9d3f0ddf27e, []int{0}
 }
-func (m *ClusterRecovered) XXX_Unmarshal(b []byte) error {
+func (m *ClusterHealthy) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *ClusterRecovered) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *ClusterHealthy) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_ClusterRecovered.Marshal(b, m, deterministic)
+		return xxx_messageInfo_ClusterHealthy.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalTo(b)
@@ -49,17 +49,17 @@ func (m *ClusterRecovered) XXX_Marshal(b []byte, deterministic bool) ([]byte, er
 		return b[:n], nil
 	}
 }
-func (m *ClusterRecovered) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ClusterRecovered.Merge(m, src)
+func (m *ClusterHealthy) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ClusterHealthy.Merge(m, src)
 }
-func (m *ClusterRecovered) XXX_Size() int {
+func (m *ClusterHealthy) XXX_Size() int {
 	return m.Size()
 }
-func (m *ClusterRecovered) XXX_DiscardUnknown() {
-	xxx_messageInfo_ClusterRecovered.DiscardUnknown(m)
+func (m *ClusterHealthy) XXX_DiscardUnknown() {
+	xxx_messageInfo_ClusterHealthy.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_ClusterRecovered proto.InternalMessageInfo
+var xxx_messageInfo_ClusterHealthy proto.InternalMessageInfo
 
 // ClusterDegraded represents a change in cluster state to a degraded state.
 type ClusterDegraded struct {
@@ -145,7 +145,7 @@ var xxx_messageInfo_ClusterUpgrade proto.InternalMessageInfo
 // NodeAdded represents a cluster resize event in which a node is added to the
 // cluster.
 type NodeAdded struct {
-	// Node specifies the node name.
+	// Node specifies the name of the node that was added to the cluster.
 	Node                 string   `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -195,7 +195,7 @@ func (m *NodeAdded) GetNode() string {
 // NodeRemoved represents a cluster resize event in which a node is removed from
 // the cluster.
 type NodeRemoved struct {
-	// Node specifies the node name.
+	// Node specifies the name of the node that was removed from the cluster.
 	Node                 string   `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -242,27 +242,27 @@ func (m *NodeRemoved) GetNode() string {
 	return ""
 }
 
-// NodeRecovered represents a change in node state to a healthy state.
-type NodeRecovered struct {
-	// Node specifies the node name.
+// NodeHealthy represents a change in node state to a healthy state.
+type NodeHealthy struct {
+	// Node specifies name of the node that became healthy.
 	Node                 string   `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *NodeRecovered) Reset()         { *m = NodeRecovered{} }
-func (m *NodeRecovered) String() string { return proto.CompactTextString(m) }
-func (*NodeRecovered) ProtoMessage()    {}
-func (*NodeRecovered) Descriptor() ([]byte, []int) {
+func (m *NodeHealthy) Reset()         { *m = NodeHealthy{} }
+func (m *NodeHealthy) String() string { return proto.CompactTextString(m) }
+func (*NodeHealthy) ProtoMessage()    {}
+func (*NodeHealthy) Descriptor() ([]byte, []int) {
 	return fileDescriptor_2d17a9d3f0ddf27e, []int{5}
 }
-func (m *NodeRecovered) XXX_Unmarshal(b []byte) error {
+func (m *NodeHealthy) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *NodeRecovered) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *NodeHealthy) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_NodeRecovered.Marshal(b, m, deterministic)
+		return xxx_messageInfo_NodeHealthy.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalTo(b)
@@ -272,19 +272,19 @@ func (m *NodeRecovered) XXX_Marshal(b []byte, deterministic bool) ([]byte, error
 		return b[:n], nil
 	}
 }
-func (m *NodeRecovered) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_NodeRecovered.Merge(m, src)
+func (m *NodeHealthy) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_NodeHealthy.Merge(m, src)
 }
-func (m *NodeRecovered) XXX_Size() int {
+func (m *NodeHealthy) XXX_Size() int {
 	return m.Size()
 }
-func (m *NodeRecovered) XXX_DiscardUnknown() {
-	xxx_messageInfo_NodeRecovered.DiscardUnknown(m)
+func (m *NodeHealthy) XXX_DiscardUnknown() {
+	xxx_messageInfo_NodeHealthy.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_NodeRecovered proto.InternalMessageInfo
+var xxx_messageInfo_NodeHealthy proto.InternalMessageInfo
 
-func (m *NodeRecovered) GetNode() string {
+func (m *NodeHealthy) GetNode() string {
 	if m != nil {
 		return m.Node
 	}
@@ -293,7 +293,7 @@ func (m *NodeRecovered) GetNode() string {
 
 // NodeDegraded represents a change in node state to a degraded state.
 type NodeDegraded struct {
-	// Node specifies the node name.
+	// Node specifies the name of the node that became degraded.
 	Node                 string   `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -342,9 +342,9 @@ func (m *NodeDegraded) GetNode() string {
 
 // ProbeSucceeded represents a probe result that changed from failure to succeessful.
 type ProbeSucceeded struct {
-	// Node specifies the node name.
+	// Node specifies the name of the node that passed the health check.
 	Node string `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
-	// Probe specifies the probe name.
+	// Probe specifies the name of the probe that succeeded.
 	Probe                string   `protobuf:"bytes,2,opt,name=probe,proto3" json:"probe,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -400,9 +400,9 @@ func (m *ProbeSucceeded) GetProbe() string {
 
 // ProbeFailed represents a probe result that changed from successful to failure.
 type ProbeFailed struct {
-	// Node specifies the node name.
+	// Node specifies the name of the node that failed the health check.
 	Node string `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
-	// Probe specifies the probe name.
+	// Probe specifies the name of the probe that failed.
 	Probe                string   `protobuf:"bytes,2,opt,name=probe,proto3" json:"probe,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -458,7 +458,7 @@ func (m *ProbeFailed) GetProbe() string {
 
 // LeaderElected represents a change in cluster leadership.
 type LeaderElected struct {
-	// Node specifies the node name.
+	// Node specifies the name of the node that's been elected as a new leader.
 	Node                 string   `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -506,12 +506,12 @@ func (m *LeaderElected) GetNode() string {
 }
 
 func init() {
-	proto.RegisterType((*ClusterRecovered)(nil), "agentpb.ClusterRecovered")
+	proto.RegisterType((*ClusterHealthy)(nil), "agentpb.ClusterHealthy")
 	proto.RegisterType((*ClusterDegraded)(nil), "agentpb.ClusterDegraded")
 	proto.RegisterType((*ClusterUpgrade)(nil), "agentpb.ClusterUpgrade")
 	proto.RegisterType((*NodeAdded)(nil), "agentpb.NodeAdded")
 	proto.RegisterType((*NodeRemoved)(nil), "agentpb.NodeRemoved")
-	proto.RegisterType((*NodeRecovered)(nil), "agentpb.NodeRecovered")
+	proto.RegisterType((*NodeHealthy)(nil), "agentpb.NodeHealthy")
 	proto.RegisterType((*NodeDegraded)(nil), "agentpb.NodeDegraded")
 	proto.RegisterType((*ProbeSucceeded)(nil), "agentpb.ProbeSucceeded")
 	proto.RegisterType((*ProbeFailed)(nil), "agentpb.ProbeFailed")
@@ -521,25 +521,24 @@ func init() {
 func init() { proto.RegisterFile("event.proto", fileDescriptor_2d17a9d3f0ddf27e) }
 
 var fileDescriptor_2d17a9d3f0ddf27e = []byte{
-	// 233 bytes of a gzipped FileDescriptorProto
+	// 223 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x4e, 0x2d, 0x4b, 0xcd,
 	0x2b, 0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x4f, 0x4c, 0x4f, 0xcd, 0x2b, 0x29, 0x48,
-	0x52, 0x12, 0xe2, 0x12, 0x70, 0xce, 0x29, 0x2d, 0x2e, 0x49, 0x2d, 0x0a, 0x4a, 0x4d, 0xce, 0x2f,
-	0x4b, 0x2d, 0x4a, 0x4d, 0x51, 0x12, 0xe4, 0xe2, 0x87, 0x8a, 0xb9, 0xa4, 0xa6, 0x17, 0x25, 0xa6,
-	0xa4, 0xa6, 0x28, 0x09, 0x70, 0xf1, 0x41, 0x85, 0x42, 0x0b, 0xc0, 0x42, 0x4a, 0xf2, 0x5c, 0x9c,
-	0x7e, 0xf9, 0x29, 0xa9, 0x8e, 0x29, 0x29, 0xa9, 0x29, 0x42, 0x42, 0x5c, 0x2c, 0x79, 0xf9, 0x29,
-	0xa9, 0x12, 0x8c, 0x0a, 0x8c, 0x1a, 0x9c, 0x41, 0x60, 0xb6, 0x92, 0x22, 0x17, 0x37, 0x48, 0x41,
-	0x50, 0x6a, 0x6e, 0x7e, 0x19, 0x0e, 0x25, 0xca, 0x5c, 0xbc, 0x10, 0x25, 0x50, 0x9b, 0xb1, 0x2a,
-	0x52, 0xe2, 0xe2, 0x01, 0x29, 0x82, 0x39, 0x05, 0xab, 0x1a, 0x2b, 0x2e, 0xbe, 0x80, 0xa2, 0xfc,
-	0xa4, 0xd4, 0xe0, 0xd2, 0xe4, 0xe4, 0xd4, 0x54, 0x1c, 0xaa, 0x84, 0x44, 0xb8, 0x58, 0x0b, 0x40,
-	0xaa, 0x24, 0x98, 0xc0, 0x82, 0x10, 0x8e, 0x92, 0x39, 0x17, 0x37, 0x58, 0xaf, 0x5b, 0x62, 0x66,
-	0x0e, 0x49, 0x1a, 0x95, 0xb9, 0x78, 0x7d, 0x52, 0x13, 0x53, 0x52, 0x8b, 0x5c, 0x73, 0x52, 0x93,
-	0x4b, 0xb0, 0x6b, 0x75, 0x12, 0x38, 0xf1, 0x48, 0x8e, 0xf1, 0xc2, 0x23, 0x39, 0xc6, 0x07, 0x8f,
-	0xe4, 0x18, 0x67, 0x3c, 0x96, 0x63, 0x48, 0x62, 0x03, 0xc7, 0x80, 0x31, 0x20, 0x00, 0x00, 0xff,
-	0xff, 0xd2, 0xa4, 0xc9, 0xbf, 0x90, 0x01, 0x00, 0x00,
+	0x52, 0x12, 0xe0, 0xe2, 0x73, 0xce, 0x29, 0x2d, 0x2e, 0x49, 0x2d, 0xf2, 0x48, 0x4d, 0xcc, 0x29,
+	0xc9, 0xa8, 0x54, 0x12, 0xe4, 0xe2, 0x87, 0x8a, 0xb8, 0xa4, 0xa6, 0x17, 0x25, 0xa6, 0xa4, 0xa6,
+	0x20, 0x29, 0x0a, 0x2d, 0x00, 0x0b, 0x29, 0xc9, 0x73, 0x71, 0xfa, 0xe5, 0xa7, 0xa4, 0x3a, 0xa6,
+	0xa4, 0xa4, 0xa6, 0x08, 0x09, 0x71, 0xb1, 0xe4, 0xe5, 0xa7, 0xa4, 0x4a, 0x30, 0x2a, 0x30, 0x6a,
+	0x70, 0x06, 0x81, 0xd9, 0x4a, 0x8a, 0x5c, 0xdc, 0x20, 0x05, 0x41, 0xa9, 0xb9, 0xf9, 0x65, 0xf8,
+	0x95, 0x40, 0xed, 0xc5, 0xaa, 0x44, 0x89, 0x8b, 0x07, 0xa4, 0x04, 0xe6, 0x10, 0xac, 0x6a, 0xac,
+	0xb8, 0xf8, 0x02, 0x8a, 0xf2, 0x93, 0x52, 0x83, 0x4b, 0x93, 0x93, 0x53, 0x53, 0x71, 0xa8, 0x12,
+	0x12, 0xe1, 0x62, 0x2d, 0x00, 0xa9, 0x92, 0x60, 0x02, 0x0b, 0x42, 0x38, 0x4a, 0xe6, 0x5c, 0xdc,
+	0x60, 0xbd, 0x6e, 0x89, 0x99, 0x39, 0x24, 0x69, 0x54, 0xe6, 0xe2, 0xf5, 0x49, 0x4d, 0x4c, 0x49,
+	0x2d, 0x72, 0xcd, 0x49, 0x4d, 0x2e, 0xc1, 0xae, 0xd5, 0x49, 0xe0, 0xc4, 0x23, 0x39, 0xc6, 0x0b,
+	0x8f, 0xe4, 0x18, 0x1f, 0x3c, 0x92, 0x63, 0x9c, 0xf1, 0x58, 0x8e, 0x21, 0x89, 0x0d, 0x1c, 0xfa,
+	0xc6, 0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0x45, 0x63, 0x10, 0xfc, 0x8c, 0x01, 0x00, 0x00,
 }
 
-func (m *ClusterRecovered) Marshal() (dAtA []byte, err error) {
+func (m *ClusterHealthy) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalTo(dAtA)
@@ -549,7 +548,7 @@ func (m *ClusterRecovered) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ClusterRecovered) MarshalTo(dAtA []byte) (int, error) {
+func (m *ClusterHealthy) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
@@ -656,7 +655,7 @@ func (m *NodeRemoved) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
-func (m *NodeRecovered) Marshal() (dAtA []byte, err error) {
+func (m *NodeHealthy) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalTo(dAtA)
@@ -666,7 +665,7 @@ func (m *NodeRecovered) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *NodeRecovered) MarshalTo(dAtA []byte) (int, error) {
+func (m *NodeHealthy) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
@@ -812,7 +811,7 @@ func encodeVarintEvent(dAtA []byte, offset int, v uint64) int {
 	dAtA[offset] = uint8(v)
 	return offset + 1
 }
-func (m *ClusterRecovered) Size() (n int) {
+func (m *ClusterHealthy) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -880,7 +879,7 @@ func (m *NodeRemoved) Size() (n int) {
 	return n
 }
 
-func (m *NodeRecovered) Size() (n int) {
+func (m *NodeHealthy) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -981,7 +980,7 @@ func sovEvent(x uint64) (n int) {
 func sozEvent(x uint64) (n int) {
 	return sovEvent(uint64((x << 1) ^ uint64((int64(x) >> 63))))
 }
-func (m *ClusterRecovered) Unmarshal(dAtA []byte) error {
+func (m *ClusterHealthy) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -1004,10 +1003,10 @@ func (m *ClusterRecovered) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ClusterRecovered: wiretype end group for non-group")
+			return fmt.Errorf("proto: ClusterHealthy: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ClusterRecovered: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: ClusterHealthy: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		default:
@@ -1315,7 +1314,7 @@ func (m *NodeRemoved) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *NodeRecovered) Unmarshal(dAtA []byte) error {
+func (m *NodeHealthy) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -1338,10 +1337,10 @@ func (m *NodeRecovered) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: NodeRecovered: wiretype end group for non-group")
+			return fmt.Errorf("proto: NodeHealthy: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: NodeRecovered: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: NodeHealthy: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:

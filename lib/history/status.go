@@ -60,7 +60,7 @@ func DiffCluster(clock clockwork.Clock, old, new *pb.SystemStatus) (events []*pb
 	}
 
 	if new.GetStatus() == pb.SystemStatus_Running {
-		events = append(events, pb.NewClusterRecovered(clock.Now()))
+		events = append(events, pb.NewClusterHealthy(clock.Now()))
 		return events
 	}
 
@@ -96,7 +96,7 @@ func DiffNode(clock clockwork.Clock, old, new *pb.NodeStatus) (events []*pb.Time
 	}
 
 	if new.GetStatus() == pb.NodeStatus_Running {
-		return append(events, pb.NewNodeRecovered(clock.Now(), new.GetName()))
+		return append(events, pb.NewNodeHealthy(clock.Now(), new.GetName()))
 	}
 
 	return append(events, pb.NewNodeDegraded(clock.Now(), new.GetName()))
