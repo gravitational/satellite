@@ -29,6 +29,8 @@ import (
 )
 
 // sqlEvent defines an sql event row.
+//
+// Implements history.ProtoBuffer
 type sqlEvent struct {
 	// ID specifies sqlite id.
 	ID int `db:"id"`
@@ -73,6 +75,8 @@ func (r sqlEvent) ProtoBuf() (event *pb.TimelineEvent, err error) {
 }
 
 // sqlExecer executes sql statements.
+//
+// Implements history.Execer
 type sqlExecer struct {
 	db *sqlx.DB
 }
@@ -88,29 +92,29 @@ func (r *sqlExecer) Exec(ctx context.Context, stmt string, args ...interface{}) 
 	return trace.Wrap(err)
 }
 
-// newDataInserter constructs a new DataInserter from the provided event.
+// newDataInserter returns the event as a history.DataInserter.
 func newDataInserter(event *pb.TimelineEvent) (row history.DataInserter, err error) {
-	switch t := event.GetData().(type) {
+	switch data := event.GetData().(type) {
 	case *pb.TimelineEvent_ClusterDegraded:
-		return &clusterDegraded{TimelineEvent: event}, nil
+		return &clusterDegraded{ts: event.GetTimestamp()}, nil
 	case *pb.TimelineEvent_ClusterHealthy:
-		return &clusterHealthy{TimelineEvent: event}, nil
+		return &clusterHealthy{ts: event.GetTimestamp()}, nil
 	case *pb.TimelineEvent_NodeAdded:
-		return &nodeAdded{TimelineEvent: event}, nil
+		return &nodeAdded{ts: event.GetTimestamp(), data: data.NodeAdded}, nil
 	case *pb.TimelineEvent_NodeRemoved:
-		return &nodeRemoved{TimelineEvent: event}, nil
+		return &nodeRemoved{ts: event.GetTimestamp(), data: data.NodeRemoved}, nil
 	case *pb.TimelineEvent_NodeHealthy:
-		return &nodeHealthy{TimelineEvent: event}, nil
+		return &nodeHealthy{ts: event.GetTimestamp(), data: data.NodeHealthy}, nil
 	case *pb.TimelineEvent_NodeDegraded:
-		return &nodeDegraded{TimelineEvent: event}, nil
+		return &nodeDegraded{ts: event.GetTimestamp(), data: data.NodeDegraded}, nil
 	case *pb.TimelineEvent_ProbeSucceeded:
-		return &probeSucceeded{TimelineEvent: event}, nil
+		return &probeSucceeded{ts: event.GetTimestamp(), data: data.ProbeSucceeded}, nil
 	case *pb.TimelineEvent_ProbeFailed:
-		return &probeFailed{TimelineEvent: event}, nil
+		return &probeFailed{ts: event.GetTimestamp(), data: data.ProbeFailed}, nil
 	case *pb.TimelineEvent_LeaderElected:
-		return &leaderElected{TimelineEvent: event}, nil
+		return &leaderElected{ts: event.GetTimestamp(), data: data.LeaderElected}, nil
 	default:
-		return row, trace.BadParameter("unknown event type %T", t)
+		return row, trace.BadParameter("unknown event type %T", data)
 	}
 }
 
@@ -118,150 +122,115 @@ func newDataInserter(event *pb.TimelineEvent) (row history.DataInserter, err err
 //
 // Implements history.DataInserter.
 type clusterDegraded struct {
-	*pb.TimelineEvent
+	ts *pb.Timestamp
 }
 
 func (r *clusterDegraded) Insert(ctx context.Context, execer history.Execer) error {
 	const insertStmt = "INSERT INTO events (timestamp, type) VALUES (?,?)"
-	args := []interface{}{r.GetTimestamp().ToTime(), history.ClusterDegraded}
-	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
+	return trace.Wrap(execer.Exec(ctx, insertStmt, r.ts.ToTime(), history.ClusterDegraded))
 }
 
 // clusterHealthy represents a cluster healthy event.
 //
 // Implements history.DataInserter.
 type clusterHealthy struct {
-	*pb.TimelineEvent
+	ts *pb.Timestamp
 }
 
 func (r *clusterHealthy) Insert(ctx context.Context, execer history.Execer) error {
 	const insertStmt = "INSERT INTO events (timestamp, type) VALUES (?,?)"
-	args := []interface{}{r.GetTimestamp().ToTime(), history.ClusterHealthy}
-	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
+	return trace.Wrap(execer.Exec(ctx, insertStmt, r.ts.ToTime(), history.ClusterHealthy))
 }
 
 // nodeAdded represents a node added event.
 //
 // Implements history.DataInserter.
 type nodeAdded struct {
-	*pb.TimelineEvent
+	ts   *pb.Timestamp
+	data *pb.NodeAdded
 }
 
 func (r *nodeAdded) Insert(ctx context.Context, execer history.Execer) error {
 	const insertStmt = "INSERT INTO events (timestamp, type, node) VALUES (?,?,?)"
-	data, ok := r.GetData().(*pb.TimelineEvent_NodeAdded)
-	if !ok {
-		return trace.BadParameter("expected %T, got %T", data, r.GetData())
-	}
-	event := data.NodeAdded
-	args := []interface{}{r.GetTimestamp().ToTime(), history.NodeAdded, event.GetNode()}
-	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
+	return trace.Wrap(execer.Exec(ctx, insertStmt, r.ts.ToTime(), history.NodeAdded, r.data.GetNode()))
 }
 
 // nodeRemoved represents a node removed event.
 //
 // Implements history.DataInserter.
 type nodeRemoved struct {
-	*pb.TimelineEvent
+	ts   *pb.Timestamp
+	data *pb.NodeRemoved
 }
 
 func (r *nodeRemoved) Insert(ctx context.Context, execer history.Execer) error {
 	const insertStmt = "INSERT INTO events (timestamp, type, node) VALUES (?,?,?)"
-	data, ok := r.GetData().(*pb.TimelineEvent_NodeRemoved)
-	if !ok {
-		return trace.BadParameter("expected %T, got %T", data, r.GetData())
-	}
-	event := data.NodeRemoved
-	args := []interface{}{r.GetTimestamp().ToTime(), history.NodeRemoved, event.GetNode()}
-	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
+	return trace.Wrap(execer.Exec(ctx, insertStmt, r.ts.ToTime(), history.NodeRemoved, r.data.GetNode()))
 }
 
 // nodeDegraded represents a node degraded event.
 //
 // Implements history.DataInserter.
 type nodeDegraded struct {
-	*pb.TimelineEvent
+	ts   *pb.Timestamp
+	data *pb.NodeDegraded
 }
 
 func (r *nodeDegraded) Insert(ctx context.Context, execer history.Execer) error {
 	const insertStmt = "INSERT INTO events (timestamp, type, node) VALUES (?,?,?)"
-	data, ok := r.GetData().(*pb.TimelineEvent_NodeDegraded)
-	if !ok {
-		return trace.BadParameter("expected %T, got %T", data, r.GetData())
-	}
-	event := data.NodeDegraded
-	args := []interface{}{r.GetTimestamp().ToTime(), history.NodeDegraded, event.GetNode()}
-	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
+	return trace.Wrap(execer.Exec(ctx, insertStmt, r.ts.ToTime(), history.NodeDegraded, r.data.GetNode()))
 }
 
 // nodeHealthy represents a node healthy event.
 //
 // Implements history.DataInserter.
 type nodeHealthy struct {
-	*pb.TimelineEvent
+	ts   *pb.Timestamp
+	data *pb.NodeHealthy
 }
 
 func (r *nodeHealthy) Insert(ctx context.Context, execer history.Execer) error {
 	const insertStmt = "INSERT INTO events (timestamp, type, node) VALUES (?,?,?)"
-	data, ok := r.GetData().(*pb.TimelineEvent_NodeHealthy)
-	if !ok {
-		return trace.BadParameter("expected %T, got %T", data, r.GetData())
-	}
-	event := data.NodeHealthy
-	args := []interface{}{r.GetTimestamp().ToTime(), history.NodeHealthy, event.GetNode()}
-	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
+	return trace.Wrap(execer.Exec(ctx, insertStmt, r.ts.ToTime(), history.NodeHealthy, r.data.GetNode()))
 }
 
 // probeFailed represents a probe failed event.
 //
 // Implements history.DataInserter.
 type probeFailed struct {
-	*pb.TimelineEvent
+	ts   *pb.Timestamp
+	data *pb.ProbeFailed
 }
 
 func (r *probeFailed) Insert(ctx context.Context, execer history.Execer) error {
 	const insertStmt = "INSERT INTO events (timestamp, type, node, probe) VALUES (?,?,?,?)"
-	data, ok := r.GetData().(*pb.TimelineEvent_ProbeFailed)
-	if !ok {
-		return trace.BadParameter("expected %T, got %T", data, r.GetData())
-	}
-	event := data.ProbeFailed
-	args := []interface{}{r.GetTimestamp().ToTime(), history.ProbeFailed, event.GetNode(), event.GetProbe()}
-	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
+	return trace.Wrap(execer.Exec(ctx, insertStmt,
+		r.ts.ToTime(), history.ProbeFailed, r.data.GetNode(), r.data.GetProbe()))
 }
 
 // probeSucceeded represents a probe succeeded event.
 //
 // Implements history.DataInserter.
 type probeSucceeded struct {
-	*pb.TimelineEvent
+	ts   *pb.Timestamp
+	data *pb.ProbeSucceeded
 }
 
 func (r *probeSucceeded) Insert(ctx context.Context, execer history.Execer) error {
 	const insertStmt = "INSERT INTO events (timestamp, type, node, probe) VALUES (?,?,?,?)"
-	data, ok := r.GetData().(*pb.TimelineEvent_ProbeSucceeded)
-	if !ok {
-		return trace.BadParameter("expected %T, got %T", data, r.GetData())
-	}
-	event := data.ProbeSucceeded
-	args := []interface{}{r.GetTimestamp().ToTime(), history.ProbeSucceeded, event.GetNode(), event.GetProbe()}
-	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
+	return trace.Wrap(execer.Exec(ctx, insertStmt,
+		r.ts.ToTime(), history.ProbeSucceeded, r.data.GetNode(), r.data.GetProbe()))
 }
 
 // leaderElected represents a leader elected event.
 //
 // Implements history.DataInserter.
 type leaderElected struct {
-	*pb.TimelineEvent
+	ts   *pb.Timestamp
+	data *pb.LeaderElected
 }
 
 func (r *leaderElected) Insert(ctx context.Context, execer history.Execer) error {
 	const insertStmt = "INSERT INTO events (timestamp, type, node) VALUES (?,?,?)"
-	data, ok := r.GetData().(*pb.TimelineEvent_LeaderElected)
-	if !ok {
-		return trace.BadParameter("expected %T, got %T", data, r.GetData())
-	}
-	event := data.LeaderElected
-	args := []interface{}{r.GetTimestamp().ToTime(), history.LeaderElected, event.GetNode()}
-	return trace.Wrap(execer.Exec(ctx, insertStmt, args...))
+	return trace.Wrap(execer.Exec(ctx, insertStmt, r.ts.ToTime(), history.LeaderElected, r.data.GetNode()))
 }
