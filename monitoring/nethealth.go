@@ -33,7 +33,6 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	log "github.com/sirupsen/logrus"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -107,57 +106,54 @@ func (c *nethealthChecker) Name() string {
 // Check verifies the network is healthy.
 // Implements health.Checker
 func (c *nethealthChecker) Check(ctx context.Context, reporter health.Reporter) {
-	probes, err := c.check(ctx)
+	err := c.check(ctx, reporter)
 	if err != nil {
-		log.WithError(err).Error("Unable to verify nethealth.")
-	}
-
-	if probes.NumProbes() != 0 {
-		health.AddFrom(reporter, probes)
+		reporter.Add(NewProbeFromErr(c.Name(), "failed to verify nethealth", err))
 		return
 	}
 	reporter.Add(NewSuccessProbe(c.Name()))
 }
 
-func (c *nethealthChecker) check(ctx context.Context) (health.Reporter, error) {
-	reporter := new(health.Probes)
-	pods, err := c.Client.CoreV1().Pods(nethealthNamespace).List(metav1.ListOptions{})
-	if err != nil {
-		reporter.Add(NewProbeFromErr(c.Name(), "failed to retrieve k8s pods", err))
-		return reporter, trace.Wrap(err)
+func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) error {
+	addr, err := c.getNethealthAddr()
+	if trace.IsNotFound(err) {
+		log.Debug("Nethealth pod was not found.")
+		return nil // pod was not found, log and treat gracefully
 	}
-
-	addr, err := c.getNethealthAddr(pods)
 	if err != nil {
-		return reporter, trace.Wrap(err, "failed to get local nethealth address")
+		return trace.Wrap(err) // received unexpected error, maybe network-related, will add error probe above
 	}
 
 	metricFamilies, err := fetchMetrics(ctx, addr)
 	if err != nil {
-		reporter.Add(NewProbeFromErr(c.Name(), "unable to nethealth metrics", err))
-		return reporter, trace.Wrap(err, "failed to fetch metrics from %s", addr)
+		return trace.Wrap(err, "failed to fetch nethealth metrics")
 	}
 
 	echoRequests, err := parseCounter(metricFamilies, echoRequestLabel)
 	if err != nil {
-		return reporter, trace.Wrap(err, "failed to parse echo requests")
+		return trace.Wrap(err, "failed to parse echo requests")
 	}
 
 	echoTimeouts, err := parseCounter(metricFamilies, echoTimeoutLabel)
 	if err != nil {
-		return reporter, trace.Wrap(err, "failed to parse echo timeouts")
+		return trace.Wrap(err, "failed to parse echo timeouts")
 	}
 
 	updated, err := c.updateStats(echoRequests, echoTimeouts)
 	if err != nil {
-		return reporter, trace.Wrap(err, "failed to update nethealth stats")
+		return trace.Wrap(err, "failed to update nethealth stats")
 	}
 
-	return c.verifyNethealth(updated)
+	return c.verifyNethealth(updated, reporter)
 }
 
 // getNethealthAddr returns the address of the local nethealth pod.
-func (c *nethealthChecker) getNethealthAddr(pods *v1.PodList) (string, error) {
+func (c *nethealthChecker) getNethealthAddr() (addr string, err error) {
+	pods, err := c.Client.CoreV1().Pods(nethealthNamespace).List(metav1.ListOptions{})
+	if err != nil {
+		return addr, rigging.ConvertError(err) // this will convert error to a proper trace error, e.g. trace.NotFound
+	}
+
 	// Find nethealth pod with matching host ip address.
 	for _, pod := range pods.Items {
 		if pod.GetLabels()[nethealthLabel] != nethealthValue {
@@ -167,7 +163,7 @@ func (c *nethealthChecker) getNethealthAddr(pods *v1.PodList) (string, error) {
 			return fmt.Sprintf("http://%s:%d", pod.Status.PodIP, c.NethealthPort), nil
 		}
 	}
-	return "", trace.NotFound("unable to find local nethealth pod")
+	return addr, trace.NotFound("unable to find local nethealth pod")
 }
 
 // fetchMetrics collects the network metrics from the nethealth pod.
@@ -253,18 +249,17 @@ func (c *nethealthChecker) updateStats(echoRequests, echoTimeouts map[string]flo
 // verifyNethealth verifies that the overlay network communication is healthy
 // for the nodes specified by the provided list of peers. Failed probes will be
 // reported for unhealthy peers.
-func (c *nethealthChecker) verifyNethealth(peers []string) (health.Reporter, error) {
-	reporter := new(health.Probes)
+func (c *nethealthChecker) verifyNethealth(peers []string, reporter health.Reporter) error {
 	for _, peer := range peers {
 		healthy, err := c.isHealthy(peer)
 		if err != nil {
-			return reporter, trace.Wrap(err)
+			return trace.Wrap(err)
 		}
 		if !healthy {
 			reporter.Add(NewProbeFromErr(c.Name(), nethealthDetail(peer), nil))
 		}
 	}
-	return reporter, nil
+	return nil
 }
 
 // isHealthy returns true if the overlay network is healthy for the specified
