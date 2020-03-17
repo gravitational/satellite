@@ -56,14 +56,14 @@ func (c *NethealthConfig) CheckAndSetDefaults() error {
 	if c.AdvertiseIP == "" {
 		errors = append(errors, trace.BadParameter("host advertise ip must be provided"))
 	}
+	if c.KubeConfig == nil {
+		errors = append(errors, trace.BadParameter("kubernetes access config must be provided"))
+	}
 	if c.NethealthPort == 0 {
 		c.NethealthPort = defaultNethealthPort
 	}
 	if c.NetStatsInterval == time.Duration(0) {
 		c.NetStatsInterval = defaultNetStatsInterval
-	}
-	if c.KubeConfig == nil {
-		errors = append(errors, trace.BadParameter("kubernetes access config must be provided"))
 	}
 	return trace.NewAggregate(errors...)
 }
@@ -75,7 +75,7 @@ type nethealthChecker struct {
 	NethealthConfig
 	// seriesCapacity specifies the number of data points to store in a series.
 	seriesCapacity int
-	// lock access to timeoutStats
+	// Mutex locks access to peerStats
 	sync.Mutex
 	// peerStats maps a peer to its recorded nethealth stats.
 	peerStats netStats
@@ -132,18 +132,18 @@ func (c *nethealthChecker) check(ctx context.Context) (health.Reporter, error) {
 		return reporter, trace.Wrap(err, "failed to get local nethealth address")
 	}
 
-	mf, err := fetchMetrics(ctx, addr)
+	metricFamilies, err := fetchMetrics(ctx, addr)
 	if err != nil {
 		reporter.Add(NewProbeFromErr(c.Name(), "unable to nethealth metrics", err))
 		return reporter, trace.Wrap(err, "failed to fetch metrics from %s", addr)
 	}
 
-	echoRequests, err := parseCounter(mf, echoRequestLabel)
+	echoRequests, err := parseCounter(metricFamilies, echoRequestLabel)
 	if err != nil {
 		return reporter, trace.Wrap(err, "failed to parse echo requests")
 	}
 
-	echoTimeouts, err := parseCounter(mf, echoTimeoutLabel)
+	echoTimeouts, err := parseCounter(metricFamilies, echoTimeoutLabel)
 	if err != nil {
 		return reporter, trace.Wrap(err, "failed to parse echo timeouts")
 	}
@@ -179,7 +179,7 @@ func fetchMetrics(ctx context.Context, addr string) (metricFamilies map[string]*
 
 	resp, err := client.Get(ctx, client.Endpoint("metrics"), url.Values{})
 	if err != nil {
-		return nil, trace.ConvertSystemError(err)
+		return nil, trace.Wrap(err)
 	}
 
 	var parser expfmt.TextParser
@@ -227,8 +227,8 @@ func (c *nethealthChecker) updateStats(echoRequests, echoTimeouts map[string]flo
 		// It should not be possible for the timeout counter to have increased
 		// more than the request counter. Log and ignore this situation.
 		if timeoutInc > requestInc {
-			log.WithField("request inc", requestInc).
-				WithField("timeout inc", timeoutInc).
+			log.WithField("request-inc", requestInc).
+				WithField("timeout-inc", timeoutInc).
 				Warn("Timeout counter increased more than request counter.")
 			continue
 		}
@@ -294,13 +294,13 @@ func (c *nethealthChecker) isHealthy(peer string) (healthy bool, err error) {
 // parseCounter parses the provided metricFamilies and returns a map of counters
 // for the desired metrics specified by label.
 func parseCounter(metricFamilies map[string]*dto.MetricFamily, label string) (counters map[string]float64, err error) {
-	mf, ok := metricFamilies[label]
+	metricFamily, ok := metricFamilies[label]
 	if !ok {
 		return nil, trace.NotFound("%s metrics not found", label)
 	}
 
 	counters = make(map[string]float64)
-	for _, m := range mf.GetMetric() {
+	for _, m := range metricFamily.GetMetric() {
 		peerName, err := getPeerName(m.GetLabel())
 		if err != nil {
 			return nil, trace.Wrap(err)
@@ -317,7 +317,7 @@ func getPeerName(labels []*dto.LabelPair) (peer string, err error) {
 			return label.GetValue(), nil
 		}
 	}
-	return "", trace.NotFound("unable to find required peer label")
+	return "", trace.NotFound("unable to find %s label", peerLabel)
 }
 
 // nethealthDetail returns a failed probe detail message.
