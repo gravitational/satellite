@@ -119,9 +119,7 @@ func (s *NethealthSuite) TestUpdateTimeoutStats(c *C) {
 
 	for _, testCase := range testCases {
 		testCase := testCase
-
-		checker, err := s.newNethealthChecker()
-		c.Assert(err, IsNil)
+		checker := s.newNethealthChecker()
 
 		for _, data := range testCase.incomingData {
 			c.Assert(checker.updatePeer(testNode, data), IsNil, testCase.comment)
@@ -184,8 +182,7 @@ func (s *NethealthSuite) TestNethealthVerification(c *C) {
 		},
 	}
 
-	checker, err := s.newNethealthChecker()
-	c.Assert(err, IsNil)
+	checker := s.newNethealthChecker()
 
 	for _, testCase := range testCases {
 		testCase := testCase
@@ -199,21 +196,11 @@ func (s *NethealthSuite) TestNethealthVerification(c *C) {
 }
 
 // newNethealthChecker returns a new nethealth checker to be used for testing.
-func (s *NethealthSuite) newNethealthChecker() (*nethealthChecker, error) {
+func (s *NethealthSuite) newNethealthChecker() *nethealthChecker {
 	return &nethealthChecker{
 		peerStats:      newNetStats(netStatsCapacity),
 		seriesCapacity: testCapacity,
-	}, nil
-}
-
-// newNetData wraps the counters into networkData and maps it to the test node.
-func (s *NethealthSuite) newNetData(requestTotal, timeoutTotal float64) map[string]networkData {
-	data := make(map[string]networkData)
-	data[testNode] = networkData{
-		requestTotal: requestTotal,
-		timeoutTotal: timeoutTotal,
 	}
-	return data
 }
 
 const (

@@ -78,7 +78,7 @@ type nethealthChecker struct {
 	// Mutex locks access to peerStats
 	sync.Mutex
 	// peerStats maps a peer to its recorded nethealth stats.
-	peerStats netStats
+	peerStats *netStats
 }
 
 // NewNethealthChecker returns a new nethealth checker.
@@ -302,7 +302,7 @@ func parseMetrics(metricFamilies map[string]*dto.MetricFamily) (map[string]netwo
 	}
 
 	// Each peer should have a request counter and timeout counter pair.
-	// If lenghts are unequal, we are missing data.
+	// If lengths are unequal, we are missing data.
 	if len(echoRequests) != len(echoTimeouts) {
 		return nil, trace.BadParameter("recieved %d timeout counters and %d request counters",
 			len(echoRequests), len(echoTimeouts))
@@ -365,12 +365,12 @@ type netStats struct {
 }
 
 // newNetStats constructs a new netStats.
-func newNetStats(capacity int) netStats {
-	return netStats{TTLMap: holster.NewTTLMap(capacity)}
+func newNetStats(capacity int) *netStats {
+	return &netStats{TTLMap: holster.NewTTLMap(capacity)}
 }
 
 // Get returns the peerData for the specified peer.
-func (r netStats) Get(peer string) (data peerData, err error) {
+func (r *netStats) Get(peer string) (data peerData, err error) {
 	r.Lock()
 	defer r.Unlock()
 	if value, ok := r.TTLMap.Get(peer); ok {
@@ -382,7 +382,7 @@ func (r netStats) Get(peer string) (data peerData, err error) {
 }
 
 // Set maps the specified peer and data.
-func (r netStats) Set(peer string, data peerData) error {
+func (r *netStats) Set(peer string, data peerData) error {
 	r.Lock()
 	defer r.Unlock()
 	return r.TTLMap.Set(peer, data, netStatsTTLSeconds)
