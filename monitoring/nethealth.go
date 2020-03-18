@@ -73,8 +73,6 @@ type nethealthChecker struct {
 	// NethealthConfig contains caller specified nethealth checker configuration
 	// values.
 	NethealthConfig
-	// seriesCapacity specifies the number of data points to store in a series.
-	seriesCapacity int
 	// Mutex locks access to peerStats
 	sync.Mutex
 	// peerStats maps a peer to its recorded nethealth stats.
@@ -92,8 +90,7 @@ func NewNethealthChecker(config NethealthConfig) (*nethealthChecker, error) {
 	seriesCapacity := math.Ceil(float64(config.NetStatsInterval) / float64(agent.StatusUpdateTimeout))
 
 	return &nethealthChecker{
-		peerStats:       newNetStats(netStatsCapacity),
-		seriesCapacity:  int(seriesCapacity),
+		peerStats:       newNetStats(netStatsCapacity, int(seriesCapacity)),
 		NethealthConfig: config,
 	}, nil
 }
@@ -212,7 +209,7 @@ func (c *nethealthChecker) updatePeer(peer string, incomingData networkData) err
 
 	// Request counter should be strictly increasing and timeout counter should
 	// be monotonically increasing. If this is not the case, nethealth pod most
-	// likely restart and reset the counters.
+	// likely restarted and reset the counters.
 	if requestInc <= 0 || timeoutInc < 0 {
 		log.WithField("request-inc", requestInc).
 			WithField("timeout-inc", timeoutInc).
@@ -232,15 +229,12 @@ func (c *nethealthChecker) updatePeer(peer string, incomingData networkData) err
 		return nil
 	}
 
-	// Record the change in request/timeout totals, but only keep the last `seriesCapacity` number of data points.
-	if len(storedData.requestInc) >= c.seriesCapacity {
-		storedData.requestInc = storedData.requestInc[1:]
+	// Record new packet loss percentage, remove first data point if slice has reached capacity.
+	if len(storedData.packetLoss) == cap(storedData.packetLoss) {
+		copy(storedData.packetLoss, storedData.packetLoss[1:])
+		storedData.packetLoss = storedData.packetLoss[:len(storedData.packetLoss)-1]
 	}
-	if len(storedData.timeoutInc) >= c.seriesCapacity {
-		storedData.timeoutInc = storedData.timeoutInc[1:]
-	}
-	storedData.requestInc = append(storedData.requestInc, requestInc)
-	storedData.timeoutInc = append(storedData.timeoutInc, timeoutInc)
+	storedData.packetLoss = append(storedData.packetLoss, timeoutInc/requestInc)
 
 	if err := c.peerStats.Set(peer, storedData); err != nil {
 		return trace.Wrap(err)
@@ -274,18 +268,19 @@ func (c *nethealthChecker) isHealthy(peer string) (healthy bool, err error) {
 	}
 
 	// Checker has not collected enough data yet to check network health.
-	if len(storedData.requestInc) < c.seriesCapacity {
+	if len(storedData.packetLoss) < cap(storedData.packetLoss) {
 		return true, nil
 	}
 
 	// If the packet loss percentage is above the packet loss threshold throughout
 	// the entire interval, overlay network communication to that peer will be
 	// considered unhealthy.
-	for i := 0; i < c.seriesCapacity; i++ {
-		if (storedData.timeoutInc[i] / storedData.requestInc[i]) <= packetLossThreshold {
+	for _, packetLoss := range storedData.packetLoss {
+		if packetLoss <= packetLossThreshold {
 			return true, nil
 		}
 	}
+
 	return false, nil
 }
 
@@ -363,24 +358,37 @@ func nethealthDetail(name string) string {
 
 // netStats holds nethealth data for a peer.
 type netStats struct {
+	// packetLossCapacity specifies the max number of packet loss data points to store.
+	packetLossCapacity int
+	// Mutex locks access to TTLMap.
 	sync.Mutex
+	// TTLMap maps a peer to its peerData.
 	*holster.TTLMap
 }
 
 // newNetStats constructs a new netStats.
-func newNetStats(capacity int) *netStats {
-	return &netStats{TTLMap: holster.NewTTLMap(capacity)}
+func newNetStats(mapCapacity int, packetLossCapacity int) *netStats {
+	return &netStats{
+		TTLMap:             holster.NewTTLMap(mapCapacity),
+		packetLossCapacity: packetLossCapacity,
+	}
 }
 
 // Get returns the peerData for the specified peer.
 func (r *netStats) Get(peer string) (data peerData, err error) {
 	r.Lock()
 	defer r.Unlock()
-	if value, ok := r.TTLMap.Get(peer); ok {
-		if data, ok = value.(peerData); !ok {
-			return data, trace.BadParameter("expected %T, got %T", data, value)
-		}
+
+	value, ok := r.TTLMap.Get(peer)
+	if !ok {
+		return peerData{packetLoss: make([]float64, 0, r.packetLossCapacity)}, nil
 	}
+
+	data, ok = value.(peerData)
+	if !ok {
+		return data, trace.BadParameter("expected %T, got %T", data, value)
+	}
+
 	return data, nil
 }
 
@@ -394,17 +402,15 @@ func (r *netStats) Set(peer string, data peerData) error {
 // peerData keeps trock of relevant nethealth data for a node.
 type peerData struct {
 	// prevRequestTotal keeps track of the previously recorded total number of
-	// requests for each peer. This is necessary to calculate the number of new
-	// requests received since the last check.
+	// requests sent to the peer. This is necessary to calculate the number of
+	// new requests since the last check.
 	prevRequestTotal float64
 	// prevTimeoutTotal keeps track of the previously recorded total number of
-	// timeouts for each peer. This is necessary to calculate the number of new
-	// timeouts received since the last check.
+	// requests sent to the peer and timed out. This is necessary to calculate
+	// the number of new timeouts since the last check.
 	prevTimeoutTotal float64
-	// requestInc records the increase in the number of requests between intervals.
-	requestInc []float64
-	// timeoutInc records the increase in the number of timeouts between intervals.
-	timeoutInc []float64
+	// packetLoss records the packet loss in percentages between check intervals.
+	packetLoss []float64
 }
 
 // networkData contains a request and timeout counter.
