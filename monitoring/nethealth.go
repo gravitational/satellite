@@ -275,18 +275,15 @@ func (c *nethealthChecker) isHealthy(peer string) (healthy bool, err error) {
 		return true, nil
 	}
 
-	// Total requests/timeouts over the interval.
-	totalRequestInc := 0.0
-	totalTimeoutInc := 0.0
+	// If the packet loss percentage is above the packet loss threshold thoroughout
+	// the entire interval, overlay network communication to that peer will be
+	// considered unhealthy.
 	for i := 0; i < c.seriesCapacity; i++ {
-		totalRequestInc += storedData.requestInc[i]
-		totalTimeoutInc += storedData.timeoutInc[i]
+		if (storedData.timeoutInc[i] / storedData.requestInc[i]) <= packetLossThreshold {
+			return true, nil
+		}
 	}
-
-	// The overlay network is considered healthy if the packet loss percentage
-	// is below the set packet loss threshold.
-	healthy = (totalTimeoutInc / totalRequestInc) <= packetLossThreshold
-	return healthy, nil
+	return false, nil
 }
 
 // parseMetrics parses the MetricsFamilies and returns the structured network

@@ -171,7 +171,7 @@ func (s *NethealthSuite) TestNethealthVerification(c *C) {
 			expected: new(health.Probes),
 			storedData: peerData{
 				requestInc: []float64{10, 20, 30, 40, 50},
-				timeoutInc: []float64{10, 0, 0, 0, 0},
+				timeoutInc: []float64{10, 20, 30, 40, 0},
 			},
 		},
 		{
