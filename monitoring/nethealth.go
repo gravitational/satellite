@@ -35,6 +35,8 @@ import (
 	"github.com/prometheus/common/expfmt"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 // NethealthConfig specifies configuration for a nethealth checker.
@@ -142,21 +144,20 @@ func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) 
 
 // getNethealthAddr returns the address of the local nethealth pod.
 func (c *nethealthChecker) getNethealthAddr() (addr string, err error) {
-	pods, err := c.Client.CoreV1().Pods(nethealthNamespace).List(metav1.ListOptions{})
+	opts := metav1.ListOptions{
+		LabelSelector: nethealthLabelSelector.String(),
+		FieldSelector: fields.OneTermEqualSelector("status.hostIP", c.AdvertiseIP).String(),
+		Limit:         1,
+	}
+	pods, err := c.Client.CoreV1().Pods(nethealthNamespace).List(opts)
 	if err != nil {
 		return addr, utils.ConvertError(err) // this will convert error to a proper trace error, e.g. trace.NotFound
 	}
 
-	// Find nethealth pod with matching host ip address.
-	for _, pod := range pods.Items {
-		if pod.GetLabels()[nethealthLabel] != nethealthValue {
-			continue
-		}
-		if pod.Status.HostIP == c.AdvertiseIP {
-			return fmt.Sprintf("http://%s:%d", pod.Status.PodIP, c.NethealthPort), nil
-		}
+	if len(pods.Items) == 0 {
+		return addr, trace.NotFound("unable to find local nethealth pod")
 	}
-	return addr, trace.NotFound("unable to find local nethealth pod")
+	return fmt.Sprintf("http://%s:%d", pods.Items[0].Status.PodIP, c.NethealthPort), nil
 }
 
 // fetchMetrics collects the network metrics from the nethealth pod.
@@ -427,10 +428,6 @@ const (
 	peerLabel = "peer_name"
 	// nethealthNamespace specifies the k8s namespace that nethealth exists within.
 	nethealthNamespace = "monitoring"
-	// nethealthLabel specifies the k8s pod label.
-	nethealthLabel = "k8s-app"
-	// nethealthValue specifies the k8s pod label value.
-	nethealthValue = "nethealth"
 	// echoRequestLabel defines the metric family label for the echo request counter.
 	echoRequestLabel = "nethealth_echo_request_total"
 	// echoTimeoutLabel defines the metric family label for the echo timeout counter.
@@ -455,3 +452,18 @@ const (
 	// if overlay network communication with a peer is unhealthy.
 	packetLossThreshold = 0.20 // packet loss > 20% is unhealthy
 )
+
+// nethealthLabelSelector specifies label selector used when querying for
+// nethealth pods.
+var nethealthLabelSelector = mustLabelSelector(metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
+	MatchLabels: map[string]string{
+		"k8s-app": "nethealth",
+	},
+}))
+
+func mustLabelSelector(selector labels.Selector, err error) labels.Selector {
+	if err != nil {
+		panic(err)
+	}
+	return selector
+}
