@@ -124,14 +124,9 @@ func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) 
 		return trace.Wrap(err) // received unexpected error, maybe network-related, will add error probe above
 	}
 
-	metricFamilies, err := fetchMetrics(ctx, addr)
+	netData, err := fetchNethealthMetrics(ctx, addr)
 	if err != nil {
 		return trace.Wrap(err, "failed to fetch nethealth metrics")
-	}
-
-	netData, err := parseMetrics(metricFamilies)
-	if err != nil {
-		return trace.Wrap(err, "failed to parse nethealth metrics")
 	}
 
 	updated, err := c.updateStats(netData)
@@ -158,27 +153,6 @@ func (c *nethealthChecker) getNethealthAddr() (addr string, err error) {
 		return addr, trace.NotFound("unable to find local nethealth pod")
 	}
 	return fmt.Sprintf("http://%s:%d", pods.Items[0].Status.PodIP, c.NethealthPort), nil
-}
-
-// fetchMetrics collects the network metrics from the nethealth pod.
-func fetchMetrics(ctx context.Context, addr string) (metricFamilies map[string]*dto.MetricFamily, err error) {
-	client, err := roundtrip.NewClient(addr, "")
-	if err != nil {
-		return nil, trace.Wrap(err, "failed to connect to nethealth service at %s.", addr)
-	}
-
-	resp, err := client.Get(ctx, client.Endpoint("metrics"), url.Values{})
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
-
-	var parser expfmt.TextParser
-	metricsFamilies, err := parser.TextToMetricFamilies(resp.Reader())
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
-
-	return metricsFamilies, nil
 }
 
 // updateStats updates netStats with new incoming data.
@@ -285,6 +259,48 @@ func (c *nethealthChecker) isHealthy(peer string) (healthy bool, err error) {
 	return false, nil
 }
 
+// fetchNethealthMetrics collects the network metrics from the nethealth pod
+// specified by addr. Returns mapping of peer to networkData.
+func fetchNethealthMetrics(ctx context.Context, addr string) (map[string]networkData, error) {
+	client, err := roundtrip.NewClient(addr, "")
+	if err != nil {
+		return nil, trace.Wrap(err, "failed to connect to nethealth service at %s.", addr)
+	}
+
+	// The two relevant metrics exposed by nethealth are 'nethealth_echo_request_total' and
+	// 'nethealth_echo_timeout_total'. We expect a pair of request/timeout metrics per peer.
+	// Example metrics received from nethealth may look something like the output below:
+	//
+	//      # HELP nethealth_echo_request_total The number of echo requests that have been sent
+	//      # TYPE nethealth_echo_request_total counter
+	//      nethealth_echo_request_total{node_name="10.128.0.96",peer_name="10.128.0.70"} 236
+	//      nethealth_echo_request_total{node_name="10.128.0.96",peer_name="10.128.0.97"} 273
+	//      # HELP nethealth_echo_timeout_total The number of echo requests that have timed out
+	//      # TYPE nethealth_echo_timeout_total counter
+	//      nethealth_echo_timeout_total{node_name="10.128.0.96",peer_name="10.128.0.70"} 37
+	//      nethealth_echo_timeout_total{node_name="10.128.0.96",peer_name="10.128.0.97"} 0
+	resp, err := client.Get(ctx, client.Endpoint("metrics"), url.Values{})
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	var parser expfmt.TextParser
+	metricFamilies, err := parser.TextToMetricFamilies(resp.Reader())
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
+	netData, err := parseMetrics(metricFamilies)
+	if err != nil {
+		log.WithError(err).
+			WithField("nethealth-metrics", string(resp.Bytes())).
+			Error("Received incomplete set of metrics. Could be due to a bug in nethealth or a change in labels.")
+		return nil, trace.Wrap(err)
+	}
+
+	return netData, nil
+}
+
 // parseMetrics parses the MetricsFamilies and returns the structured network
 // data. data maps a peer to its total request counter and total timeout counter.
 func parseMetrics(metricFamilies map[string]*dto.MetricFamily) (map[string]networkData, error) {
@@ -300,11 +316,9 @@ func parseMetrics(metricFamilies map[string]*dto.MetricFamily) (map[string]netwo
 		return nil, trace.Wrap(err, "failed to parse echo timeouts")
 	}
 
-	// Each peer should have a request counter and timeout counter pair.
-	// If lengths are unequal, we are missing data.
 	if len(echoRequests) != len(echoTimeouts) {
-		return nil, trace.BadParameter("recieved %d timeout counters and %d request counters",
-			len(echoRequests), len(echoTimeouts))
+		return nil, trace.BadParameter("expected equal number of counters for requests and timeouts,"+
+			"but received %d request counters and %d timeout counters", len(echoRequests), len(echoTimeouts))
 	}
 
 	netData := make(map[string]networkData)
