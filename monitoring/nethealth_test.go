@@ -19,7 +19,6 @@ package monitoring
 import (
 	"github.com/gravitational/satellite/agent/health"
 	"github.com/gravitational/satellite/lib/test"
-
 	. "gopkg.in/check.v1"
 )
 
@@ -31,46 +30,90 @@ var _ = Suite(&NethealthSuite{})
 // data points from available metrics.
 func (s *NethealthSuite) TestUpdateTimeoutStats(c *C) {
 	var testCases = []struct {
-		comment            CommentInterface
-		expectedPacketLoss []float64
-		expectedUpdated    []string
-		requests           []float64
-		timeouts           []float64
+		comment      CommentInterface
+		expected     peerData
+		incomingData []networkData
 	}{
 		{
-			comment:            Commentf("Expected no data points to be recorded. Requests did not increase."),
-			expectedPacketLoss: nil,
-			expectedUpdated:    nil,
-			requests:           []float64{0, 0, 0, 0, 0},
-			timeouts:           []float64{0, 0, 0, 0, 0},
+			comment: Commentf("Expected no data points to be recorded. Requests did not increase."),
+			expected: peerData{
+				prevRequestTotal: 0,
+				prevTimeoutTotal: 0,
+				requestInc:       nil,
+				timeoutInc:       nil,
+			},
+			incomingData: []networkData{
+				networkData{requestTotal: 0, timeoutTotal: 0},
+				networkData{requestTotal: 0, timeoutTotal: 0},
+				networkData{requestTotal: 0, timeoutTotal: 0},
+				networkData{requestTotal: 0, timeoutTotal: 0},
+				networkData{requestTotal: 0, timeoutTotal: 0},
+			},
 		},
 		{
-			comment:            Commentf("Expected no data points to be recorded. Timeout inc > request inc"),
-			expectedPacketLoss: nil,
-			expectedUpdated:    nil,
-			requests:           []float64{0, 0, 0, 0, 0},
-			timeouts:           []float64{1, 2, 3, 4, 5},
+			comment: Commentf("Expected no data points to be recorded. Timeout inc > request inc"),
+			expected: peerData{
+				prevRequestTotal: 0,
+				prevTimeoutTotal: 5,
+				requestInc:       nil,
+				timeoutInc:       nil,
+			},
+			incomingData: []networkData{
+				networkData{requestTotal: 0, timeoutTotal: 1},
+				networkData{requestTotal: 0, timeoutTotal: 2},
+				networkData{requestTotal: 0, timeoutTotal: 3},
+				networkData{requestTotal: 0, timeoutTotal: 4},
+				networkData{requestTotal: 0, timeoutTotal: 5},
+			},
 		},
 		{
-			comment:            Commentf("Expected zero packet loss to be recorded."),
-			expectedPacketLoss: []float64{0, 0, 0, 0, 0},
-			expectedUpdated:    []string{testNode},
-			requests:           []float64{1, 2, 3, 4, 5},
-			timeouts:           []float64{0, 0, 0, 0, 0},
+			comment: Commentf("Expected zero packet loss to be recorded."),
+			expected: peerData{
+				prevRequestTotal: 5,
+				prevTimeoutTotal: 0,
+				requestInc:       []float64{1, 1, 1, 1, 1},
+				timeoutInc:       []float64{0, 0, 0, 0, 0},
+			},
+			incomingData: []networkData{
+				networkData{requestTotal: 1, timeoutTotal: 0},
+				networkData{requestTotal: 2, timeoutTotal: 0},
+				networkData{requestTotal: 3, timeoutTotal: 0},
+				networkData{requestTotal: 4, timeoutTotal: 0},
+				networkData{requestTotal: 5, timeoutTotal: 0},
+			},
 		},
 		{
-			comment:            Commentf("Expected 100% packet loss to be recorded."),
-			expectedPacketLoss: []float64{1, 1, 1, 1, 1},
-			expectedUpdated:    []string{testNode},
-			requests:           []float64{1, 2, 3, 4, 5},
-			timeouts:           []float64{1, 2, 3, 4, 5},
+			comment: Commentf("Expected 100% packet loss to be recorded."),
+			expected: peerData{
+				prevRequestTotal: 5,
+				prevTimeoutTotal: 5,
+				requestInc:       []float64{1, 1, 1, 1, 1},
+				timeoutInc:       []float64{1, 1, 1, 1, 1},
+			},
+			incomingData: []networkData{
+				networkData{requestTotal: 1, timeoutTotal: 1},
+				networkData{requestTotal: 2, timeoutTotal: 2},
+				networkData{requestTotal: 3, timeoutTotal: 3},
+				networkData{requestTotal: 4, timeoutTotal: 4},
+				networkData{requestTotal: 5, timeoutTotal: 5},
+			},
 		},
 		{
-			comment:            Commentf("Expected oldest data point to be removed"),
-			expectedPacketLoss: []float64{0, 0, 0, 0, 0},
-			expectedUpdated:    []string{testNode},
-			requests:           []float64{1, 2, 3, 4, 5, 6},
-			timeouts:           []float64{1, 1, 1, 1, 1, 1},
+			comment: Commentf("Expected oldest data point to be removed"),
+			expected: peerData{
+				prevRequestTotal: 7,
+				prevTimeoutTotal: 2,
+				requestInc:       []float64{1, 1, 1, 1, 2},
+				timeoutInc:       []float64{0, 0, 0, 0, 1},
+			},
+			incomingData: []networkData{
+				networkData{requestTotal: 1, timeoutTotal: 1},
+				networkData{requestTotal: 2, timeoutTotal: 1},
+				networkData{requestTotal: 3, timeoutTotal: 1},
+				networkData{requestTotal: 4, timeoutTotal: 1},
+				networkData{requestTotal: 5, timeoutTotal: 1},
+				networkData{requestTotal: 7, timeoutTotal: 2},
+			},
 		},
 	}
 
@@ -80,20 +123,13 @@ func (s *NethealthSuite) TestUpdateTimeoutStats(c *C) {
 		checker, err := s.newNethealthChecker()
 		c.Assert(err, IsNil)
 
-		for i, requestCount := range testCase.requests {
-			timeoutCount := testCase.timeouts[i]
-
-			requestData := s.newDataWithCount(requestCount)
-			timeoutData := s.newDataWithCount(timeoutCount)
-
-			updated, err := checker.updateStats(requestData, timeoutData)
-			c.Assert(err, IsNil, testCase.comment)
-			c.Assert(updated, test.DeepCompare, testCase.expectedUpdated, testCase.comment)
+		for _, data := range testCase.incomingData {
+			c.Assert(checker.updatePeer(testNode, data), IsNil, testCase.comment)
 		}
 
-		packetLoss, err := checker.peerStats.GetPacketLoss(testNode)
+		data, err := checker.peerStats.Get(testNode)
 		c.Assert(err, IsNil, testCase.comment)
-		c.Assert(packetLoss, test.DeepCompare, testCase.expectedPacketLoss, testCase.comment)
+		c.Assert(data, test.DeepCompare, testCase.expected, testCase.comment)
 	}
 }
 
@@ -104,31 +140,47 @@ func (s *NethealthSuite) TestNethealthVerification(c *C) {
 		comment    CommentInterface
 		expected   health.Reporter
 		packetLoss []float64
+		storedData peerData
 	}{
 		{
-			comment:    Commentf("Expected no failed probes. Not enough data points."),
-			expected:   new(health.Probes),
-			packetLoss: []float64{abovePLT, abovePLT, abovePLT},
+			comment:  Commentf("Expected no failed probes. Not enough data points."),
+			expected: new(health.Probes),
+			storedData: peerData{
+				requestInc: []float64{10, 20, 30},
+				timeoutInc: []float64{5, 10, 15},
+			},
 		},
 		{
-			comment:    Commentf("Expected no failed probes. No timeouts."),
-			expected:   new(health.Probes),
-			packetLoss: []float64{0, 0, 0, 0, 0},
+			comment:  Commentf("Expected no failed probes. No timeouts."),
+			expected: new(health.Probes),
+			storedData: peerData{
+				requestInc: []float64{10, 20, 30, 40, 50},
+				timeoutInc: []float64{0, 0, 0, 0, 0},
+			},
 		},
 		{
-			comment:    Commentf("Expected no failed probes. Data points do not exceed threshold."),
-			expected:   new(health.Probes),
-			packetLoss: []float64{plt, plt, plt, plt, plt},
+			comment:  Commentf("Expected no failed probes. Data points do not exceed threshold."),
+			expected: new(health.Probes),
+			storedData: peerData{
+				requestInc: []float64{10, 20, 30, 40, 50},
+				timeoutInc: []float64{2, 4, 6, 8, 10},
+			},
 		},
 		{
-			comment:    Commentf("Expected no failed probes. Does not exceed threshold throughout entire interval."),
-			expected:   new(health.Probes),
-			packetLoss: []float64{abovePLT, abovePLT, abovePLT, abovePLT, plt},
+			comment:  Commentf("Expected no failed probes. Does not exceed threshold throughout entire interval."),
+			expected: new(health.Probes),
+			storedData: peerData{
+				requestInc: []float64{10, 20, 30, 40, 50},
+				timeoutInc: []float64{10, 0, 0, 0, 0},
+			},
 		},
 		{
-			comment:    Commentf("Expected failed probe. Timeouts increase at each interval."),
-			expected:   &health.Probes{NewProbeFromErr(nethealthCheckerID, nethealthDetail(testNode), nil)},
-			packetLoss: []float64{abovePLT, abovePLT, abovePLT, abovePLT, abovePLT},
+			comment:  Commentf("Expected failed probe. Timeouts increase at each interval."),
+			expected: &health.Probes{NewProbeFromErr(nethealthCheckerID, nethealthDetail(testNode), nil)},
+			storedData: peerData{
+				requestInc: []float64{10, 20, 30, 40, 50},
+				timeoutInc: []float64{10, 20, 30, 40, 50},
+			},
 		},
 	}
 
@@ -137,12 +189,11 @@ func (s *NethealthSuite) TestNethealthVerification(c *C) {
 
 	for _, testCase := range testCases {
 		testCase := testCase
+		reporter := new(health.Probes)
 
-		data := peerData{packetLossPercentages: testCase.packetLoss}
-		c.Assert(checker.peerStats.Set(testNode, data), IsNil, testCase.comment)
+		c.Assert(checker.peerStats.Set(testNode, testCase.storedData), IsNil, testCase.comment)
 
-		reporter, err := checker.verifyNethealth([]string{testNode})
-		c.Assert(err, IsNil, testCase.comment)
+		c.Assert(checker.verifyNethealth([]string{testNode}, reporter), IsNil, testCase.comment)
 		c.Assert(reporter, test.DeepCompare, testCase.expected, testCase.comment)
 	}
 }
@@ -155,15 +206,13 @@ func (s *NethealthSuite) newNethealthChecker() (*nethealthChecker, error) {
 	}, nil
 }
 
-// newDataWithCount returns a map with the testNode mapped to the count.
-func (s *NethealthSuite) newDataWithCount(count float64) map[string]float64 {
-	return s.newData(testNode, count)
-}
-
-// newData returns a map with the peer mapped to the count.
-func (s *NethealthSuite) newData(peer string, count float64) map[string]float64 {
-	data := make(map[string]float64)
-	data[peer] = count
+// newNetData wraps the counters into networkData and maps it to the test node.
+func (s *NethealthSuite) newNetData(requestTotal, timeoutTotal float64) map[string]networkData {
+	data := make(map[string]networkData)
+	data[testNode] = networkData{
+		requestTotal: requestTotal,
+		timeoutTotal: timeoutTotal,
+	}
 	return data
 }
 
@@ -172,8 +221,4 @@ const (
 	testNode = "test-node"
 	// testCapacity specifies the time series capacity used for test cases.
 	testCapacity = 5
-	// plt is packetLossThreshold alias
-	plt = packetLossThreshold
-	// abovePLT is arbitrary percentage above the packetLossThreshold
-	abovePLT = packetLossThreshold + 0.01
 )

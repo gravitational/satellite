@@ -130,17 +130,12 @@ func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) 
 		return trace.Wrap(err, "failed to fetch nethealth metrics")
 	}
 
-	echoRequests, err := parseCounter(metricFamilies, echoRequestLabel)
+	netData, err := parseMetrics(metricFamilies)
 	if err != nil {
-		return trace.Wrap(err, "failed to parse echo requests")
+		return trace.Wrap(err, "failed to parse nethealth metrics")
 	}
 
-	echoTimeouts, err := parseCounter(metricFamilies, echoTimeoutLabel)
-	if err != nil {
-		return trace.Wrap(err, "failed to parse echo timeouts")
-	}
-
-	updated, err := c.updateStats(echoRequests, echoTimeouts)
+	updated, err := c.updateStats(netData)
 	if err != nil {
 		return trace.Wrap(err, "failed to update nethealth stats")
 	}
@@ -188,56 +183,10 @@ func fetchMetrics(ctx context.Context, addr string) (metricFamilies map[string]*
 	return metricsFamilies, nil
 }
 
-// updateStats updates netStats with new data collected in the provided
-// MetricFamily.
-func (c *nethealthChecker) updateStats(echoRequests, echoTimeouts map[string]float64) (updated []string, err error) {
-	if len(echoRequests) != len(echoTimeouts) {
-		return updated, trace.BadParameter("recieved %d timeout counters and %d request counters",
-			len(echoRequests), len(echoTimeouts))
-	}
-
-	for peer, requests := range echoRequests {
-		timeouts, ok := echoTimeouts[peer]
-		if !ok {
-			return updated, trace.BadParameter("echo timeout data not available for %s", peer)
-		}
-
-		data, err := c.peerStats.Get(peer)
-		if err != nil {
-			return updated, trace.Wrap(err)
-		}
-
-		// Calcuate counter increase since last check and replace previous total
-		requestInc := requests - data.prevRequestTotal
-		data.prevRequestTotal = requests
-		timeoutInc := timeouts - data.prevTimeoutTotal
-		data.prevTimeoutTotal = timeouts
-
-		// Request counter should be constantly increasing, if this is not the
-		// case, nethealth pod most likely reset the counter. Do no update
-		// packet loss percentages this round.
-		if requestInc <= 0 {
-			log.Warn("Request counter did not increase. Nethealth pod may have restarted.")
-			continue
-		}
-
-		// It should not be possible for the timeout counter to have increased
-		// more than the request counter. Log and ignore this situation.
-		if timeoutInc > requestInc {
-			log.WithField("request-inc", requestInc).
-				WithField("timeout-inc", timeoutInc).
-				Warn("Timeout counter increased more than request counter.")
-			continue
-		}
-
-		// Record the new packet loss percentage, but only keep the last `seriesCapacity` number of data points.
-		if len(data.packetLossPercentages) >= c.seriesCapacity {
-			data.packetLossPercentages = data.packetLossPercentages[1:]
-		}
-		packetLoss := timeoutInc / requestInc
-		data.packetLossPercentages = append(data.packetLossPercentages, packetLoss)
-
-		if err := c.peerStats.Set(peer, data); err != nil {
+// updateStats updates netStats with new incoming data.
+func (c *nethealthChecker) updateStats(incoming map[string]networkData) (updated []string, err error) {
+	for peer, incomingData := range incoming {
+		if err := c.updatePeer(peer, incomingData); err != nil {
 			return updated, trace.Wrap(err)
 		}
 
@@ -245,6 +194,56 @@ func (c *nethealthChecker) updateStats(echoRequests, echoTimeouts map[string]flo
 		updated = append(updated, peer)
 	}
 	return updated, nil
+}
+
+// updatePeer updates the peer's stats with the incoming data.
+func (c *nethealthChecker) updatePeer(peer string, incomingData networkData) error {
+	storedData, err := c.peerStats.Get(peer)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	// Calcuate counter increase since last check and replace previous total
+	requestInc := incomingData.requestTotal - storedData.prevRequestTotal
+	timeoutInc := incomingData.timeoutTotal - storedData.prevTimeoutTotal
+	storedData.prevRequestTotal = incomingData.requestTotal
+	storedData.prevTimeoutTotal = incomingData.timeoutTotal
+
+	// Request counter should be constantly increasing, if this is not the
+	// case, nethealth pod most likely reset the counter. Update prevTotals,
+	// but do no update requestInc/timeoutInc.
+	if requestInc <= 0 {
+		log.Warn("Request counter did not increase. Nethealth pod may have restarted.")
+		if err := c.peerStats.Set(peer, storedData); err != nil {
+			return trace.Wrap(err)
+		}
+		return nil
+	}
+
+	// It should not be possible for the timeout counter to have increased
+	// more than the request counter. Log and ignore this situation.
+	if timeoutInc > requestInc {
+		log.WithField("request-inc", requestInc).
+			WithField("timeout-inc", timeoutInc).
+			Warn("Timeout counter increased more than request counter.")
+		return nil
+	}
+
+	// Record the change in request/timeout totals, but only keep the last `seriesCapacity` number of data points.
+	if len(storedData.requestInc) >= c.seriesCapacity {
+		storedData.requestInc = storedData.requestInc[1:]
+	}
+	if len(storedData.timeoutInc) >= c.seriesCapacity {
+		storedData.timeoutInc = storedData.timeoutInc[1:]
+	}
+	storedData.requestInc = append(storedData.requestInc, requestInc)
+	storedData.timeoutInc = append(storedData.timeoutInc, timeoutInc)
+
+	if err := c.peerStats.Set(peer, storedData); err != nil {
+		return trace.Wrap(err)
+	}
+
+	return nil
 }
 
 // verifyNethealth verifies that the overlay network communication is healthy
@@ -266,29 +265,70 @@ func (c *nethealthChecker) verifyNethealth(peers []string, reporter health.Repor
 // isHealthy returns true if the overlay network is healthy for the specified
 // peer.
 func (c *nethealthChecker) isHealthy(peer string) (healthy bool, err error) {
-	packetLossPercentages, err := c.peerStats.GetPacketLoss(peer)
+	storedData, err := c.peerStats.Get(peer)
 	if err != nil {
 		return false, trace.Wrap(err)
 	}
 
 	// Checker has not collected enough data yet to check network health.
-	if len(packetLossPercentages) < c.seriesCapacity {
+	if len(storedData.requestInc) < c.seriesCapacity {
 		return true, nil
 	}
 
-	// If the percentage is above `packetLossTreshhold` throughout the entire
-	// interval, the overlay network communication to that peer will be
-	// considered unhealthy.
+	// Total requests/timeouts over the interval.
+	totalRequestInc := 0.0
+	totalTimeoutInc := 0.0
 	for i := 0; i < c.seriesCapacity; i++ {
-		if packetLossPercentages[i] <= packetLossThreshold {
-			return true, nil
+		totalRequestInc += storedData.requestInc[i]
+		totalTimeoutInc += storedData.timeoutInc[i]
+	}
+
+	// The overlay network is considered healthy if the packet loss percentage
+	// is below the set packet loss threshold.
+	healthy = (totalTimeoutInc / totalRequestInc) <= packetLossThreshold
+	return healthy, nil
+}
+
+// parseMetrics parses the MetricsFamilies and returns the structured network
+// data. data maps a peer to its total request counter and total timeout counter.
+func parseMetrics(metricFamilies map[string]*dto.MetricFamily) (map[string]networkData, error) {
+	// echoRequests maps a peer to the current running total number of requests sent to that peer.
+	echoRequests, err := parseCounter(metricFamilies, echoRequestLabel)
+	if err != nil {
+		return nil, trace.Wrap(err, "failed to parse echo requests")
+	}
+
+	// echoTimeouts maps a peer to the current running total number of timeouts received from that peer.
+	echoTimeouts, err := parseCounter(metricFamilies, echoTimeoutLabel)
+	if err != nil {
+		return nil, trace.Wrap(err, "failed to parse echo timeouts")
+	}
+
+	// Each peer should have a request counter and timeout counter pair.
+	// If lenghts are unequal, we are missing data.
+	if len(echoRequests) != len(echoTimeouts) {
+		return nil, trace.BadParameter("recieved %d timeout counters and %d request counters",
+			len(echoRequests), len(echoTimeouts))
+	}
+
+	netData := make(map[string]networkData)
+	for peer, requestTotal := range echoRequests {
+		timeoutTotal, ok := echoTimeouts[peer]
+		if !ok {
+			return nil, trace.BadParameter("echo timeout data not available for %s", peer)
+		}
+		netData[peer] = networkData{
+			requestTotal: requestTotal,
+			timeoutTotal: timeoutTotal,
 		}
 	}
-	return false, nil
+
+	return netData, nil
 }
 
 // parseCounter parses the provided metricFamilies and returns a map of counters
-// for the desired metrics specified by label.
+// for the desired metrics specified by label. The counters map a peer to a
+// counter.
 func parseCounter(metricFamilies map[string]*dto.MetricFamily, label string) (counters map[string]float64, err error) {
 	metricFamily, ok := metricFamilies[label]
 	if !ok {
@@ -351,15 +391,6 @@ func (r netStats) Set(peer string, data peerData) error {
 	return r.TTLMap.Set(peer, data, netStatsTTLSeconds)
 }
 
-// GetPacketLoss returns the packet loss percentages for the specified peer.
-func (r netStats) GetPacketLoss(peer string) (packetLoss []float64, err error) {
-	data, err := r.Get(peer)
-	if err != nil {
-		return packetLoss, trace.Wrap(err)
-	}
-	return data.packetLossPercentages, nil
-}
-
 // peerData keeps trock of relevant nethealth data for a node.
 type peerData struct {
 	// prevRequestTotal keeps track of the previously recorded total number of
@@ -370,20 +401,33 @@ type peerData struct {
 	// timeouts for each peer. This is necessary to calculate the number of new
 	// timeouts received since the last check.
 	prevTimeoutTotal float64
-	// packetLoss is time series data containing the packet loss percentage for
-	// a set interval.
-	packetLossPercentages []float64
+	// requestInc records the increase in the number of requests between intervals.
+	requestInc []float64
+	// timeoutInc records the increase in the number of timeouts between intervals.
+	timeoutInc []float64
+}
+
+// networkData contains a request and timeout counter.
+type networkData struct {
+	// requestTotal specifies the total number of requests sent.
+	requestTotal float64
+	// timeoutTotal specifies the total number of timeouts received.
+	timeoutTotal float64
 }
 
 const (
 	nethealthCheckerID = "nethealth-checker"
-	peerLabel          = "peer_name"
+	// peerLabel specifies the label to collect peer name from nethealth metrics.
+	peerLabel = "peer_name"
+	// nethealthNamespace specifies the k8s namespace that nethealth exists within.
 	nethealthNamespace = "monitoring"
-	nethealthLabel     = "k8s-app"
-	nethealthValue     = "nethealth"
-	// echoRequestLabel defines the metric family label for the cho request counter
+	// nethealthLabel specifies the k8s pod label.
+	nethealthLabel = "k8s-app"
+	// nethealthValue specifies the k8s pod label value.
+	nethealthValue = "nethealth"
+	// echoRequestLabel defines the metric family label for the cho request counter.
 	echoRequestLabel = "nethealth_echo_request_total"
-	// echoTimeoutLabel defines the metric family label for the echo timeout counter
+	// echoTimeoutLabel defines the metric family label for the echo timeout counter.
 	echoTimeoutLabel = "nethealth_echo_timeout_total"
 
 	// defaultNethealthPort defines the default nethealth port.
