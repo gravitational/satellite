@@ -26,6 +26,7 @@ import (
 
 	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/agent/health"
+	"github.com/gravitational/satellite/utils"
 
 	"github.com/gravitational/roundtrip"
 	"github.com/gravitational/trace"
@@ -151,7 +152,7 @@ func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) 
 func (c *nethealthChecker) getNethealthAddr() (addr string, err error) {
 	pods, err := c.Client.CoreV1().Pods(nethealthNamespace).List(metav1.ListOptions{})
 	if err != nil {
-		return addr, rigging.ConvertError(err) // this will convert error to a proper trace error, e.g. trace.NotFound
+		return addr, utils.ConvertError(err) // this will convert error to a proper trace error, e.g. trace.NotFound
 	}
 
 	// Find nethealth pod with matching host ip address.
