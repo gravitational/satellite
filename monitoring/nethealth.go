@@ -176,7 +176,7 @@ func (c *nethealthChecker) updatePeer(peer string, incomingData networkData) err
 		return trace.Wrap(err)
 	}
 
-	// Calcluate counter delta since last check and replace total.
+	// Calculate counter delta since last check and replace total.
 	requestInc := incomingData.requestTotal - storedData.prevRequestTotal
 	timeoutInc := incomingData.timeoutTotal - storedData.prevTimeoutTotal
 	storedData.prevRequestTotal = incomingData.requestTotal
@@ -467,7 +467,7 @@ const (
 	packetLossThreshold = 0.20 // packet loss > 20% is unhealthy
 )
 
-// nethealthLabelSelector specifies label selector used when querying for
+// nethealthLabelSelector defines label selector used when querying for
 // nethealth pods.
 var nethealthLabelSelector = mustLabelSelector(metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
 	MatchLabels: map[string]string{
