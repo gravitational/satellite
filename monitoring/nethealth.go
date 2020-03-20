@@ -317,8 +317,8 @@ func parseMetrics(metricFamilies map[string]*dto.MetricFamily) (map[string]netwo
 	}
 
 	if len(echoRequests) != len(echoTimeouts) {
-		return nil, trace.BadParameter("expected equal number of counters for requests and timeouts,"+
-			"but received %d request counters and %d timeout counters", len(echoRequests), len(echoTimeouts))
+		return nil, trace.BadParameter("received incomplete pair(s) of nethealth metrics. " +
+			"This may be due to a bug in prometheus or in the way nethealth is exposing its metrics")
 	}
 
 	netData := make(map[string]networkData)
@@ -453,8 +453,7 @@ const (
 	// defaultNetStatsInterval defines the default interval duration for the netStats.
 	defaultNetStatsInterval = 5 * time.Minute
 
-	// netStatsCapacity sets the number of TTLMaps that can be stored.
-	// This will be the size of the cluster -1.
+	// netStatsCapacity specifies the maximum number of nethealth samples to store.
 	netStatsCapacity = 1000
 
 	// netStatsTTLSeconds defines the time to live in seconds for the stored
@@ -463,8 +462,10 @@ const (
 	netStatsTTLSeconds = 60 * 60 * 24 // 1 day
 
 	// packetLossThreshold defines the packet loss percentage used to determine
-	// if overlay network communication with a peer is unhealthy.
-	packetLossThreshold = 0.20 // packet loss > 20% is unhealthy
+	// if overlay network communication with a peer is unhealthy. If the packet
+	// loss is consistently observed to be above this threshold over the entire
+	// interval, network communication will be considered unhealthy.
+	packetLossThreshold = 0.20
 )
 
 // nethealthLabelSelector defines label selector used when querying for
