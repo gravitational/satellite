@@ -1,7 +1,6 @@
 package roundtrip
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -63,13 +62,12 @@ func (s *seeker) canSeek() error {
 	return s.lastError
 }
 
-func newSeeker(c *Client, ctx context.Context, endpoint string) (ReadSeekCloser, error) {
+func newSeeker(c *Client, endpoint string) (ReadSeekCloser, error) {
 	response, err := c.RoundTrip(func() (*http.Response, error) {
 		req, err := http.NewRequest("HEAD", endpoint, nil)
 		if err != nil {
 			return nil, err
 		}
-		req = req.WithContext(ctx)
 		c.addAuth(req)
 		return c.client.Do(req)
 	})

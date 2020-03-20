@@ -37,7 +37,6 @@ package roundtrip
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -170,7 +169,7 @@ func (c *Client) Endpoint(params ...string) string {
 //
 // c.PostForm(c.Endpoint("users"), url.Values{"name": []string{"John"}})
 //
-func (c *Client) PostForm(ctx context.Context, endpoint string, vals url.Values, files ...File) (*Response, error) {
+func (c *Client) PostForm(endpoint string, vals url.Values, files ...File) (*Response, error) {
 	// If the sanitizer is enabled, make sure the requested path is safe.
 	if c.sanitizerEnabled {
 		err := isPathSafe(endpoint)
@@ -185,7 +184,6 @@ func (c *Client) PostForm(ctx context.Context, endpoint string, vals url.Values,
 			if err != nil {
 				return nil, err
 			}
-			req = req.WithContext(ctx)
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			c.addAuth(req)
 			return c.client.Do(req)
@@ -216,10 +214,9 @@ func (c *Client) PostForm(ctx context.Context, endpoint string, vals url.Values,
 		if err != nil {
 			return nil, err
 		}
-		req = req.WithContext(ctx)
+		c.addAuth(req)
 		req.Header.Set("Content-Type",
 			fmt.Sprintf(`multipart/form-data;boundary="%v"`, writer.Boundary()))
-		c.addAuth(req)
 		return c.client.Do(req)
 	})
 }
@@ -228,7 +225,7 @@ func (c *Client) PostForm(ctx context.Context, endpoint string, vals url.Values,
 //
 // c.PostJSON(c.Endpoint("users"), map[string]string{"name": "alice@example.com"})
 //
-func (c *Client) PostJSON(ctx context.Context, endpoint string, data interface{}) (*Response, error) {
+func (c *Client) PostJSON(endpoint string, data interface{}) (*Response, error) {
 	// If the sanitizer is enabled, make sure the requested path is safe.
 	if c.sanitizerEnabled {
 		err := isPathSafe(endpoint)
@@ -244,7 +241,6 @@ func (c *Client) PostJSON(ctx context.Context, endpoint string, data interface{}
 		if err != nil {
 			return nil, err
 		}
-		req = req.WithContext(ctx)
 		req.Header.Set("Content-Type", "application/json")
 		c.addAuth(req)
 		tracer.Start(req)
@@ -256,7 +252,7 @@ func (c *Client) PostJSON(ctx context.Context, endpoint string, data interface{}
 //
 // c.PutJSON(c.Endpoint("users"), map[string]string{"name": "alice@example.com"})
 //
-func (c *Client) PutJSON(ctx context.Context, endpoint string, data interface{}) (*Response, error) {
+func (c *Client) PutJSON(endpoint string, data interface{}) (*Response, error) {
 	// If the sanitizer is enabled, make sure the requested path is safe.
 	if c.sanitizerEnabled {
 		err := isPathSafe(endpoint)
@@ -272,7 +268,6 @@ func (c *Client) PutJSON(ctx context.Context, endpoint string, data interface{})
 		if err != nil {
 			return nil, err
 		}
-		req = req.WithContext(ctx)
 		req.Header.Set("Content-Type", "application/json")
 		c.addAuth(req)
 		tracer.Start(req)
@@ -284,7 +279,7 @@ func (c *Client) PutJSON(ctx context.Context, endpoint string, data interface{})
 //
 // c.PatchJSON(c.Endpoint("users"), map[string]string{"name": "alice@example.com"})
 //
-func (c *Client) PatchJSON(ctx context.Context, endpoint string, data interface{}) (*Response, error) {
+func (c *Client) PatchJSON(endpoint string, data interface{}) (*Response, error) {
 	// If the sanitizer is enabled, make sure the requested path is safe.
 	if c.sanitizerEnabled {
 		err := isPathSafe(endpoint)
@@ -300,7 +295,6 @@ func (c *Client) PatchJSON(ctx context.Context, endpoint string, data interface{
 		if err != nil {
 			return nil, err
 		}
-		req = req.WithContext(ctx)
 		req.Header.Set("Content-Type", "application/json")
 		c.addAuth(req)
 		tracer.Start(req)
@@ -312,7 +306,7 @@ func (c *Client) PatchJSON(ctx context.Context, endpoint string, data interface{
 //
 // re, err := c.Delete(c.Endpoint("users", "id1"))
 //
-func (c *Client) Delete(ctx context.Context, endpoint string) (*Response, error) {
+func (c *Client) Delete(endpoint string) (*Response, error) {
 	// If the sanitizer is enabled, make sure the requested path is safe.
 	if c.sanitizerEnabled {
 		err := isPathSafe(endpoint)
@@ -327,7 +321,6 @@ func (c *Client) Delete(ctx context.Context, endpoint string) (*Response, error)
 		if err != nil {
 			return nil, err
 		}
-		req = req.WithContext(ctx)
 		c.addAuth(req)
 		tracer.Start(req)
 		return c.client.Do(req)
@@ -338,20 +331,20 @@ func (c *Client) Delete(ctx context.Context, endpoint string) (*Response, error)
 //
 // re, err := c.DeleteWithParams(c.Endpoint("users", "id1"), url.Values{"force": []string{"true"}})
 //
-func (c *Client) DeleteWithParams(ctx context.Context, endpoint string, params url.Values) (*Response, error) {
+func (c *Client) DeleteWithParams(endpoint string, params url.Values) (*Response, error) {
 	baseURL, err := url.Parse(endpoint)
 	if err != nil {
 		return nil, err
 	}
 	baseURL.RawQuery = params.Encode()
-	return c.Delete(ctx, baseURL.String())
+	return c.Delete(baseURL.String())
 }
 
 // Get executes GET request to the server endpoint with optional query arguments passed in params
 //
 // re, err := c.Get(c.Endpoint("users"), url.Values{"name": []string{"John"}})
 //
-func (c *Client) Get(ctx context.Context, endpoint string, params url.Values) (*Response, error) {
+func (c *Client) Get(endpoint string, params url.Values) (*Response, error) {
 	// If the sanitizer is enabled, make sure the requested path is safe.
 	if c.sanitizerEnabled {
 		err := isPathSafe(endpoint)
@@ -371,7 +364,6 @@ func (c *Client) Get(ctx context.Context, endpoint string, params url.Values) (*
 		if err != nil {
 			return nil, err
 		}
-		req = req.WithContext(ctx)
 		c.addAuth(req)
 		tracer.Start(req)
 		return c.client.Do(req)
@@ -382,7 +374,7 @@ func (c *Client) Get(ctx context.Context, endpoint string, params url.Values) (*
 //
 // f, err := c.GetFile("files", "report.txt") // returns "/v1/files/report.txt"
 //
-func (c *Client) GetFile(ctx context.Context, endpoint string, params url.Values) (*FileResponse, error) {
+func (c *Client) GetFile(endpoint string, params url.Values) (*FileResponse, error) {
 	// If the sanitizer is enabled, make sure the requested path is safe.
 	if c.sanitizerEnabled {
 		err := isPathSafe(endpoint)
@@ -400,7 +392,6 @@ func (c *Client) GetFile(ctx context.Context, endpoint string, params url.Values
 	if err != nil {
 		return nil, err
 	}
-	req = req.WithContext(ctx)
 	c.addAuth(req)
 	tracer := c.newTracer()
 	tracer.Start(req)
@@ -426,7 +417,7 @@ type ReadSeekCloser interface {
 // OpenFile opens file using HTTP protocol and uses `Range` headers
 // to seek to various positions in the file, this means that server
 // has to support the flags `Range` and `Content-Range`
-func (c *Client) OpenFile(ctx context.Context, endpoint string, params url.Values) (ReadSeekCloser, error) {
+func (c *Client) OpenFile(endpoint string, params url.Values) (ReadSeekCloser, error) {
 	// If the sanitizer is enabled, make sure the requested path is safe.
 	if c.sanitizerEnabled {
 		err := isPathSafe(endpoint)
@@ -441,7 +432,7 @@ func (c *Client) OpenFile(ctx context.Context, endpoint string, params url.Value
 	}
 	u.RawQuery = params.Encode()
 
-	return newSeeker(c, ctx, u.String())
+	return newSeeker(c, u.String())
 }
 
 // RoundTripFn inidicates any function that can be passed to RoundTrip
