@@ -242,7 +242,7 @@ func (s *NethealthSuite) TestParseMetricsFailure(c *C) {
 	}{
 		{
 			comment:  Commentf("Expected missing request metrics error."),
-			expected: fmt.Sprintf("%s metrics not found, failed to parse echo requests", echoRequestLabel),
+			expected: fmt.Sprintf("failed to parse echo requests\n\t%s metrics not found", echoRequestLabel),
 			metrics: `# HELP nethealth_echo_timeout_total The number of echo requests that have timed out
 	      # TYPE nethealth_echo_timeout_total counter
 	      nethealth_echo_timeout_total{node_name="10.128.0.96",peer_name="10.128.0.70"} 37
@@ -251,7 +251,7 @@ func (s *NethealthSuite) TestParseMetricsFailure(c *C) {
 		},
 		{
 			comment:  Commentf("Expected missing timeout metrics error."),
-			expected: fmt.Sprintf("%s metrics not found, failed to parse echo timeouts", echoTimeoutLabel),
+			expected: fmt.Sprintf("failed to parse echo timeouts\n\t%s metrics not found", echoTimeoutLabel),
 			metrics: `# HELP nethealth_echo_request_total The number of echo requests that have been sent
 	      # TYPE nethealth_echo_request_total counter
 	      nethealth_echo_request_total{node_name="10.128.0.96",peer_name="10.128.0.70"} 236
