@@ -142,7 +142,7 @@ func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) 
 func (c *nethealthChecker) getNethealthAddr() (addr string, err error) {
 	opts := metav1.ListOptions{
 		LabelSelector: nethealthLabelSelector.String(),
-		FieldSelector: fields.OneTermEqualSelector("status.hostIP", c.AdvertiseIP).String(),
+		FieldSelector: fields.OneTermEqualSelector("spec.nodeName", c.AdvertiseIP).String(),
 		Limit:         1,
 	}
 	pods, err := c.Client.CoreV1().Pods(nethealthNamespace).List(opts)
@@ -436,7 +436,7 @@ func (r *netStats) Set(peer string, data peerData) error {
 	return r.TTLMap.Set(peer, data, netStatsTTLSeconds)
 }
 
-// peerData keeps trock of relevant nethealth data for a node.
+// peerData keeps track of relevant nethealth data for a node.
 type peerData struct {
 	// prevRequestTotal keeps track of the previously recorded total number of
 	// requests sent to the peer. This is necessary to calculate the number of
