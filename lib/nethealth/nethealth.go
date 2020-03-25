@@ -527,6 +527,8 @@ func (s *Server) sendHeartbeat(peer *peer) {
 		"id":        peer.echoCounter,
 	})
 
+	s.promPeerRequest.WithLabelValues(s.config.NodeName, peer.name).Inc()
+
 	// If we don't know the pod IP address of the peer, we still want to generate a timeout, but not actually send
 	// a heartbeat
 	peer.echoTimeout = true
@@ -554,7 +556,6 @@ func (s *Server) sendHeartbeat(peer *peer) {
 		log.WithError(err).Warn("Failed to send ping.")
 		return
 	}
-	s.promPeerRequest.WithLabelValues(s.config.NodeName, peer.name).Inc()
 
 	log.Debug("Sent echo request.")
 }
