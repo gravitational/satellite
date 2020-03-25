@@ -263,36 +263,26 @@ func (c *nethealthChecker) isHealthy(peer string) (healthy bool, err error) {
 // fetchNethealthMetrics collects the network metrics from the nethealth pod
 // specified by addr. Returns mapping of peer to networkData.
 func fetchNethealthMetrics(ctx context.Context, addr string) (map[string]networkData, error) {
-	respCh := make(chan *http.Response, 1)
-	errCh := make(chan error, 1)
-	go func() {
-		// The two relevant metrics exposed by nethealth are 'nethealth_echo_request_total' and
-		// 'nethealth_echo_timeout_total'. We expect a pair of request/timeout metrics per peer.
-		// Example metrics received from nethealth may look something like the output below:
-		//
-		//      # HELP nethealth_echo_request_total The number of echo requests that have been sent
-		//      # TYPE nethealth_echo_request_total counter
-		//      nethealth_echo_request_total{node_name="10.128.0.96",peer_name="10.128.0.70"} 236
-		//      nethealth_echo_request_total{node_name="10.128.0.96",peer_name="10.128.0.97"} 273
-		//      # HELP nethealth_echo_timeout_total The number of echo requests that have timed out
-		//      # TYPE nethealth_echo_timeout_total counter
-		//      nethealth_echo_timeout_total{node_name="10.128.0.96",peer_name="10.128.0.70"} 37
-		//      nethealth_echo_timeout_total{node_name="10.128.0.96",peer_name="10.128.0.97"} 0
-		resp, err := http.Get(addr + "/metrics")
-		if err != nil {
-			errCh <- err
-			return
-		}
-		respCh <- resp
-	}()
-
-	var resp *http.Response
-	select {
-	case resp = <-respCh:
-	case err := <-errCh:
+	// The two relevant metrics exposed by nethealth are 'nethealth_echo_request_total' and
+	// 'nethealth_echo_timeout_total'. We expect a pair of request/timeout metrics per peer.
+	// Example metrics received from nethealth may look something like the output below:
+	//
+	//      # HELP nethealth_echo_request_total The number of echo requests that have been sent
+	//      # TYPE nethealth_echo_request_total counter
+	//      nethealth_echo_request_total{node_name="10.128.0.96",peer_name="10.128.0.70"} 236
+	//      nethealth_echo_request_total{node_name="10.128.0.96",peer_name="10.128.0.97"} 273
+	//      # HELP nethealth_echo_timeout_total The number of echo requests that have timed out
+	//      # TYPE nethealth_echo_timeout_total counter
+	//      nethealth_echo_timeout_total{node_name="10.128.0.96",peer_name="10.128.0.70"} 37
+	//      nethealth_echo_timeout_total{node_name="10.128.0.96",peer_name="10.128.0.97"} 0
+	req, err := http.NewRequestWithContext(ctx, "GET", addr+"/metrics", nil)
+	if err != nil {
 		return nil, trace.Wrap(err)
-	case <-ctx.Done():
-		return nil, trace.Wrap(ctx.Err())
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, trace.Wrap(err, "failed to fetch metrics")
 	}
 
 	defer func() {
