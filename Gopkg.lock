@@ -130,6 +130,14 @@
   version = "v4.2.0"
 
 [[projects]]
+  digest = "1:af43bdaaf86655a2343f113e9b293bbc16b12099eaeb223982bbe4d4c22ba14d"
+  name = "github.com/fatih/structs"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "4966fc68f5b7593aafa6cbbba2d65ec6e1416047"
+  version = "v1.1.0"
+
+[[projects]]
   digest = "1:fb46255681497314debedde38b64be32a75bae50bad107586c22f1662bf2d352"
   name = "github.com/go-ini/ini"
   packages = ["."]
@@ -392,6 +400,14 @@
   pruneopts = "UT"
   revision = "aedfce64c122eef47009b7f80c9771044753215d"
   version = "v1.8.0"
+
+[[projects]]
+  digest = "1:b787518ff1745b6710250b526c50cb32fa3322127d144bebc3602a606cbe332a"
+  name = "github.com/mailgun/holster"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "2296d2fb30b143ac13780cb07dd5e75b22d044b1"
+  version = "v3.8.0"
 
 [[projects]]
   branch = "master"
@@ -977,11 +993,14 @@
     "github.com/magefile/mage/mage",
     "github.com/magefile/mage/mg",
     "github.com/magefile/mage/sh",
+    "github.com/mailgun/holster",
     "github.com/mattn/go-sqlite3",
     "github.com/miekg/dns",
     "github.com/mitchellh/go-ps",
     "github.com/prometheus/client_golang/prometheus",
     "github.com/prometheus/client_golang/prometheus/promhttp",
+    "github.com/prometheus/client_model/go",
+    "github.com/prometheus/common/expfmt",
     "github.com/prometheus/procfs",
     "github.com/sirupsen/logrus",
     "github.com/stretchr/testify/assert",
