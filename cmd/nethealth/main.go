@@ -36,7 +36,7 @@ func init() {
 
 func main() {
 	if err := run(); err != nil {
-		log.Fatal(trace.DebugReport(err))
+		log.WithError(err).Error("Failed to run nethealth.")
 	}
 }
 
@@ -59,12 +59,9 @@ func run() error {
 				Default(nethealth.DefaultSelector).String()
 	)
 
-	var cmd string
-	var err error
-
-	cmd, err = app.Parse(os.Args[1:])
+	cmd, err := app.Parse(os.Args[1:])
 	if err != nil {
-		return trace.Errorf("unable to parse command line.\nUse nethealth --help for help.")
+		return trace.BadParameter("unable to parse command line.\nUse nethealth --help for help.")
 	}
 
 	log.SetOutput(os.Stderr)
