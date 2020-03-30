@@ -84,7 +84,7 @@ func (*MonitoringSuite) TestValidatesOS(c *C) {
 			probes: health.Probes{
 				prober.newRaisedProbe(probe{
 					detail: "failed to validate OS distribution",
-					error:  "permission denied, failed to query OS version",
+					error:  "failed to query OS version\n\tpermission denied",
 				}),
 			},
 			comment: "fail if error prevents from reading the file (other than not found)",
