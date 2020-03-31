@@ -223,10 +223,7 @@ func (s *NethealthSuite) TestParseMetricsSuccess(c *C) {
 	for _, testCase := range testCases {
 		testCase := testCase
 
-		metricFamilies, err := s.textToMetrics(testCase.metrics)
-		c.Assert(err, IsNil, testCase.comment)
-
-		netData, err := parseMetrics(metricFamilies)
+		netData, err := parseMetrics([]byte(testCase.metrics))
 		c.Assert(err, IsNil, testCase.comment)
 		c.Assert(netData, test.DeepCompare, testCase.expected)
 	}
@@ -287,10 +284,7 @@ func (s *NethealthSuite) TestParseMetricsFailure(c *C) {
 	for _, testCase := range testCases {
 		testCase := testCase
 
-		metricFamilies, err := s.textToMetrics(testCase.metrics)
-		c.Assert(err, IsNil, testCase.comment)
-
-		_, err = parseMetrics(metricFamilies)
+		_, err := parseMetrics([]byte(testCase.metrics))
 		c.Assert(err.Error(), Equals, testCase.expected, testCase.comment)
 	}
 }
