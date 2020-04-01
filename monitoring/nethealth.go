@@ -125,9 +125,17 @@ func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) 
 		return trace.Wrap(err) // received unexpected error, maybe network-related, will add error probe above
 	}
 
-	netData, err := fetchNethealthMetrics(ctx, addr)
+	resp, err := fetchNethealthMetrics(ctx, addr)
 	if err != nil {
 		return trace.Wrap(err, "failed to fetch nethealth metrics")
+	}
+
+	netData, err := parseMetrics(resp)
+	if err != nil {
+		log.WithError(err).
+			WithField("nethealth-metrics", string(resp)).
+			Error("Received incomplete set of metrics. Could be due to a bug in nethealth or a change in labels.")
+		return nil
 	}
 
 	updated, err := c.updateStats(netData)
@@ -261,8 +269,8 @@ func (c *nethealthChecker) isHealthy(peer string) (healthy bool, err error) {
 }
 
 // fetchNethealthMetrics collects the network metrics from the nethealth pod
-// specified by addr. Returns mapping of peer to networkData.
-func fetchNethealthMetrics(ctx context.Context, addr string) (map[string]networkData, error) {
+// specified by addr. Returns the resp as an array of bytes.
+func fetchNethealthMetrics(ctx context.Context, addr string) ([]byte, error) {
 	// The two relevant metrics exposed by nethealth are 'nethealth_echo_request_total' and
 	// 'nethealth_echo_timeout_total'. We expect a pair of request/timeout metrics per peer.
 	// Example metrics received from nethealth may look something like the output below:
@@ -297,26 +305,19 @@ func fetchNethealthMetrics(ctx context.Context, addr string) (map[string]network
 		return nil, trace.Wrap(err)
 	}
 
-	var parser expfmt.TextParser
-	metricFamilies, err := parser.TextToMetricFamilies(bytes.NewReader(byteData))
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
-
-	netData, err := parseMetrics(metricFamilies)
-	if err != nil {
-		log.WithError(err).
-			WithField("nethealth-metrics", string(byteData)).
-			Error("Received incomplete set of metrics. Could be due to a bug in nethealth or a change in labels.")
-		return nil, trace.Wrap(err)
-	}
-
-	return netData, nil
+	return byteData, nil
 }
 
-// parseMetrics parses the MetricsFamilies and returns the structured network
-// data. data maps a peer to its total request counter and total timeout counter.
-func parseMetrics(metricFamilies map[string]*dto.MetricFamily) (map[string]networkData, error) {
+// parseMetrics parses the provided data and returns the structured network
+// data. The returned networkData maps a peer to its total request counter and
+// total timeout counter.
+func parseMetrics(data []byte) (map[string]networkData, error) {
+	var parser expfmt.TextParser
+	metricFamilies, err := parser.TextToMetricFamilies(bytes.NewReader(data))
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
 	// echoRequests maps a peer to the current running total number of requests sent to that peer.
 	echoRequests, err := parseCounter(metricFamilies, echoRequestLabel)
 	if err != nil {
