@@ -164,7 +164,7 @@ func (c *nethealthChecker) getNethealthAddr() (addr string, err error) {
 		}
 	}
 
-	return addr, trace.NotFound("unable to find local nethealth pod")
+	return addr, trace.NotFound("unable to find nethealth pod running on host %s", c.AdvertiseIP)
 }
 
 // updateStats updates netStats with new incoming data.
@@ -248,6 +248,9 @@ func (c *nethealthChecker) verifyNethealth(peers []string, reporter health.Repor
 		if err != nil {
 			return trace.Wrap(err)
 		}
+		if len(data.packetLoss) == 0 {
+			continue
+		}
 		packetLoss := data.packetLoss[len(data.packetLoss)-1]
 		reporter.Add(nethealthFailureProbe(c.Name(), peer, packetLoss))
 	}
@@ -284,8 +287,8 @@ func (c *nethealthChecker) isHealthy(peer string) (healthy bool, err error) {
 func nethealthFailureProbe(name, peer string, packetLoss float64) *pb.Probe {
 	return &pb.Probe{
 		Checker: name,
-		Detail: fmt.Sprintf("overlay packet loss for peer %s is higher than the allowed threshold of %.2f%%: %.2f%%",
-			peer, packetLossThreshold*100, packetLoss*100),
+		Detail: fmt.Sprintf("overlay packet loss for node %s is higher than the allowed threshold of %.2f%%: %.2f%%",
+			peer, thresholdPercent, packetLoss*100),
 		Status:   pb.Probe_Failed,
 		Severity: pb.Probe_Warning,
 	}
@@ -498,6 +501,10 @@ const (
 	// loss is consistently observed to be above this threshold over the entire
 	// interval, network communication will be considered unhealthy.
 	packetLossThreshold = 0.20
+
+	// thresholdPercent converts the packetLossThreshold into a percent value.
+	// Used for logging purposes.
+	thresholdPercent = packetLossThreshold * 100
 )
 
 // nethealthLabelSelector defines label selector used when querying for
