@@ -292,6 +292,7 @@ func (c *timeDriftChecker) shouldCheckNode(node serf.Member) bool {
 func (c *timeDriftChecker) getAgentClient(ctx context.Context, node serf.Member) (client.Client, error) {
 	c.mu.Lock()
 	if conn, exists := c.clients[node.Addr.String()]; exists {
+		c.mu.Unlock()
 		return conn, nil
 	}
 	c.mu.Unlock()
