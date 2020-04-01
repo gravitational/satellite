@@ -496,7 +496,7 @@ func (s *Server) processAck(e messageWrapper) error {
 		if err != nil {
 			return trace.Wrap(err)
 		}
-		if pkt.Seq != peer.echoCounter {
+		if uint16(pkt.Seq) != uint16(peer.echoCounter) {
 			return trace.BadParameter("Response sequence doesn't match latest request.")
 		}
 
@@ -508,7 +508,7 @@ func (s *Server) processAck(e messageWrapper) error {
 		s.WithFields(logrus.Fields{
 			"peer_name": peer.name,
 			"peer_addr": peer.addr,
-			"id":        pkt.Seq,
+			"id":        peer.echoCounter,
 			"rtt":       rtt,
 		}).Debug("Ack.")
 	default:
