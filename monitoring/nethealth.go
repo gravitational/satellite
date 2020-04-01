@@ -36,7 +36,6 @@ import (
 	"github.com/prometheus/common/expfmt"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 )
 
@@ -150,18 +149,19 @@ func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) 
 func (c *nethealthChecker) getNethealthAddr() (addr string, err error) {
 	opts := metav1.ListOptions{
 		LabelSelector: nethealthLabelSelector.String(),
-		FieldSelector: fields.OneTermEqualSelector("spec.nodeName", c.AdvertiseIP).String(),
-		Limit:         1,
 	}
 	pods, err := c.Client.CoreV1().Pods(nethealthNamespace).List(opts)
 	if err != nil {
 		return addr, utils.ConvertError(err) // this will convert error to a proper trace error, e.g. trace.NotFound
 	}
 
-	if len(pods.Items) == 0 {
-		return addr, trace.NotFound("unable to find local nethealth pod")
+	for _, pod := range pods.Items {
+		if pod.Status.HostIP == c.AdvertiseIP {
+			return fmt.Sprintf("http://%s:%d", pod.Status.PodIP, c.NethealthPort), nil
+		}
 	}
-	return fmt.Sprintf("http://%s:%d", pods.Items[0].Status.PodIP, c.NethealthPort), nil
+
+	return addr, trace.NotFound("unable to find local nethealth pod")
 }
 
 // updateStats updates netStats with new incoming data.
