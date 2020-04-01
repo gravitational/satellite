@@ -273,8 +273,10 @@ func (c *timeDriftChecker) removeExpiredClients(members []serf.Member) {
 			continue
 		}
 		if err := conn.Close(); err != nil {
-			log.WithError(err).Error("Failed to close client connection.")
+			log.WithError(err).WithField("address", addr).Error("Failed to close client connection.")
+			continue
 		}
+		log.WithField("address", addr).Info("Closed client connection.")
 		delete(c.clients, addr)
 	}
 }
@@ -289,18 +291,20 @@ func (c *timeDriftChecker) shouldCheckNode(node serf.Member) bool {
 // getAgentClient returns Satellite agent client for the provided node.
 func (c *timeDriftChecker) getAgentClient(ctx context.Context, node serf.Member) (client.Client, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if conn, exists := c.clients[node.Addr.String()]; exists {
 		return conn, nil
 	}
+	c.mu.Unlock()
 
 	conn, err := c.DialRPC(ctx, &node)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
 
+	c.mu.Lock()
 	c.clients[node.Addr.String()] = conn
+	c.mu.Unlock()
+
 	return conn, nil
 }
 
