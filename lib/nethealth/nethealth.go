@@ -487,7 +487,7 @@ func (s *Server) processAck(e messageWrapper) error {
 		return nil
 	default:
 		//unexpected / unknown
-		return trace.BadParameter("received unexpected icmp message type").(trace.Error).AddField("type", e.message.Type)
+		return trace.BadParameter("received unexpected icmp message type").AddField("type", e.message.Type)
 	}
 
 	switch pkt := e.message.Body.(type) {
@@ -497,8 +497,9 @@ func (s *Server) processAck(e messageWrapper) error {
 			return trace.Wrap(err)
 		}
 		if uint16(pkt.Seq) != uint16(peer.echoCounter) {
-			return trace.BadParameter("response sequence doesn't match latest request. Expected %d, received %d",
-				uint16(pkt.Seq), uint16(peer.echoCounter))
+			return trace.BadParameter("response sequence doesn't match latest request.").
+				AddField("expected", uint16(peer.echoCounter)).
+				AddField("received", uint16(pkt.Seq))
 		}
 
 		rtt := e.rxTime.Sub(peer.echoTime)
@@ -509,7 +510,8 @@ func (s *Server) processAck(e messageWrapper) error {
 		s.WithFields(logrus.Fields{
 			"peer_name": peer.name,
 			"peer_addr": peer.addr,
-			"id":        peer.echoCounter,
+			"counter":   peer.echoCounter,
+			"seq":       uint16(peer.echoCounter),
 			"rtt":       rtt,
 		}).Debug("Ack.")
 	default:
