@@ -28,6 +28,7 @@ import (
 
 	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/agent/health"
+	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/utils"
 
 	"github.com/gravitational/trace"
@@ -111,7 +112,9 @@ func (c *nethealthChecker) Check(ctx context.Context, reporter health.Reporter) 
 		reporter.Add(NewProbeFromErr(c.Name(), "failed to verify nethealth", err))
 		return
 	}
-	reporter.Add(NewSuccessProbe(c.Name()))
+	if reporter.NumProbes() == 0 {
+		reporter.Add(NewSuccessProbe(c.Name()))
+	}
 }
 
 func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) error {
@@ -236,9 +239,17 @@ func (c *nethealthChecker) verifyNethealth(peers []string, reporter health.Repor
 		if err != nil {
 			return trace.Wrap(err)
 		}
-		if !healthy {
-			reporter.Add(NewProbeFromErr(c.Name(), nethealthDetail(peer), nil))
+		if healthy {
+			continue
 		}
+
+		// Report last recorded packet loss percentage
+		data, err := c.peerStats.Get(peer)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+		packetLoss := data.packetLoss[len(data.packetLoss)-1]
+		reporter.Add(nethealthFailureProbe(c.Name(), peer, packetLoss))
 	}
 	return nil
 }
@@ -266,6 +277,18 @@ func (c *nethealthChecker) isHealthy(peer string) (healthy bool, err error) {
 	}
 
 	return false, nil
+}
+
+// nethealthFailureProbe constructs a probe that represents failed nethealth check
+// against the specified peer.
+func nethealthFailureProbe(name, peer string, packetLoss float64) *pb.Probe {
+	return &pb.Probe{
+		Checker: name,
+		Detail: fmt.Sprintf("overlay packet loss for peer %s is higher than the allowed threshold of %.2f%%: %.2f%%",
+			peer, packetLossThreshold*100, packetLoss*100),
+		Status:   pb.Probe_Failed,
+		Severity: pb.Probe_Warning,
+	}
 }
 
 // fetchNethealthMetrics collects the network metrics from the nethealth pod
@@ -378,11 +401,6 @@ func getPeerName(labels []*dto.LabelPair) (peer string, err error) {
 		}
 	}
 	return "", trace.NotFound("unable to find %s label", peerLabel)
-}
-
-// nethealthDetail returns a failed probe detail message.
-func nethealthDetail(name string) string {
-	return fmt.Sprintf("overlay network communication failure with %s", name)
 }
 
 // netStats holds nethealth data for a peer.
