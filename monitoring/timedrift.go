@@ -31,7 +31,6 @@ import (
 	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
-	"github.com/mailgun/holster"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -41,11 +40,6 @@ const (
 	// timeDriftThreshold sets the default threshold of the acceptable time
 	// difference between nodes.
 	timeDriftThreshold = 300 * time.Millisecond
-	// clientsCacheCapacity is the capacity of the TTL map that holds
-	// clients to satellite agents on other cluster nodes.
-	clientsCacheCapacity = 1000
-	// clientCacheTTLSeconds specifies how long clients information will be kept before being dropped
-	clientsCacheTTLSeconds = 3600 // 1 hour
 )
 
 // timeDriftChecker is a checker that verifies that the time difference between
@@ -58,7 +52,7 @@ type timeDriftChecker struct {
 	// mu protects the clients map.
 	mu sync.Mutex
 	// clients contains RPC clients for other cluster nodes.
-	clients *holster.TTLMap
+	clients map[string]client.Client
 }
 
 // TimeDriftCheckerConfig stores configuration for the time drift check.
@@ -110,13 +104,10 @@ func NewTimeDriftChecker(conf TimeDriftCheckerConfig) (c health.Checker, err err
 	if err := conf.CheckAndSetDefaults(); err != nil {
 		return nil, trace.Wrap(err)
 	}
-
-	clientsCache := holster.NewTTLMap(clientsCacheCapacity)
-
 	return &timeDriftChecker{
 		TimeDriftCheckerConfig: conf,
 		FieldLogger:            log.WithField(trace.Component, timeDriftCheckerID),
-		clients:                clientsCache,
+		clients:                make(map[string]client.Client),
 	}, nil
 }
 
@@ -253,12 +244,39 @@ func (c *timeDriftChecker) nodesToCheck() (result []serf.Member, err error) {
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
+
+	c.removeExpiredClients(nodes)
+
 	for _, node := range nodes {
 		if c.shouldCheckNode(node) {
 			result = append(result, node)
 		}
 	}
 	return result, nil
+}
+
+// removeExpiredClients closes client connections to nodes that have left the
+// cluster and deletes the entry from the cache.
+func (c *timeDriftChecker) removeExpiredClients(members []serf.Member) {
+	currentMembers := make(map[string]struct{})
+	for _, member := range members {
+		currentMembers[member.Addr.String()] = struct{}{}
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for addr, conn := range c.clients {
+		if _, ok := currentMembers[addr]; ok {
+			continue
+		}
+		if err := conn.Close(); err != nil {
+			log.WithError(err).WithField("address", addr).Error("Failed to close client connection.")
+			continue
+		}
+		log.WithField("address", addr).Info("Closed client connection.")
+		delete(c.clients, addr)
+	}
 }
 
 // shouldCheckNode returns true if the check should be run against specified
@@ -271,19 +289,31 @@ func (c *timeDriftChecker) shouldCheckNode(node serf.Member) bool {
 // getAgentClient returns Satellite agent client for the provided node.
 func (c *timeDriftChecker) getAgentClient(ctx context.Context, node serf.Member) (client.Client, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	clientI, exists := c.clients.Get(node.Addr.String())
-	if exists {
-		return clientI.(client.Client), nil
+	if conn, exists := c.clients[node.Addr.String()]; exists {
+		c.mu.Unlock()
+		return conn, nil
 	}
-	client, err := c.DialRPC(ctx, &node)
+	c.mu.Unlock()
+
+	newConn, err := c.DialRPC(ctx, &node)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	if err := c.clients.Set(node.Addr.String(), client, clientsCacheTTLSeconds); err != nil {
-		return nil, trace.Wrap(err)
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Close newly created client connection if a new client was already cached while dialing.
+	if conn, exists := c.clients[node.Addr.String()]; exists {
+		if err := newConn.Close(); err != nil {
+			log.WithError(err).WithField("address", node.Addr.String()).Error("Failed to close client connection.")
+		}
+		return conn, nil
 	}
-	return client, nil
+
+	// Cache and return new client connection.
+	c.clients[node.Addr.String()] = newConn
+	return newConn, nil
 }
 
 // isDriftHigh returns true if the provided drift value is over the threshold.
