@@ -497,7 +497,8 @@ func (s *Server) processAck(e messageWrapper) error {
 			return trace.Wrap(err)
 		}
 		if uint16(pkt.Seq) != uint16(peer.echoCounter) {
-			return trace.BadParameter("Response sequence doesn't match latest request.")
+			return trace.BadParameter("response sequence doesn't match latest request. Expected %d, received %d",
+				uint16(pkt.Seq), uint16(peer.echoCounter))
 		}
 
 		rtt := e.rxTime.Sub(peer.echoTime)
