@@ -167,7 +167,7 @@ func (s *NethealthSuite) TestNethealthVerification(c *C) {
 		},
 		{
 			comment:  Commentf("Expected failed probe. Timeouts increase at each interval."),
-			expected: &health.Probes{NewProbeFromErr(nethealthCheckerID, nethealthDetail(testNode), nil)},
+			expected: &health.Probes{nethealthFailureProbe(nethealthCheckerID, testNode, abovePLT)},
 			storedData: peerData{
 				packetLoss: s.newPacketLoss(abovePLT, abovePLT, abovePLT, abovePLT, abovePLT),
 			},
