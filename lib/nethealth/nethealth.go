@@ -487,7 +487,7 @@ func (s *Server) processAck(e messageWrapper) error {
 		return nil
 	default:
 		//unexpected / unknown
-		return trace.BadParameter("received unexpected icmp message type").(trace.Error).AddField("type", e.message.Type)
+		return trace.BadParameter("received unexpected icmp message type").AddField("type", e.message.Type)
 	}
 
 	switch pkt := e.message.Body.(type) {
@@ -496,8 +496,10 @@ func (s *Server) processAck(e messageWrapper) error {
 		if err != nil {
 			return trace.Wrap(err)
 		}
-		if pkt.Seq != peer.echoCounter {
-			return trace.BadParameter("Response sequence doesn't match latest request.")
+		if uint16(pkt.Seq) != uint16(peer.echoCounter) {
+			return trace.BadParameter("response sequence doesn't match latest request.").
+				AddField("expected", uint16(peer.echoCounter)).
+				AddField("received", uint16(pkt.Seq))
 		}
 
 		rtt := e.rxTime.Sub(peer.echoTime)
@@ -508,7 +510,8 @@ func (s *Server) processAck(e messageWrapper) error {
 		s.WithFields(logrus.Fields{
 			"peer_name": peer.name,
 			"peer_addr": peer.addr,
-			"id":        pkt.Seq,
+			"counter":   peer.echoCounter,
+			"seq":       uint16(peer.echoCounter),
 			"rtt":       rtt,
 		}).Debug("Ack.")
 	default:
@@ -526,6 +529,8 @@ func (s *Server) sendHeartbeat(peer *peer) {
 		"peer_addr": peer.addr,
 		"id":        peer.echoCounter,
 	})
+
+	s.promPeerRequest.WithLabelValues(s.config.NodeName, peer.name).Inc()
 
 	// If we don't know the pod IP address of the peer, we still want to generate a timeout, but not actually send
 	// a heartbeat
@@ -554,7 +559,6 @@ func (s *Server) sendHeartbeat(peer *peer) {
 		log.WithError(err).Warn("Failed to send ping.")
 		return
 	}
-	s.promPeerRequest.WithLabelValues(s.config.NodeName, peer.name).Inc()
 
 	log.Debug("Sent echo request.")
 }

@@ -24,9 +24,9 @@ import (
 	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/agent/health"
 	"github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/lib/rpc/client"
 
 	"github.com/gravitational/trace"
-	"github.com/gravitational/ttlmap"
 	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
 	"github.com/sirupsen/logrus"
@@ -185,14 +185,10 @@ func (a *mockedTimeAgentClient) Close() error {
 	return nil
 }
 
-func newClientsCache(c *check.C, times map[string]time.Time) *ttlmap.TTLMap {
-	clients, err := ttlmap.New(10)
-	c.Assert(err, check.IsNil)
+func newClientsCache(c *check.C, times map[string]time.Time) map[string]client.Client {
+	clients := make(map[string]client.Client)
 	for nodeName, nodeTime := range times {
-		clients.Set(
-			nodes[nodeName].Addr.String(),
-			newMockedTimeAgentClient(nodeTime),
-			time.Hour)
+		clients[nodes[nodeName].Addr.String()] = newMockedTimeAgentClient(nodeTime)
 	}
 	return clients
 }
