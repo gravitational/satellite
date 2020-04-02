@@ -109,6 +109,7 @@ func (c *nethealthChecker) Name() string {
 func (c *nethealthChecker) Check(ctx context.Context, reporter health.Reporter) {
 	err := c.check(ctx, reporter)
 	if err != nil {
+		log.WithError(err).Warn("Failed to verify nethealth")
 		reporter.Add(NewProbeFromErr(c.Name(), "failed to verify nethealth", err))
 		return
 	}
@@ -120,7 +121,7 @@ func (c *nethealthChecker) Check(ctx context.Context, reporter health.Reporter) 
 func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) error {
 	addr, err := c.getNethealthAddr()
 	if trace.IsNotFound(err) {
-		log.Warn("Nethealth pod was not found.")
+		log.WithError(err).Warn("Nethealth pod was not found.")
 		return nil // pod was not found, log and treat gracefully
 	}
 	if err != nil {
@@ -160,6 +161,9 @@ func (c *nethealthChecker) getNethealthAddr() (addr string, err error) {
 
 	for _, pod := range pods.Items {
 		if pod.Status.HostIP == c.AdvertiseIP {
+			if pod.Status.PodIP == "" {
+				return addr, trace.NotFound("local nethealth pod IP has not been assigned yet.")
+			}
 			return fmt.Sprintf("http://%s:%d", pod.Status.PodIP, c.NethealthPort), nil
 		}
 	}

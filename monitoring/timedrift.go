@@ -292,20 +292,30 @@ func (c *timeDriftChecker) shouldCheckNode(node serf.Member) bool {
 func (c *timeDriftChecker) getAgentClient(ctx context.Context, node serf.Member) (client.Client, error) {
 	c.mu.Lock()
 	if conn, exists := c.clients[node.Addr.String()]; exists {
+		c.mu.Unlock()
 		return conn, nil
 	}
 	c.mu.Unlock()
 
-	conn, err := c.DialRPC(ctx, &node)
+	newConn, err := c.DialRPC(ctx, &node)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
 
 	c.mu.Lock()
-	c.clients[node.Addr.String()] = conn
-	c.mu.Unlock()
+	defer c.mu.Unlock()
 
-	return conn, nil
+	// Close newly created client connection if a new client was already cached while dialing.
+	if conn, exists := c.clients[node.Addr.String()]; exists {
+		if err := newConn.Close(); err != nil {
+			log.WithError(err).WithField("address", node.Addr.String()).Error("Failed to close client connection.")
+		}
+		return conn, nil
+	}
+
+	// Cache and return new client connection.
+	c.clients[node.Addr.String()] = newConn
+	return newConn, nil
 }
 
 // isDriftHigh returns true if the provided drift value is over the threshold.
