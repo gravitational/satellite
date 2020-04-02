@@ -161,6 +161,9 @@ func (c *nethealthChecker) getNethealthAddr() (addr string, err error) {
 
 	for _, pod := range pods.Items {
 		if pod.Status.HostIP == c.AdvertiseIP {
+			if pod.Status.PodIP == "" {
+				return addr, trace.NotFound("local nethealth pod IP has not been assigned yet.")
+			}
 			return fmt.Sprintf("http://%s:%d", pod.Status.PodIP, c.NethealthPort), nil
 		}
 	}
