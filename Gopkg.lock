@@ -217,12 +217,12 @@
   version = "v1.0.0"
 
 [[projects]]
-  digest = "1:418247f700939c99867b42639d985686ba229fd9f8ee9e119c7cc3ffde6e0fe3"
+  digest = "1:dc84545f9f2a442b14864f2f7e54ae556cae53bd437a05a456572fea9e73cc87"
   name = "github.com/gravitational/trace"
   packages = ["."]
   pruneopts = "UT"
-  revision = "a535a178675fb4a11ba74818491754a8c5575dd6"
-  version = "1.1.8"
+  revision = "dd5b2e8eae86d31f6273ff3ac46d5b15edd6d6be"
+  version = "1.1.10"
 
 [[projects]]
   digest = "1:01cb46669ee737a700ca9a0968ffe2aa820f262e5f49e1e54f8bfc441650ea8e"
@@ -993,6 +993,8 @@
     "github.com/mitchellh/go-ps",
     "github.com/prometheus/client_golang/prometheus",
     "github.com/prometheus/client_golang/prometheus/promhttp",
+    "github.com/prometheus/client_model/go",
+    "github.com/prometheus/common/expfmt",
     "github.com/prometheus/procfs",
     "github.com/sirupsen/logrus",
     "github.com/stretchr/testify/assert",
