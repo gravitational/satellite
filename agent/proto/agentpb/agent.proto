@@ -183,7 +183,7 @@ message TimelineEvent {
 
     LeaderElected leaderElected = 11;
 
-    // TODO: Additional events
+    UnknownEvent unknownEvent = 12;
   }
 }
 

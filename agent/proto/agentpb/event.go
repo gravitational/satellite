@@ -121,3 +121,12 @@ func NewLeaderElected(timestamp time.Time, node string) *TimelineEvent {
 	}
 	return event
 }
+
+// NewUnknownEvent constructs a new UnknownEvent.
+func NewUnknownEvent(timestamp time.Time) *TimelineEvent {
+	event := newTimelineEvent(timestamp)
+	event.Data = &TimelineEvent_UnknownEvent{
+		UnknownEvent: &UnknownEvent{},
+	}
+	return event
+}
