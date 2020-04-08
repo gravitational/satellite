@@ -49,28 +49,28 @@ type sqlEvent struct {
 }
 
 // ProtoBuf returns the sql event row as a protobuf message.
-func (r sqlEvent) ProtoBuf() (event *pb.TimelineEvent, err error) {
+func (r sqlEvent) ProtoBuf() (event *pb.TimelineEvent) {
 	switch history.EventType(r.EventType) {
 	case history.ClusterDegraded:
-		return pb.NewClusterDegraded(r.Timestamp), nil
+		return pb.NewClusterDegraded(r.Timestamp)
 	case history.ClusterHealthy:
-		return pb.NewClusterHealthy(r.Timestamp), nil
+		return pb.NewClusterHealthy(r.Timestamp)
 	case history.NodeAdded:
-		return pb.NewNodeAdded(r.Timestamp, r.Node.String), nil
+		return pb.NewNodeAdded(r.Timestamp, r.Node.String)
 	case history.NodeRemoved:
-		return pb.NewNodeRemoved(r.Timestamp, r.Node.String), nil
+		return pb.NewNodeRemoved(r.Timestamp, r.Node.String)
 	case history.NodeDegraded:
-		return pb.NewNodeDegraded(r.Timestamp, r.Node.String), nil
+		return pb.NewNodeDegraded(r.Timestamp, r.Node.String)
 	case history.NodeHealthy:
-		return pb.NewNodeHealthy(r.Timestamp, r.Node.String), nil
+		return pb.NewNodeHealthy(r.Timestamp, r.Node.String)
 	case history.ProbeFailed:
-		return pb.NewProbeFailed(r.Timestamp, r.Node.String, r.Probe.String), nil
+		return pb.NewProbeFailed(r.Timestamp, r.Node.String, r.Probe.String)
 	case history.ProbeSucceeded:
-		return pb.NewProbeSucceeded(r.Timestamp, r.Node.String, r.Probe.String), nil
+		return pb.NewProbeSucceeded(r.Timestamp, r.Node.String, r.Probe.String)
 	case history.LeaderElected:
-		return pb.NewLeaderElected(r.Timestamp, r.Node.String), nil
+		return pb.NewLeaderElected(r.Timestamp, r.Node.String)
 	default:
-		return event, trace.BadParameter("unknown event type %s", r.EventType)
+		return pb.NewUnknownEvent(r.Timestamp)
 	}
 }
 

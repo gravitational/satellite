@@ -178,7 +178,8 @@ func (t *Timeline) insertEvents(ctx context.Context, events []*pb.TimelineEvent)
 	for _, event := range events {
 		row, err := newDataInserter(event)
 		if err != nil {
-			return trace.Wrap(err)
+			log.WithError(err).Warn("Attempting to insert unknown event.")
+			continue
 		}
 
 		err = row.Insert(ctx, sqlExecer)
@@ -217,12 +218,7 @@ func (t *Timeline) GetEvents(ctx context.Context, params map[string]string) (eve
 		if err := rows.StructScan(&row); err != nil {
 			return nil, trace.Wrap(err)
 		}
-
-		event, err := row.ProtoBuf()
-		if err != nil {
-			return nil, trace.Wrap(err)
-		}
-		events = append(events, event)
+		events = append(events, row.ProtoBuf())
 	}
 
 	if err := rows.Err(); err != nil {

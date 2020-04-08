@@ -41,28 +41,28 @@ type memEvent struct {
 }
 
 // ProtoBuf returns the event as a protobuf message.
-func (r memEvent) ProtoBuf() (event *pb.TimelineEvent, err error) {
+func (r memEvent) ProtoBuf() (event *pb.TimelineEvent) {
 	switch r.eventType {
 	case history.ClusterDegraded:
-		return pb.NewClusterDegraded(r.timestamp), nil
+		return pb.NewClusterDegraded(r.timestamp)
 	case history.ClusterHealthy:
-		return pb.NewClusterHealthy(r.timestamp), nil
+		return pb.NewClusterHealthy(r.timestamp)
 	case history.NodeAdded:
-		return pb.NewNodeAdded(r.timestamp, r.node), nil
+		return pb.NewNodeAdded(r.timestamp, r.node)
 	case history.NodeRemoved:
-		return pb.NewNodeRemoved(r.timestamp, r.node), nil
+		return pb.NewNodeRemoved(r.timestamp, r.node)
 	case history.NodeDegraded:
-		return pb.NewNodeDegraded(r.timestamp, r.node), nil
+		return pb.NewNodeDegraded(r.timestamp, r.node)
 	case history.NodeHealthy:
-		return pb.NewNodeHealthy(r.timestamp, r.node), nil
+		return pb.NewNodeHealthy(r.timestamp, r.node)
 	case history.ProbeFailed:
-		return pb.NewProbeFailed(r.timestamp, r.node, r.probe), nil
+		return pb.NewProbeFailed(r.timestamp, r.node, r.probe)
 	case history.ProbeSucceeded:
-		return pb.NewProbeSucceeded(r.timestamp, r.node, r.probe), nil
+		return pb.NewProbeSucceeded(r.timestamp, r.node, r.probe)
 	case history.LeaderElected:
-		return pb.NewLeaderElected(r.timestamp, r.node), nil
+		return pb.NewLeaderElected(r.timestamp, r.node)
 	default:
-		return event, trace.BadParameter("unknown event type %s", r.eventType)
+		return pb.NewUnknownEvent(r.timestamp)
 	}
 }
 

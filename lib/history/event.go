@@ -37,7 +37,7 @@ type Execer interface {
 // ProtoBuffer can be converted into a protobuf TimelineEvent.
 type ProtoBuffer interface {
 	// ProtoBuf returns event as a protobuf message.
-	ProtoBuf() (*pb.TimelineEvent, error)
+	ProtoBuf() *pb.TimelineEvent
 }
 
 // EventType specifies the type of event.

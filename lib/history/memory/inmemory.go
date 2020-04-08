@@ -28,6 +28,7 @@ import (
 
 	"github.com/gravitational/trace"
 	"github.com/jonboulle/clockwork"
+	log "github.com/sirupsen/logrus"
 )
 
 // Timeline represents a timeline of cluster status events. The Timeline
@@ -83,11 +84,7 @@ func (t *Timeline) GetEvents(_ context.Context, params map[string]string) (pbEve
 	events := t.getFilteredEvents(params)
 	pbEvents = make([]*pb.TimelineEvent, 0, len(events))
 	for _, event := range events {
-		pbEvent, err := event.ProtoBuf()
-		if err != nil {
-			return pbEvents, trace.Wrap(err)
-		}
-		pbEvents = append(pbEvents, pbEvent)
+		pbEvents = append(pbEvents, event.ProtoBuf())
 	}
 	return pbEvents, nil
 }
@@ -99,7 +96,8 @@ func (t *Timeline) insertEvents(ctx context.Context, events []*pb.TimelineEvent)
 	for _, event := range events {
 		row, err := newDataInserter(event)
 		if err != nil {
-			return trace.Wrap(err)
+			log.WithError(err).Warn("Attempting to insert unknown event.")
+			continue
 		}
 		if err := row.Insert(ctx, execer); err != nil {
 			return trace.Wrap(err)
