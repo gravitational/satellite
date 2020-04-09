@@ -26,6 +26,7 @@ import (
 	"time"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/lib/history"
 	"github.com/gravitational/satellite/utils"
 
 	"github.com/gravitational/trace"
@@ -176,22 +177,29 @@ func (t *Timeline) RecordEvents(ctx context.Context, events []*pb.TimelineEvent)
 func (t *Timeline) insertEvents(ctx context.Context, events []*pb.TimelineEvent) error {
 	sqlExecer := newSQLExecer(t.database)
 	for _, event := range events {
-		row, err := newDataInserter(event)
-		if err != nil {
-			log.WithError(err).Warn("Attempting to insert unknown event.")
-			continue
-		}
-
-		err = row.Insert(ctx, sqlExecer)
-		// Unique constraint error indicates duplicate row.
-		// Just ignore duplicates and continue.
-		if isErrConstraintUnique(err) {
-			log.WithField("row", row).Debug("Attempting to insert duplicate row.")
-			continue
-		}
-		if err != nil {
+		if err := t.insertEvent(ctx, sqlExecer, event); err != nil {
 			return trace.Wrap(err)
 		}
+	}
+	return nil
+}
+
+func (t *Timeline) insertEvent(ctx context.Context, execer history.Execer, event *pb.TimelineEvent) error {
+	row, err := newDataInserter(event)
+	if err != nil {
+		log.WithError(err).Warn("Attempting to insert unknown event.")
+		return nil
+	}
+
+	err = row.Insert(ctx, execer)
+	// Unique constraint error indicates duplicate row.
+	// Just ignore duplicates and continue.
+	if isErrConstraintUnique(err) {
+		log.WithField("row", row).Debug("Attempting to insert duplicate row.")
+		return nil
+	}
+	if err != nil {
+		return trace.Wrap(err)
 	}
 
 	return nil

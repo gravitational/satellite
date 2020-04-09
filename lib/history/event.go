@@ -43,7 +43,6 @@ type ProtoBuffer interface {
 // EventType specifies the type of event.
 type EventType string
 
-// Defines event types
 const (
 	// ClusterDegraded indicates the overall cluster is in a degraded state.
 	ClusterDegraded EventType = "ClusterDegraded"
