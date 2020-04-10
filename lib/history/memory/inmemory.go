@@ -106,7 +106,7 @@ func (t *Timeline) insertEvents(ctx context.Context, events []*pb.TimelineEvent)
 
 	t.filterDuplicates()
 
-	// remove events oldest events if timeline is over capacity.
+	// remove oldest events if timeline is over capacity.
 	index := len(t.events) - t.capacity
 	if index > 0 {
 		t.events = t.events[index:]
