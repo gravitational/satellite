@@ -60,7 +60,7 @@ func (r memEvent) ProtoBuf() (event *pb.TimelineEvent) {
 	case history.ProbeSucceeded:
 		return pb.NewProbeSucceeded(r.timestamp, r.node, r.probe)
 	case history.LeaderElected:
-		return pb.NewLeaderElected(r.timestamp, r.node)
+		return pb.NewLeaderElected(r.timestamp, r.node, r.old)
 	default:
 		return pb.NewUnknownEvent(r.timestamp)
 	}
@@ -267,6 +267,7 @@ type leaderElected struct {
 }
 
 func (r *leaderElected) Insert(ctx context.Context, execer history.Execer) error {
-	const insertStmt = "timestamp,type,node"
-	return trace.Wrap(execer.Exec(ctx, insertStmt, r.ts.ToTime(), history.LeaderElected, r.data.GetNode()))
+	const insertStmt = "timestamp,type,node,old"
+	return trace.Wrap(execer.Exec(ctx, insertStmt,
+		r.ts.ToTime(), history.LeaderElected, r.data.GetNode(), r.data.GetPrev()))
 }
