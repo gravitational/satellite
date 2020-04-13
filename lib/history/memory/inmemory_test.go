@@ -18,10 +18,11 @@ package memory
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-	"github.com/gravitational/satellite/lib/history"
 	"github.com/gravitational/satellite/lib/test"
 
 	"github.com/jonboulle/clockwork"
@@ -41,57 +42,62 @@ func (s *InMemorySuite) SetUpSuite(c *C) {
 	s.clock = clockwork.NewFakeClock()
 }
 
-// TestRecordStatus simply tests that the timeline can successfully record
-// a status.
-func (s *InMemorySuite) TestRecordStatus(c *C) {
-	test.WithTimeout(func(ctx context.Context) {
-		timeline := s.newTimeline()
-		node := "test-node"
-		old := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
-		expected := []*pb.TimelineEvent{history.NewNodeRecovered(s.clock.Now(), node)}
+// TestRecordEvents verifies that the timeline can successfully record a new
+// event.
+func (s *InMemorySuite) TestRecordEvents(c *C) {
+	timeline := s.newTimeline()
+	events := []*pb.TimelineEvent{pb.NewNodeHealthy(s.clock.Now(), node)}
+	expected := []*pb.TimelineEvent{pb.NewNodeHealthy(s.clock.Now(), node)}
+	comment := Commentf("Expected the a node recovered event to be recorded.")
 
-		c.Assert(timeline.RecordStatus(ctx, old), IsNil)
+	test.WithTimeout(func(ctx context.Context) {
+		c.Assert(timeline.RecordEvents(ctx, events), IsNil, comment)
 
 		actual, err := timeline.GetEvents(ctx, nil)
-		c.Assert(err, IsNil)
-		c.Assert(actual, test.DeepCompare, expected, Commentf("Expected the status to be recorded."))
+		c.Assert(err, IsNil, comment)
+		c.Assert(actual, test.DeepCompare, expected, comment)
 	})
 }
 
 // TestFIFOEviction tests the FIFO eviction policy of the timeline.
 func (s *InMemorySuite) TestFIFOEviction(c *C) {
-	test.WithTimeout(func(ctx context.Context) {
-		// Limit timeline capacity to 1.
-		// Necessary to easily test if events are evicted if max capacity is reached.
-		timeline := s.newLimitedTimeline(1)
-		node := "test-node"
-		old := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Running}
-		new := &pb.NodeStatus{Name: node, Status: pb.NodeStatus_Degraded}
-		expected := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), node)}
+	// Limit timeline capacity to 1.
+	// Necessary to easily test if events are evicted if max capacity is reached.
+	timeline := s.newLimitedTimeline(1)
+	events := []*pb.TimelineEvent{
+		pb.NewNodeHealthy(s.clock.Now().Add(-time.Second), node), // older event should be evicted first
+		pb.NewNodeDegraded(s.clock.Now(), node),
+	}
+	expected := []*pb.TimelineEvent{pb.NewNodeDegraded(s.clock.Now(), node)}
+	comment := Commentf("Expected node degraded event.")
 
-		// Recording two statuses should result in timeline to exceed capacity.
-		c.Assert(timeline.RecordStatus(ctx, old), IsNil)
-		c.Assert(timeline.RecordStatus(ctx, new), IsNil)
+	test.WithTimeout(func(ctx context.Context) {
+
+		// Recording two statuses should result in timeline exceeding capacity.
+		c.Assert(timeline.RecordEvents(ctx, events), IsNil, comment)
+
+		fmt.Println(timeline.events)
 
 		actual, err := timeline.GetEvents(ctx, nil)
-		c.Assert(err, IsNil)
-		c.Assert(actual, test.DeepCompare, expected, Commentf("Expected degraded event."))
+		c.Assert(err, IsNil, comment)
+		c.Assert(actual, test.DeepCompare, expected, comment)
 	})
 }
 
+// TestIgnoreDuplicate verifies duplicate events will not be recorded.
 func (s *InMemorySuite) TestIgnoreDuplicate(c *C) {
-	test.WithTimeout(func(ctx context.Context) {
-		timeline := s.newTimeline()
-		node := "test-node"
-		events := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), node)}
-		duplicates := []*pb.TimelineEvent{history.NewNodeDegraded(s.clock.Now(), node)}
+	timeline := s.newTimeline()
+	events := []*pb.TimelineEvent{pb.NewNodeDegraded(s.clock.Now(), node)}
+	expected := []*pb.TimelineEvent{pb.NewNodeDegraded(s.clock.Now(), node)}
+	comment := Commentf("Expected a single event.")
 
-		c.Assert(timeline.RecordTimeline(ctx, events), IsNil)
-		c.Assert(timeline.RecordTimeline(ctx, duplicates), IsNil)
+	test.WithTimeout(func(ctx context.Context) {
+		c.Assert(timeline.RecordEvents(ctx, events), IsNil, comment)
+		c.Assert(timeline.RecordEvents(ctx, events), IsNil, comment)
 
 		actual, err := timeline.GetEvents(ctx, nil)
-		c.Assert(err, IsNil)
-		c.Assert(actual, test.DeepCompare, events, Commentf("Expected a single event."))
+		c.Assert(err, IsNil, comment)
+		c.Assert(actual, test.DeepCompare, expected, comment)
 	})
 }
 
@@ -107,3 +113,6 @@ func (s *InMemorySuite) newTimeline() *Timeline {
 func (s *InMemorySuite) newLimitedTimeline(capacity int) *Timeline {
 	return NewTimeline(s.clock, capacity)
 }
+
+// node defines node name used for tests
+const node = "test-node"
