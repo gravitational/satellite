@@ -29,7 +29,6 @@ import (
 	"github.com/gravitational/satellite/agent/backend/inmemory"
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-	"github.com/gravitational/satellite/lib/history"
 	"github.com/gravitational/satellite/lib/history/memory"
 	"github.com/gravitational/satellite/lib/membership"
 	"github.com/gravitational/satellite/lib/rpc/client"
@@ -305,7 +304,7 @@ func (r *AgentSuite) TestRecordLocalTimeline(c *C) {
 	}{
 		{
 			comment:    Commentf("Expected master to record local events."),
-			expected:   []*pb.TimelineEvent{history.NewNodeRecovered(r.clock.Now(), "master-1")},
+			expected:   []*pb.TimelineEvent{pb.NewNodeHealthy(r.clock.Now(), "master-1")},
 			membership: newMockClusterMembership(),
 			agentConfig: testAgentConfig{
 				node: "master-1",
@@ -314,7 +313,7 @@ func (r *AgentSuite) TestRecordLocalTimeline(c *C) {
 		},
 		{
 			comment:    Commentf("Expected non master to record local events."),
-			expected:   []*pb.TimelineEvent{history.NewNodeRecovered(r.clock.Now(), "node-1")},
+			expected:   []*pb.TimelineEvent{pb.NewNodeHealthy(r.clock.Now(), "node-1")},
 			membership: newMockClusterMembership(),
 			agentConfig: testAgentConfig{
 				node: "node-1",
@@ -352,13 +351,13 @@ func (r *AgentSuite) TestRecordTimeline(c *C) {
 	}{
 		{
 			comment:    Commentf("Expected master-1 to record events to cluster timeline."),
-			expected:   []*pb.TimelineEvent{history.NewNodeRecovered(r.clock.Now(), "master-1")},
+			expected:   []*pb.TimelineEvent{pb.NewNodeHealthy(r.clock.Now(), "master-1")},
 			membership: newMockClusterMembership(),
 			agentConfig: testAgentConfig{
 				node: "master-1",
 				role: RoleMaster,
 			},
-			events: []*pb.TimelineEvent{history.NewNodeRecovered(r.clock.Now(), "master-1")},
+			events: []*pb.TimelineEvent{pb.NewNodeHealthy(r.clock.Now(), "master-1")},
 		},
 	}
 
@@ -369,9 +368,9 @@ func (r *AgentSuite) TestRecordTimeline(c *C) {
 		c.Assert(r.becomeActiveMember(testCase.membership, agent), IsNil)
 
 		test.WithTimeout(func(ctx context.Context) {
-			c.Assert(agent.RecordTimeline(ctx, testCase.events), IsNil)
+			c.Assert(agent.RecordClusterEvents(ctx, testCase.events), IsNil)
 
-			events, err := agent.Timeline.GetEvents(ctx, nil)
+			events, err := agent.ClusterTimeline.GetEvents(ctx, nil)
 			c.Assert(err, IsNil)
 			c.Assert(events, test.DeepCompare, testCase.expected, testCase.comment)
 		})
@@ -443,7 +442,7 @@ func (r *AgentSuite) TestProvidesTimeline(c *C) {
 	}{
 		{
 			comment:    Commentf("Expected master to push local events to it's own cluster timeline."),
-			expected:   []*pb.TimelineEvent{history.NewNodeRecovered(r.clock.Now(), "master-1")},
+			expected:   []*pb.TimelineEvent{pb.NewNodeHealthy(r.clock.Now(), "master-1")},
 			membership: newMockClusterMembership(),
 			masterConfigs: []testAgentConfig{
 				{
@@ -455,8 +454,8 @@ func (r *AgentSuite) TestProvidesTimeline(c *C) {
 		{
 			comment: Commentf("Expected node to push push it's local events to the master."),
 			expected: []*pb.TimelineEvent{
-				history.NewNodeRecovered(r.clock.Now(), "master-1"),
-				history.NewNodeRecovered(r.clock.Now(), "node-1"),
+				pb.NewNodeHealthy(r.clock.Now(), "master-1"),
+				pb.NewNodeHealthy(r.clock.Now(), "node-1"),
 			},
 			membership: newMockClusterMembership(),
 			masterConfigs: []testAgentConfig{
@@ -475,9 +474,9 @@ func (r *AgentSuite) TestProvidesTimeline(c *C) {
 		{
 			comment: Commentf("Expected master nodes to notify each other of local events."),
 			expected: []*pb.TimelineEvent{
-				history.NewNodeRecovered(r.clock.Now(), "master-1"),
-				history.NewNodeRecovered(r.clock.Now(), "master-2"),
-				history.NewNodeRecovered(r.clock.Now(), "master-3"),
+				pb.NewNodeHealthy(r.clock.Now(), "master-1"),
+				pb.NewNodeHealthy(r.clock.Now(), "master-2"),
+				pb.NewNodeHealthy(r.clock.Now(), "master-3"),
 			},
 			membership: newMockClusterMembership(),
 			masterConfigs: []testAgentConfig{
@@ -583,7 +582,7 @@ func (r *AgentSuite) newAgent(config testAgentConfig) (*agent, error) {
 
 	agent := &agent{
 		ClusterMembership:       clusterMembership,
-		Timeline:                memory.NewTimeline(config.clock, timelineCapacity),
+		ClusterTimeline:         memory.NewTimeline(config.clock, timelineCapacity),
 		LocalTimeline:           memory.NewTimeline(config.clock, timelineCapacity),
 		Config:                  agentConfig,
 		Checkers:                config.checkers,
@@ -836,7 +835,7 @@ func (r *mockClient) Timeline(ctx context.Context, req *pb.TimelineRequest) (*pb
 
 // UpdateTimeline requests that the timeline be updated with the specified event.
 func (r *mockClient) UpdateTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateResponse, error) {
-	if err := r.agent.RecordTimeline(ctx, []*pb.TimelineEvent{req.GetEvent()}); err != nil {
+	if err := r.agent.RecordClusterEvents(ctx, []*pb.TimelineEvent{req.GetEvent()}); err != nil {
 		return nil, trace.Wrap(err)
 	}
 	if err := r.agent.RecordLastSeen(req.GetName(), req.GetEvent().GetTimestamp().ToTime()); err != nil {
