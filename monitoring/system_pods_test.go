@@ -51,7 +51,7 @@ func (r *SystemPodsSuite) TestVerifyPodStatus(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		err := verifyPodStatus("", testCase.status)
+		err := verifyPodStatus(testCase.status)
 		c.Assert(err, IsNil, testCase.comment)
 	}
 }

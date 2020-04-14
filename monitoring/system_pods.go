@@ -123,14 +123,14 @@ func (r *systemPodsChecker) getPods() ([]corev1.Pod, error) {
 // any pods that are in an invalid state.
 func (r *systemPodsChecker) verifyPods(pods []corev1.Pod, reporter health.Reporter) {
 	for _, pod := range pods {
-		if err := verifyPodStatus(pod.Name, pod.Status); err != nil {
+		if err := verifyPodStatus(pod.Status); err != nil {
 			reporter.Add(NewProbeFromErr(r.Name(), fmt.Sprintf("%s is in an invalid state", pod.Name), err))
 		}
 	}
 }
 
 // verifyPodStatus verifies the status phase and conditions.
-func verifyPodStatus(name string, status corev1.PodStatus) error {
+func verifyPodStatus(status corev1.PodStatus) error {
 	// https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-phase
 	switch status.Phase {
 	case corev1.PodPending, corev1.PodSucceeded:
@@ -138,7 +138,7 @@ func verifyPodStatus(name string, status corev1.PodStatus) error {
 	case corev1.PodFailed:
 		return trace.BadParameter("pod has failed")
 	case corev1.PodUnknown:
-		log.Warnf("%s is in unknown state.", name)
+		log.Warn("Pod is in unknown state.")
 		return nil
 	}
 
