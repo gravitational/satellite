@@ -120,7 +120,7 @@ func (c *nethealthChecker) Check(ctx context.Context, reporter health.Reporter) 
 func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) error {
 	addr, err := c.getNethealthAddr()
 	if trace.IsNotFound(err) {
-		log.WithError(err).Warn("Nethealth pod was not found.")
+		log.Debug("Nethealth pod was not found.")
 		return nil // pod was not found, log and treat gracefully
 	}
 	if err != nil {
