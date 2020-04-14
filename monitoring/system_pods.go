@@ -90,7 +90,7 @@ func (r *systemPodsChecker) Check(ctx context.Context, reporter health.Reporter)
 func (r *systemPodsChecker) check(ctx context.Context, reporter health.Reporter) error {
 	pods, err := r.getPods()
 	if trace.IsNotFound(err) {
-		log.WithError(err).Debug("Failed to get system pods.")
+		log.Debug("Failed to get system pods.")
 		return nil // system pods were not found, log and treat gracefully
 	}
 	if err != nil {
