@@ -115,7 +115,6 @@ func (s *NethealthSuite) TestUpdateTimeoutStats(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		checker := s.newNethealthChecker()
 
 		for _, data := range testCase.incomingData {
@@ -177,11 +176,8 @@ func (s *NethealthSuite) TestNethealthVerification(c *C) {
 	checker := s.newNethealthChecker()
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		reporter := new(health.Probes)
-
 		c.Assert(checker.peerStats.Set(testNode, testCase.storedData), IsNil, testCase.comment)
-
 		c.Assert(checker.verifyNethealth([]string{testNode}, reporter), IsNil, testCase.comment)
 		c.Assert(reporter, test.DeepCompare, testCase.expected, testCase.comment)
 	}
@@ -221,8 +217,6 @@ func (s *NethealthSuite) TestParseMetricsSuccess(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
-
 		netData, err := parseMetrics([]byte(testCase.metrics))
 		c.Assert(err, IsNil, testCase.comment)
 		c.Assert(netData, test.DeepCompare, testCase.expected)
@@ -282,8 +276,6 @@ func (s *NethealthSuite) TestParseMetricsFailure(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
-
 		_, err := parseMetrics([]byte(testCase.metrics))
 		c.Assert(err.Error(), Equals, testCase.expected, testCase.comment)
 	}

@@ -18,7 +18,6 @@ package memory
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -72,11 +71,8 @@ func (s *InMemorySuite) TestFIFOEviction(c *C) {
 	comment := Commentf("Expected node degraded event.")
 
 	test.WithTimeout(func(ctx context.Context) {
-
 		// Recording two statuses should result in timeline exceeding capacity.
 		c.Assert(timeline.RecordEvents(ctx, events), IsNil, comment)
-
-		fmt.Println(timeline.events)
 
 		actual, err := timeline.GetEvents(ctx, nil)
 		c.Assert(err, IsNil, comment)
