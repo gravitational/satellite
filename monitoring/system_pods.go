@@ -135,25 +135,59 @@ func verifyPodStatus(status corev1.PodStatus) error {
 	switch status.Phase {
 	case corev1.PodPending, corev1.PodSucceeded:
 		return nil
+	case corev1.PodRunning:
+		return trace.Wrap(verifyConditions(status.Conditions))
 	case corev1.PodFailed:
 		return trace.BadParameter("pod has failed")
 	case corev1.PodUnknown:
 		log.Warn("Pod is in unknown state.")
 		return nil
+	default:
+		log.WithField("phase", status.Phase).Warn("Pod is in invalid phase.")
+		return trace.BadParameter("pod is in invalid phase")
 	}
+}
 
-	// https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-conditions
-	// If the pod phase is `Running`, all conditions are expected to be true?
-	for _, condition := range status.Conditions {
-		if condition.Status == corev1.ConditionFalse {
-			return trace.BadParameter("%s condition is false; reason: %s", condition.Type, condition.Reason)
-		}
-		if condition.Status == corev1.ConditionUnknown {
-			log.Warnf("%s condition is in an unknown state.", condition.Type)
+// verifyConditions verifies all pod conditions.
+func verifyConditions(conditions []corev1.PodCondition) error {
+	for _, condition := range conditions {
+		if err := verifyCondition(condition); err != nil {
+			return trace.Wrap(err)
 		}
 	}
-
 	return nil
+}
+
+// verifyCondition verifies the provided pod condition.
+// The pod is expected to have `Initialized`, `ContainersReady`, and
+// `PodScheduled` set to true. The pod does not need to be `Ready`.
+func verifyCondition(condition corev1.PodCondition) error {
+	// https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-conditions
+	switch condition.Type {
+	case corev1.PodScheduled, corev1.PodInitialized, corev1.ContainersReady:
+		return trace.Wrap(verifyConditionIsTrue(condition))
+	case corev1.PodReady:
+		return nil // `Running` pods are not always expected to be `Ready`. e.g. `gravity-site`.
+	default:
+		log.WithField("condition", condition.Type).Warnf("Received invalid pod condition.")
+		return trace.BadParameter("received invalid pod condition: %s", condition.Type)
+	}
+}
+
+// verifyConditionIsTrue verifies that the provided condition status is true.
+func verifyConditionIsTrue(condition corev1.PodCondition) error {
+	switch condition.Status {
+	case corev1.ConditionTrue:
+		return nil
+	case corev1.ConditionFalse:
+		return trace.BadParameter("%s condition is false; reason: %s", condition.Type, condition.Reason)
+	case corev1.ConditionUnknown:
+		log.Warnf("%s condition is in an unknown state.", condition.Type)
+		return nil
+	default:
+		log.WithField("status", condition.Status).Warnf("%s condition is in an invalid state", condition.Type)
+		return trace.BadParameter("%s condition is in an invalid state: %s", condition.Type, condition.Status)
+	}
 }
 
 const systemPodsCheckerID = "system-pods-checker"
