@@ -37,9 +37,9 @@ type SystemPodsConfig struct {
 	*KubeConfig
 }
 
-// CheckAndSetDefaults validates that this configuration is correct and sets
+// checkAndSetDefaults validates that this configuration is correct and sets
 // value defaults where necessary.
-func (r *SystemPodsConfig) CheckAndSetDefaults() error {
+func (r *SystemPodsConfig) checkAndSetDefaults() error {
 	var errors []error
 	if r.AdvertiseIP == "" {
 		errors = append(errors, trace.BadParameter("host advertise ip must be provided"))
@@ -58,7 +58,7 @@ type systemPodsChecker struct {
 
 // NewSystemPodsChecker returns a new system pods checker.
 func NewSystemPodsChecker(config SystemPodsConfig) (*systemPodsChecker, error) {
-	if err := config.CheckAndSetDefaults(); err != nil {
+	if err := config.checkAndSetDefaults(); err != nil {
 		return nil, trace.Wrap(err)
 	}
 
