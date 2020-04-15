@@ -29,11 +29,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// SystemPodsConfig specifies configuration for a system pods checkers.
+// SystemPodsConfig specifies configuration for a system pods checker.
 type SystemPodsConfig struct {
 	// AdvertiseIP specifies the advertised ip address of the host running this checker.
 	AdvertiseIP string
-	// KubeConfig specifies kubernetes access information.
+	// KubeConfig specifies kubernetes access configuration.
 	*KubeConfig
 }
 
