@@ -224,7 +224,6 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		agents := make([]*agent, 0, len(testCase.agentConfigs))
 		for _, agentConfig := range testCase.agentConfigs {
 			agent, err := r.newAgent(agentConfig)
@@ -275,7 +274,6 @@ func (r *AgentSuite) TestIsMember(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		agents := make([]*agent, 0, len(testCase.agentConfigs))
 		for _, agentConfig := range testCase.agentConfigs {
 			agent, err := r.newAgent(agentConfig)
@@ -323,7 +321,6 @@ func (r *AgentSuite) TestRecordLocalTimeline(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		agent, err := r.newAgent(testCase.agentConfig)
 		c.Assert(err, IsNil)
 		c.Assert(r.becomeActiveMember(testCase.membership, agent), IsNil)
@@ -362,7 +359,6 @@ func (r *AgentSuite) TestRecordTimeline(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		agent, err := r.newAgent(testCase.agentConfig)
 		c.Assert(err, IsNil)
 		c.Assert(r.becomeActiveMember(testCase.membership, agent), IsNil)
@@ -413,7 +409,6 @@ func (r *AgentSuite) TestAgentProvidesLastSeen(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		agent, err := r.newAgent(testCase.agentConfig)
 		c.Assert(err, IsNil)
 
@@ -497,7 +492,6 @@ func (r *AgentSuite) TestProvidesTimeline(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		masters := make([]*agent, 0, len(testCase.masterConfigs))
 		for _, masterConfig := range testCase.masterConfigs {
 			master, err := r.newAgent(masterConfig)
