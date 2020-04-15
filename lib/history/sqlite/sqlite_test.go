@@ -171,7 +171,6 @@ func (s *SQLiteSuite) TestFilterEvents(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		clock := clockwork.NewFakeClock()
 		timeline, err := s.newTimelineWithClock(clock)
 		c.Assert(err, IsNil)
@@ -228,7 +227,6 @@ func (s *SQLiteSuite) TestIgnoreExpiredEvents(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		timeline, err := s.newDefaultTimeline()
 		c.Assert(err, IsNil)
 
@@ -285,15 +283,4 @@ func fileExists(filename string) bool {
 		return false
 	}
 	return !info.IsDir()
-}
-
-var healthyProbe = &pb.Probe{
-	Checker: "test-probe",
-	Status:  pb.Probe_Running,
-}
-
-var failedProbe = &pb.Probe{
-	Checker: "test-probe",
-	Status:  pb.Probe_Failed,
-	Error:   "invalid state",
 }
