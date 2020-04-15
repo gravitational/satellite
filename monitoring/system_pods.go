@@ -164,9 +164,9 @@ func verifyConditions(conditions []corev1.PodCondition) error {
 func verifyCondition(condition corev1.PodCondition) error {
 	// https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-conditions
 	switch condition.Type {
-	case corev1.PodScheduled, corev1.PodInitialized, corev1.ContainersReady:
+	case corev1.PodScheduled, corev1.PodInitialized:
 		return trace.Wrap(verifyConditionIsTrue(condition))
-	case corev1.PodReady:
+	case corev1.PodReady, corev1.ContainersReady:
 		return nil // `Running` pods are not always expected to be `Ready`. e.g. `gravity-site`.
 	default:
 		log.WithField("condition", condition.Type).Warnf("Received invalid pod condition.")
