@@ -23,12 +23,12 @@ import (
 	"context"
 	"sort"
 	"sync"
-	"time"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-	"github.com/gravitational/satellite/lib/history"
 
+	"github.com/gravitational/trace"
 	"github.com/jonboulle/clockwork"
+	log "github.com/sirupsen/logrus"
 )
 
 // Timeline represents a timeline of cluster status events. The Timeline
@@ -37,153 +37,101 @@ import (
 //
 // Implements history.Timeline
 type Timeline struct {
-	sync.Mutex
 	// clock is used to record event timestamps.
 	clock clockwork.Clock
 	// capacity specifies the max number of events stored in the timeline.
 	capacity int
+	// Mutex locks access to events
+	sync.Mutex
 	// events holds the latest status events.
-	events []*pb.TimelineEvent
-	// lastStatus holds the last recorded status.
-	lastStatus *pb.NodeStatus
+	events []memEvent
 }
 
 // NewTimeline initializes and returns a new Timeline with the specified
 // capacity. The provided clock will be used to record event timestamps.
 func NewTimeline(clock clockwork.Clock, capacity int) *Timeline {
 	return &Timeline{
-		clock:      clock,
-		capacity:   capacity,
-		events:     make([]*pb.TimelineEvent, 0, capacity),
-		lastStatus: nil,
+		clock:    clock,
+		capacity: capacity,
+		events:   make([]memEvent, 0, capacity),
 	}
 }
 
-// RecordStatus records the differences between the previously stored status
-// and the newly provided status into the timeline.
-// Context unused for memory Timeline.
-func (t *Timeline) RecordStatus(ctx context.Context, status *pb.NodeStatus) error {
-	events := history.DiffNode(t.clock, t.lastStatus, status)
-	if len(events) == 0 {
-		return nil
-	}
-
-	t.Lock()
-	defer t.Unlock()
-
-	t.addEvents(events)
-	t.filterDuplicates()
-	t.lastStatus = status
-	return nil
-}
-
-// RecordTimeline merges the provided events into the current timeline.
+// RecordEvents records the provided events into the current timeline.
 // Duplicate events will be ignored.
-func (t *Timeline) RecordTimeline(ctx context.Context, events []*pb.TimelineEvent) error {
+func (t *Timeline) RecordEvents(ctx context.Context, events []*pb.TimelineEvent) error {
 	if len(events) == 0 {
 		return nil
 	}
+
+	sort.Sort(byTimestamp(events))
+
 	t.Lock()
 	defer t.Unlock()
 
-	t.addEvents(events)
-	t.filterDuplicates()
+	if err := t.insertEvents(ctx, events); err != nil {
+		return trace.Wrap(err)
+	}
+
 	return nil
 }
 
 // GetEvents returns a filtered list of events based on the provided params.
 // Events will be returned in sorted order by timestamp.
-// Context unused for memory Timeline.
-func (t *Timeline) GetEvents(ctx context.Context, params map[string]string) (events []*pb.TimelineEvent, err error) {
+func (t *Timeline) GetEvents(_ context.Context, params map[string]string) (pbEvents []*pb.TimelineEvent, err error) {
 	t.Lock()
 	defer t.Unlock()
-	return t.getFilteredEvents(params), nil
+	events := t.getFilteredEvents(params)
+	pbEvents = make([]*pb.TimelineEvent, 0, len(events))
+	for _, event := range events {
+		pbEvents = append(pbEvents, event.ProtoBuf())
+	}
+	return pbEvents, nil
 }
 
-// addEvents adds the events into the timeline. Duplicates will be filtered out
-// and events will be stored in sorted order by timestamp.
-func (t *Timeline) addEvents(events []*pb.TimelineEvent) {
-	t.events = append(t.events, events...)
-	t.filterDuplicates()
-	sort.Sort(byTimestamp(t.events))
+// insertEvents inserts the provided events into the timeline. Duplicates will
+// be filtered out and events will be stored in sorted order by timestamp.
+func (t *Timeline) insertEvents(ctx context.Context, events []*pb.TimelineEvent) error {
+	execer := newMemExecer(&t.events)
+	for _, event := range events {
+		row, err := newDataInserter(event)
+		if err != nil {
+			log.WithError(err).Warn("Attempting to insert unknown event.")
+			continue
+		}
+		if err := row.Insert(ctx, execer); err != nil {
+			return trace.Wrap(err)
+		}
+	}
 
-	// remove events oldest events if timeline is over capacity.
+	t.filterDuplicates()
+
+	// remove oldest events if timeline is over capacity.
 	index := len(t.events) - t.capacity
 	if index > 0 {
 		t.events = t.events[index:]
 	}
+
+	return nil
 }
 
 // getFilteredEvents returns a filtered list of events based on the provided params.
-func (t *Timeline) getFilteredEvents(params map[string]string) (events []*pb.TimelineEvent) {
+func (t *Timeline) getFilteredEvents(_ map[string]string) (events []memEvent) {
 	// TODO: for now just return the unfiltered events.
 	return t.events
 }
 
 // filterDuplicates removes duplicate events.
 func (t *Timeline) filterDuplicates() {
-	set := make(map[comparableEvent]struct{})
-	filteredEvents := make([]*pb.TimelineEvent, 0, t.capacity)
+	set := make(map[memEvent]struct{})
+	filteredEvents := make([]memEvent, 0, t.capacity)
 	for _, event := range t.events {
-		comparable := newComparable(event)
-		if _, ok := set[comparable]; !ok {
-			set[comparable] = struct{}{}
+		if _, ok := set[event]; !ok {
+			set[event] = struct{}{}
 			filteredEvents = append(filteredEvents, event)
 		}
 	}
 	t.events = filteredEvents
-}
-
-// comparableEvent defines an event in a comparable struct.
-// Used when filtering duplicate events.
-type comparableEvent struct {
-	timestamp time.Time
-	eventType string
-	node      string
-	probe     string
-	old       string
-	new       string
-}
-
-func newComparable(event *pb.TimelineEvent) comparableEvent {
-	comparable := comparableEvent{
-		timestamp: event.GetTimestamp().ToTime(),
-	}
-	switch event.GetData().(type) {
-	case *pb.TimelineEvent_ClusterRecovered:
-		comparable.eventType = clusterRecoveredType
-	case *pb.TimelineEvent_ClusterDegraded:
-		comparable.eventType = clusterDegradedType
-	case *pb.TimelineEvent_NodeAdded:
-		e := event.GetNodeAdded()
-		comparable.eventType = nodeAddedType
-		comparable.node = e.GetNode()
-	case *pb.TimelineEvent_NodeRemoved:
-		e := event.GetNodeRemoved()
-		comparable.eventType = nodeRemovedType
-		comparable.node = e.GetNode()
-	case *pb.TimelineEvent_NodeRecovered:
-		e := event.GetNodeRecovered()
-		comparable.eventType = nodeRecoveredType
-		comparable.node = e.GetNode()
-	case *pb.TimelineEvent_NodeDegraded:
-		e := event.GetNodeDegraded()
-		comparable.eventType = nodeDegradedType
-		comparable.node = e.GetNode()
-	case *pb.TimelineEvent_ProbeSucceeded:
-		e := event.GetProbeSucceeded()
-		comparable.eventType = probeSucceededType
-		comparable.node = e.GetNode()
-		comparable.probe = e.GetProbe()
-	case *pb.TimelineEvent_ProbeFailed:
-		e := event.GetProbeFailed()
-		comparable.eventType = probeFailedType
-		comparable.node = e.GetNode()
-		comparable.probe = e.GetProbe()
-	default:
-		comparable.eventType = unknownType
-	}
-	return comparable
 }
 
 // byTimestamp implements sort.Interface. Events are sorted by timestamp.
@@ -194,15 +142,3 @@ func (r byTimestamp) Less(i, j int) bool {
 	return r[i].GetTimestamp().ToTime().Before(r[j].GetTimestamp().ToTime())
 }
 func (r byTimestamp) Swap(i, j int) { r[i], r[j] = r[j], r[i] }
-
-const (
-	clusterRecoveredType = "ClusterRecovered"
-	clusterDegradedType  = "ClusterDegraded"
-	nodeAddedType        = "NodeAdded"
-	nodeRemovedType      = "NodeRemoved"
-	nodeRecoveredType    = "NodeRecovered"
-	nodeDegradedType     = "NodeDegraded"
-	probeSucceededType   = "ProbeSucceeded"
-	probeFailedType      = "ProbeFailed"
-	unknownType          = "Unknown"
-)

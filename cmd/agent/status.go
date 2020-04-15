@@ -143,16 +143,16 @@ func printEvent(event *pb.TimelineEvent) {
 	switch event.GetData().(type) {
 	case *pb.TimelineEvent_ClusterDegraded:
 		fmt.Println("Cluster Degraded")
-	case *pb.TimelineEvent_ClusterRecovered:
-		fmt.Println("Cluster Recovered")
+	case *pb.TimelineEvent_ClusterHealthy:
+		fmt.Println("Cluster Healthy")
 	case *pb.TimelineEvent_NodeAdded:
 		fmt.Printf("Node Added [%s]\n", event.GetNodeAdded().GetNode())
 	case *pb.TimelineEvent_NodeRemoved:
 		fmt.Printf("Node Removed [%s]\n", event.GetNodeRemoved().GetNode())
 	case *pb.TimelineEvent_NodeDegraded:
 		fmt.Printf("Node Degraded [%s]\n", event.GetNodeDegraded().GetNode())
-	case *pb.TimelineEvent_NodeRecovered:
-		fmt.Printf("Node Recovered [%s]\n", event.GetNodeRecovered().GetNode())
+	case *pb.TimelineEvent_NodeHealthy:
+		fmt.Printf("Node Healthy [%s]\n", event.GetNodeHealthy().GetNode())
 	case *pb.TimelineEvent_ProbeFailed:
 		e := event.GetProbeFailed()
 		fmt.Printf("Probe Failed [%s] [%s]\n", e.GetNode(), e.GetProbe())
