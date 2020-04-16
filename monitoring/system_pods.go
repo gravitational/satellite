@@ -101,11 +101,12 @@ func (r *systemPodsChecker) check(ctx context.Context, reporter health.Reporter)
 	return nil
 }
 
-// getPods returns a list of the local pods that exist in the
-// systemPodsNamespace.
+// getPods returns a list of the local pods that have the system pod label.
 func (r *systemPodsChecker) getPods() ([]corev1.Pod, error) {
-	opts := metav1.ListOptions{}
-	pods, err := r.Client.CoreV1().Pods(systemPodsNamespace).List(opts)
+	opts := metav1.ListOptions{
+		LabelSelector: systemPodsSelector.String(),
+	}
+	pods, err := r.Client.CoreV1().Pods("").List(opts)
 	if err != nil {
 		return nil, utils.ConvertError(err) // this will convert error to a proper trace error, e.g. trace.NotFound
 	}
@@ -159,8 +160,8 @@ func verifyConditions(conditions []corev1.PodCondition) error {
 }
 
 // verifyCondition verifies the provided pod condition.
-// The pod is expected to have `Initialized`, `ContainersReady`, and
-// `PodScheduled` set to true. The pod does not need to be `Ready`.
+// The pod is expected to have `Initialized` and`PodScheduled` set to true.
+// The pod does not need to have `Ready` or `ContainersReady` set to true.
 func verifyCondition(condition corev1.PodCondition) error {
 	// https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-conditions
 	switch condition.Type {
@@ -191,4 +192,11 @@ func verifyConditionIsTrue(condition corev1.PodCondition) error {
 }
 
 const systemPodsCheckerID = "system-pods-checker"
-const systemPodsNamespace = "kube-system"
+
+// systemPodsSelector defines a label selector used to query system pods.
+var systemPodsSelector = utils.MustLabelSelector(
+	metav1.LabelSelectorAsSelector(
+		&metav1.LabelSelector{
+			MatchExpressions: []metav1.LabelSelectorRequirement{
+				{Key: "system-pod", Operator: metav1.LabelSelectorOpExists},
+			}}))
