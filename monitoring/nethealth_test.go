@@ -18,11 +18,13 @@ package monitoring
 
 import (
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/gravitational/satellite/agent/health"
 	"github.com/gravitational/satellite/lib/test"
 
+	serf "github.com/hashicorp/serf/client"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	. "gopkg.in/check.v1"
@@ -46,11 +48,11 @@ func (s *NethealthSuite) TestUpdateTimeoutStats(c *C) {
 				packetLoss: s.newPacketLoss(),
 			},
 			incomingData: []networkData{
-				networkData{},
-				networkData{},
-				networkData{},
-				networkData{},
-				networkData{},
+				{},
+				{},
+				{},
+				{},
+				{},
 			},
 		},
 		{
@@ -60,11 +62,11 @@ func (s *NethealthSuite) TestUpdateTimeoutStats(c *C) {
 				packetLoss:       s.newPacketLoss(),
 			},
 			incomingData: []networkData{
-				networkData{timeoutTotal: 1},
-				networkData{timeoutTotal: 2},
-				networkData{timeoutTotal: 3},
-				networkData{timeoutTotal: 4},
-				networkData{timeoutTotal: 5},
+				{timeoutTotal: 1},
+				{timeoutTotal: 2},
+				{timeoutTotal: 3},
+				{timeoutTotal: 4},
+				{timeoutTotal: 5},
 			},
 		},
 		{
@@ -74,11 +76,11 @@ func (s *NethealthSuite) TestUpdateTimeoutStats(c *C) {
 				packetLoss:       s.newPacketLoss(0, 0, 0, 0, 0),
 			},
 			incomingData: []networkData{
-				networkData{requestTotal: 1},
-				networkData{requestTotal: 2},
-				networkData{requestTotal: 3},
-				networkData{requestTotal: 4},
-				networkData{requestTotal: 5},
+				{requestTotal: 1},
+				{requestTotal: 2},
+				{requestTotal: 3},
+				{requestTotal: 4},
+				{requestTotal: 5},
 			},
 		},
 		{
@@ -89,11 +91,11 @@ func (s *NethealthSuite) TestUpdateTimeoutStats(c *C) {
 				packetLoss:       s.newPacketLoss(1, 1, 1, 1, 1),
 			},
 			incomingData: []networkData{
-				networkData{requestTotal: 1, timeoutTotal: 1},
-				networkData{requestTotal: 2, timeoutTotal: 2},
-				networkData{requestTotal: 3, timeoutTotal: 3},
-				networkData{requestTotal: 4, timeoutTotal: 4},
-				networkData{requestTotal: 5, timeoutTotal: 5},
+				{requestTotal: 1, timeoutTotal: 1},
+				{requestTotal: 2, timeoutTotal: 2},
+				{requestTotal: 3, timeoutTotal: 3},
+				{requestTotal: 4, timeoutTotal: 4},
+				{requestTotal: 5, timeoutTotal: 5},
 			},
 		},
 		{
@@ -104,12 +106,12 @@ func (s *NethealthSuite) TestUpdateTimeoutStats(c *C) {
 				packetLoss:       s.newPacketLoss(0, 0, 0, 0, 0),
 			},
 			incomingData: []networkData{
-				networkData{requestTotal: 1, timeoutTotal: 1},
-				networkData{requestTotal: 2, timeoutTotal: 1},
-				networkData{requestTotal: 3, timeoutTotal: 1},
-				networkData{requestTotal: 4, timeoutTotal: 1},
-				networkData{requestTotal: 5, timeoutTotal: 1},
-				networkData{requestTotal: 6, timeoutTotal: 1},
+				{requestTotal: 1, timeoutTotal: 1},
+				{requestTotal: 2, timeoutTotal: 1},
+				{requestTotal: 3, timeoutTotal: 1},
+				{requestTotal: 4, timeoutTotal: 1},
+				{requestTotal: 5, timeoutTotal: 1},
+				{requestTotal: 6, timeoutTotal: 1},
 			},
 		},
 	}
@@ -195,11 +197,11 @@ func (s *NethealthSuite) TestParseMetricsSuccess(c *C) {
 		{
 			comment: Commentf("Expected networkData for peers 10.128.0.70 and 10.128.0.97."),
 			expected: map[string]networkData{
-				"10.128.0.70": networkData{
+				"10.128.0.70": {
 					requestTotal: 236,
 					timeoutTotal: 37,
 				},
-				"10.128.0.97": networkData{
+				"10.128.0.97": {
 					requestTotal: 273,
 					timeoutTotal: 0,
 				},
@@ -278,6 +280,51 @@ func (s *NethealthSuite) TestParseMetricsFailure(c *C) {
 	for _, testCase := range testCases {
 		_, err := parseMetrics([]byte(testCase.metrics))
 		c.Assert(err.Error(), Equals, testCase.expected, testCase.comment)
+	}
+}
+
+// TestFilterNetData verifies filterNetData correctly filters irrelevant data.
+func (s *NethealthSuite) TestFilterNetData(c *C) {
+	var testCases = []struct {
+		comment  CommentInterface
+		expected map[string]networkData
+		netData  map[string]networkData
+		members  []serf.Member
+	}{
+		{
+			comment: Commentf("Expected netData present for all members. No members have left the cluster."),
+			expected: map[string]networkData{
+				"172.28.128.101": {},
+				"172.28.128.102": {},
+			},
+			netData: map[string]networkData{
+				"172.28.128.101": {},
+				"172.28.128.102": {},
+			},
+			members: []serf.Member{
+				{Addr: net.ParseIP("172.28.128.101")},
+				{Addr: net.ParseIP("172.28.128.102")},
+			},
+		},
+		{
+			comment: Commentf("Expected netData filtered for member that has left the cluster."),
+			expected: map[string]networkData{
+				"172.28.128.101": {},
+			},
+			netData: map[string]networkData{
+				"172.28.128.101": {},
+				"172.28.128.102": {},
+			},
+			members: []serf.Member{
+				{Addr: net.ParseIP("172.28.128.101")},
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		filtered, err := filterBySerf(testCase.netData, testCase.members)
+		c.Assert(err, IsNil, testCase.comment)
+		c.Assert(filtered, test.DeepCompare, testCase.expected, testCase.comment)
 	}
 }
 

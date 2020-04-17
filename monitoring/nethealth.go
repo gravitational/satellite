@@ -32,6 +32,7 @@ import (
 
 	"github.com/gravitational/roundtrip"
 	"github.com/gravitational/trace"
+	serf "github.com/hashicorp/serf/client"
 	"github.com/mailgun/holster"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
@@ -48,6 +49,8 @@ type NethealthConfig struct {
 	NethealthPort int
 	// NetStatsInterval specifies the duration to store net stats.
 	NetStatsInterval time.Duration
+	// SerfClient is the client to the local serf agent.
+	SerfClient agent.SerfClient
 	// KubeConfig specifies kubernetes access information.
 	*KubeConfig
 }
@@ -59,9 +62,13 @@ func (c *NethealthConfig) CheckAndSetDefaults() error {
 	if c.AdvertiseIP == "" {
 		errors = append(errors, trace.BadParameter("host advertise ip must be provided"))
 	}
+	if c.SerfClient == nil {
+		errors = append(errors, trace.BadParameter("local serf client can't be empty"))
+	}
 	if c.KubeConfig == nil {
 		errors = append(errors, trace.BadParameter("kubernetes access config must be provided"))
 	}
+
 	if c.NethealthPort == 0 {
 		c.NethealthPort = defaultNethealthPort
 	}
@@ -78,7 +85,7 @@ type nethealthChecker struct {
 	NethealthConfig
 	// Mutex locks access to peerStats
 	sync.Mutex
-	// peerStats maps a peer to its recorded nethealth stats.
+	// peerStats maps a peer IP to its recorded nethealth stats.
 	peerStats *netStats
 }
 
@@ -138,6 +145,12 @@ func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) 
 		log.WithError(err).
 			WithField("nethealth-metrics", string(resp)).
 			Error("Received incomplete set of metrics. Could be due to a bug in nethealth or a change in labels.")
+		return nil
+	}
+
+	netData, err = c.filterNetData(netData)
+	if err != nil {
+		log.WithError(err).Error("Failed to filter nethealth data.")
 		return nil
 	}
 
@@ -394,6 +407,30 @@ func getPeerName(labels []*dto.LabelPair) (peer string, err error) {
 		}
 	}
 	return "", trace.NotFound("unable to find %s label", peerLabel)
+}
+
+// filterNetData filters the networkData. Nethealth may retain metrics for nodes
+// that have previously left the cluster. This data is now irrelevant and should
+// not be further processed.
+func (c *nethealthChecker) filterNetData(netData map[string]networkData) (filtered map[string]networkData, err error) {
+	members, err := c.SerfClient.Members()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	return filterBySerf(netData, members)
+}
+
+// filterBySerf removes netData for nodes that are not part of the serf cluster.
+func filterBySerf(netData map[string]networkData, members []serf.Member) (filtered map[string]networkData, err error) {
+	filtered = make(map[string]networkData)
+	for _, member := range members {
+		if data, exists := netData[member.Addr.String()]; exists {
+			filtered[member.Addr.String()] = data
+			continue
+		}
+		log.Warnf("Missing nethealth data for node %s", member.Addr.String())
+	}
+	return filtered, nil
 }
 
 // netStats holds nethealth data for a peer.
