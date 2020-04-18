@@ -24,10 +24,14 @@ import (
 type MemberStatus string
 
 const (
-	MemberAlive   MemberStatus = "alive"
-	MemberLeaving              = "leaving"
-	MemberLeft                 = "left"
-	MemberFailed               = "failed"
+	// MemberAlive indicates the node is a member of the serf cluster.
+	MemberAlive MemberStatus = "alive"
+	// MemberLeaving indicates the node is in the process of leaving the serf cluster.
+	MemberLeaving = "leaving"
+	// MemberLeft indicates the node has left the serf cluster.
+	MemberLeft = "left"
+	// MemberFailed indicates the node is in a failed state.
+	MemberFailed = "failed"
 )
 
 // Role describes the agent's server role.

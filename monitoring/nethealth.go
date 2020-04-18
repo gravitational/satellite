@@ -68,7 +68,6 @@ func (c *NethealthConfig) CheckAndSetDefaults() error {
 	if c.KubeConfig == nil {
 		errors = append(errors, trace.BadParameter("kubernetes access config must be provided"))
 	}
-
 	if c.NethealthPort == 0 {
 		c.NethealthPort = defaultNethealthPort
 	}
@@ -424,11 +423,16 @@ func (c *nethealthChecker) filterNetData(netData map[string]networkData) (filter
 func filterBySerf(netData map[string]networkData, members []serf.Member) (filtered map[string]networkData, err error) {
 	filtered = make(map[string]networkData)
 	for _, member := range members {
-		if data, exists := netData[member.Addr.String()]; exists {
-			filtered[member.Addr.String()] = data
+		data, exists := netData[member.Addr.String()]
+		if !exists {
+			log.Warnf("Missing nethealth data for node %s", member.Addr.String())
 			continue
 		}
-		log.Warnf("Missing nethealth data for node %s", member.Addr.String())
+		if agent.MemberStatus(member.Status) != agent.MemberAlive {
+			log.WithField("member", member.Addr.String()).Debug("NetData filtered for this member.")
+			continue
+		}
+		filtered[member.Addr.String()] = data
 	}
 	return filtered, nil
 }

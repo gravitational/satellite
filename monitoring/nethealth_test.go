@@ -21,6 +21,7 @@ import (
 	"net"
 	"strings"
 
+	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/agent/health"
 	"github.com/gravitational/satellite/lib/test"
 
@@ -295,28 +296,31 @@ func (s *NethealthSuite) TestFilterNetData(c *C) {
 			comment: Commentf("Expected netData present for all members. No members have left the cluster."),
 			expected: map[string]networkData{
 				"172.28.128.101": {},
-				"172.28.128.102": {},
 			},
 			netData: map[string]networkData{
 				"172.28.128.101": {},
-				"172.28.128.102": {},
 			},
 			members: []serf.Member{
-				{Addr: net.ParseIP("172.28.128.101")},
-				{Addr: net.ParseIP("172.28.128.102")},
+				s.newSerfMember("172.28.128.101", agent.MemberAlive),
 			},
 		},
 		{
-			comment: Commentf("Expected netData filtered for member that has left the cluster."),
+			comment: Commentf("Expected netData only for the single member that is `Alive`"),
 			expected: map[string]networkData{
 				"172.28.128.101": {},
 			},
 			netData: map[string]networkData{
 				"172.28.128.101": {},
 				"172.28.128.102": {},
+				"172.28.128.103": {},
+				"172.28.128.104": {},
+				"172.28.128.105": {},
 			},
 			members: []serf.Member{
-				{Addr: net.ParseIP("172.28.128.101")},
+				s.newSerfMember("172.28.128.101", agent.MemberAlive),
+				s.newSerfMember("172.28.128.102", agent.MemberLeft),
+				s.newSerfMember("172.28.128.103", agent.MemberLeaving),
+				s.newSerfMember("172.28.128.104", agent.MemberFailed),
 			},
 		},
 	}
@@ -347,6 +351,14 @@ func (s *NethealthSuite) newPacketLoss(values ...float64) []float64 {
 func (s *NethealthSuite) textToMetrics(metrics string) (map[string]*dto.MetricFamily, error) {
 	var parser expfmt.TextParser
 	return parser.TextToMetricFamilies(strings.NewReader(metrics))
+}
+
+// newSerfMember constructs a new serf member with the provided IP and status.
+func (s *NethealthSuite) newSerfMember(ip string, status agent.MemberStatus) serf.Member {
+	return serf.Member{
+		Addr:   net.ParseIP(ip),
+		Status: string(status),
+	}
 }
 
 const (
