@@ -18,13 +18,13 @@ package nethealth
 import (
 	"net"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
 	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	testclient "k8s.io/client-go/kubernetes/fake"
 )
 
@@ -32,297 +32,61 @@ const ns = "test-namespace"
 
 func TestResyncPeerList(t *testing.T) {
 	server := testServer(t)
-
 	cases := []struct {
-		add         []*v1.Node
-		rm          []string
-		expected    map[string]*peer
-		description string
-	}{
-		{
-			description: "skip our own server",
-			add: []*v1.Node{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "node-1",
-					},
-				},
-			},
-			expected: map[string]*peer{},
-		},
-		{
-			description: "add a peer to the cluster",
-			add: []*v1.Node{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "peer-1",
-					},
-				},
-			},
-			expected: map[string]*peer{
-				"peer-1": {
-					name:             "peer-1",
-					lastStatusChange: server.clock.Now(),
-					addr:             &net.IPAddr{},
-				},
-			},
-		},
-		{
-			description: "add multiple peers",
-			add: []*v1.Node{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "peer-2",
-					},
-				},
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "peer-3",
-					},
-				},
-			},
-			expected: map[string]*peer{
-				"peer-1": {
-					name:             "peer-1",
-					lastStatusChange: server.clock.Now(),
-					addr:             &net.IPAddr{},
-				},
-				"peer-2": {
-					name:             "peer-2",
-					lastStatusChange: server.clock.Now(),
-					addr:             &net.IPAddr{},
-				},
-				"peer-3": {
-					name:             "peer-3",
-					lastStatusChange: server.clock.Now(),
-					addr:             &net.IPAddr{},
-				},
-			},
-		},
-		{
-			description: "remove peer 2 and 3 from the cluster",
-			rm:          []string{"peer-2", "peer-3"},
-			expected: map[string]*peer{
-				"peer-1": {
-					name:             "peer-1",
-					lastStatusChange: server.clock.Now(),
-					addr:             &net.IPAddr{},
-				},
-			},
-		},
-	}
-
-	for _, tt := range cases {
-		for _, node := range tt.add {
-			_, err := server.client.CoreV1().Nodes().Create(node)
-			assert.NoError(t, err, tt.description)
-		}
-
-		for _, node := range tt.rm {
-			err := server.client.CoreV1().Nodes().Delete(node, nil)
-			assert.NoError(t, err, tt.description)
-		}
-
-		err := server.resyncPeerList()
-		assert.NoError(t, err, tt.description)
-		assert.Equal(t, tt.expected, server.peers, tt.description)
-	}
-
-}
-
-func TestResyncPods(t *testing.T) {
-	server := testServer(t)
-	nodes := []*v1.Node{
-		{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "node-1",
-			},
-		},
-		{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "peer-1",
-			},
-		},
-		{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "peer-2",
-			},
-		},
-	}
-
-	cases := []struct {
-		add            []*v1.Pod
-		rm             []string
+		pods           []v1.Pod
 		expectedPeers  map[string]*peer
 		expectedLookup map[string]string
 		description    string
 	}{
 		{
-			description: "ignore our own node",
-			add: []*v1.Pod{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "pod-node-1",
-						Labels: map[string]string{
-							"k8s-app": "nethealth",
-						},
-					},
-					Spec: v1.PodSpec{
-						NodeName: "node-1",
-					},
-					Status: v1.PodStatus{
-						PodIP: "1.1.1.1",
-					},
-				},
+			description: "skip our own server",
+			pods: []v1.Pod{
+				newTestPod(testHostIP, testPodIP),
 			},
-			expectedPeers: map[string]*peer{
-				"peer-1": {
-					name:             "peer-1",
-					lastStatusChange: server.clock.Now(),
-					addr:             &net.IPAddr{},
-				},
-				"peer-2": {
-					name:             "peer-2",
-					lastStatusChange: server.clock.Now(),
-					addr:             &net.IPAddr{},
-				},
-			},
+			expectedPeers:  map[string]*peer{},
 			expectedLookup: map[string]string{},
 		},
 		{
-			description: "new pod for peer-1",
-			add: []*v1.Pod{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "pod-peer-1",
-						Labels: map[string]string{
-							"k8s-app": "nethealth",
-						},
-					},
-					Spec: v1.PodSpec{
-						NodeName: "peer-1",
-					},
-					Status: v1.PodStatus{
-						PodIP: "1.1.1.1",
-					},
-				},
+			description: "add a peer to the cluster",
+			pods: []v1.Pod{
+				newTestPod("172.28.128.102", "10.128.0.2"),
 			},
 			expectedPeers: map[string]*peer{
-				"peer-1": {
-					name:             "peer-1",
-					lastStatusChange: server.clock.Now(),
-					addr: &net.IPAddr{
-						IP: net.ParseIP("1.1.1.1"),
-					},
-				},
-				"peer-2": {
-					name:             "peer-2",
-					lastStatusChange: server.clock.Now(),
-					addr:             &net.IPAddr{},
-				},
+				"172.28.128.102": newTestPeer("172.28.128.102", "10.128.0.2", server.clock.Now()),
 			},
 			expectedLookup: map[string]string{
-				"1.1.1.1": "peer-1",
+				"10.128.0.2": "172.28.128.102",
 			},
 		},
 		{
-			description: "pod that doesn't have a node set",
-			add: []*v1.Pod{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "pod-unknown-peer-1",
-						Labels: map[string]string{
-							"k8s-app": "nethealth",
-						},
-					},
-					Spec: v1.PodSpec{
-						NodeName: "",
-					},
-					Status: v1.PodStatus{
-						PodIP: "1.1.1.1",
-					},
-				},
+			description: "add multiple peers",
+			pods: []v1.Pod{
+				newTestPod("172.28.128.102", "10.128.0.2"),
+				newTestPod("172.28.128.103", "10.128.0.3"),
+				newTestPod("172.28.128.104", "10.128.0.4"),
 			},
 			expectedPeers: map[string]*peer{
-				"peer-1": {
-					name:             "peer-1",
-					lastStatusChange: server.clock.Now(),
-					addr: &net.IPAddr{
-						IP: net.ParseIP("1.1.1.1"),
-					},
-				},
-				"peer-2": {
-					name:             "peer-2",
-					lastStatusChange: server.clock.Now(),
-					addr:             &net.IPAddr{},
-				},
+				"172.28.128.102": newTestPeer("172.28.128.102", "10.128.0.2", server.clock.Now()),
+				"172.28.128.103": newTestPeer("172.28.128.103", "10.128.0.3", server.clock.Now()),
+				"172.28.128.104": newTestPeer("172.28.128.104", "10.128.0.4", server.clock.Now()),
 			},
 			expectedLookup: map[string]string{
-				"1.1.1.1": "peer-1",
-			},
-		},
-		{
-			description: "pod that doesn't have an equivelant node object",
-			add: []*v1.Pod{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "pod-unknown-peer-2",
-						Labels: map[string]string{
-							"k8s-app": "nethealth",
-						},
-					},
-					Spec: v1.PodSpec{
-						NodeName: "non-existant-node",
-					},
-					Status: v1.PodStatus{
-						PodIP: "1.1.1.1",
-					},
-				},
-			},
-			expectedPeers: map[string]*peer{
-				"peer-1": {
-					name:             "peer-1",
-					lastStatusChange: server.clock.Now(),
-					addr: &net.IPAddr{
-						IP: net.ParseIP("1.1.1.1"),
-					},
-				},
-				"peer-2": {
-					name:             "peer-2",
-					lastStatusChange: server.clock.Now(),
-					addr:             &net.IPAddr{},
-				},
-			},
-			expectedLookup: map[string]string{
-				"1.1.1.1": "peer-1",
+				"10.128.0.2": "172.28.128.102",
+				"10.128.0.3": "172.28.128.103",
+				"10.128.0.4": "172.28.128.104",
 			},
 		},
 	}
-
-	for _, node := range nodes {
-		_, err := server.client.CoreV1().Nodes().Create(node)
-		assert.NoError(t, err, node.Name)
-	}
-	err := server.resyncPeerList()
-	assert.NoError(t, err, "error syncing peer list")
 
 	for _, tt := range cases {
-		for _, pod := range tt.add {
-			_, err := server.client.CoreV1().Pods(ns).Create(pod)
-			assert.NoError(t, err, tt.description)
-		}
-
-		for _, node := range tt.rm {
-			err := server.client.CoreV1().Pods(ns).Delete(node, nil)
-			assert.NoError(t, err, tt.description)
-		}
-
-		err = server.resyncNethealthPods()
-		assert.NoError(t, err, tt.description)
+		server.resyncNethealth(tt.pods)
 		assert.Equal(t, tt.expectedPeers, server.peers, tt.description)
-		assert.Equal(t, tt.expectedLookup, server.addrToPeer, tt.description)
+		assert.Equal(t, tt.expectedLookup, server.podToHost, tt.description)
 	}
 }
+
+const testHostIP = "172.28.128.101"
+const testPodIP = "10.128.0.1"
 
 func testServer(t *testing.T) *Server {
 	// reset the prometheus registerer between tests
@@ -330,7 +94,7 @@ func testServer(t *testing.T) *Server {
 
 	config := Config{
 		Namespace: ns,
-		NodeName:  "node-1",
+		HostIP:    testHostIP,
 	}
 
 	server, err := config.New()
@@ -338,6 +102,24 @@ func testServer(t *testing.T) *Server {
 
 	server.client = testclient.NewSimpleClientset()
 	server.clock = clockwork.NewFakeClock()
-
 	return server
+}
+
+// newTestPod constructs a new pods with the provided hostIP and podIP
+func newTestPod(hostIP, podIP string) v1.Pod {
+	return v1.Pod{
+		Status: v1.PodStatus{
+			HostIP: hostIP,
+			PodIP:  podIP,
+		},
+	}
+}
+
+// newTestPeer constructs a new peer with the provided config values.
+func newTestPeer(hostIP, podAddr string, ts time.Time) *peer {
+	return &peer{
+		hostIP:           hostIP,
+		podAddr:          &net.IPAddr{IP: net.ParseIP(podAddr)},
+		lastStatusChange: ts,
+	}
 }
