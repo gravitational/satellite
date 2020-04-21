@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/gravitational/satellite/agent/health"
+	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/utils"
 
 	"github.com/gravitational/trace"
@@ -90,7 +91,7 @@ func (r *systemPodsChecker) Check(ctx context.Context, reporter health.Reporter)
 func (r *systemPodsChecker) check(ctx context.Context, reporter health.Reporter) error {
 	pods, err := r.getPods()
 	if trace.IsNotFound(err) {
-		log.Debug("Failed to get system pods.")
+		log.Debug("No system pods found.")
 		return nil // system pods were not found, log and treat gracefully
 	}
 	if err != nil {
@@ -108,7 +109,7 @@ func (r *systemPodsChecker) getPods() ([]corev1.Pod, error) {
 	}
 	pods, err := r.Client.CoreV1().Pods("").List(opts)
 	if err != nil {
-		return nil, utils.ConvertError(err) // this will convert error to a proper trace error, e.g. trace.NotFound
+		return nil, utils.ConvertError(err)
 	}
 
 	var localPods []corev1.Pod
@@ -125,7 +126,7 @@ func (r *systemPodsChecker) getPods() ([]corev1.Pod, error) {
 func (r *systemPodsChecker) verifyPods(pods []corev1.Pod, reporter health.Reporter) {
 	for _, pod := range pods {
 		if err := verifyPodStatus(pod.Status); err != nil {
-			reporter.Add(NewProbeFromErr(r.Name(), fmt.Sprintf("%s is in an invalid state", pod.Name), err))
+			reporter.Add(systemPodsFailureProbe(r.Name(), pod.Name, pod.Namespace))
 		}
 	}
 }
@@ -188,6 +189,16 @@ func verifyConditionIsTrue(condition corev1.PodCondition) error {
 	default:
 		log.WithField("status", condition.Status).Warnf("%s condition is in an invalid state", condition.Type)
 		return trace.BadParameter("%s condition is in an invalid state: %s", condition.Type, condition.Status)
+	}
+}
+
+// systemPodsFailureProbe constructs a probe that represents a failed system pods
+// check for the pod specified by podName and namespace.
+func systemPodsFailureProbe(checkerName, podName, namespace string) *pb.Probe {
+	return &pb.Probe{
+		Checker: checkerName,
+		Detail:  fmt.Sprintf("pod %s running in namespace %s is in an invalid state", podName, namespace),
+		Status:  pb.Probe_Failed,
 	}
 }
 
