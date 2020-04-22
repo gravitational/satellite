@@ -391,7 +391,10 @@ func (s *Server) resyncNethealth(pods []corev1.Pod) {
 			lastStatusChange: s.clock.Now(),
 		}
 		s.podToHost[pod.Status.PodIP] = pod.Status.HostIP
-		s.WithField("peer", pod.Status.HostIP).Info("Adding peer.")
+		s.WithFields(logrus.Fields{
+			"host_ip":  pod.Status.HostIP,
+			"pod_addr": pod.Status.PodIP,
+		}).Info("Adding peer.")
 
 		// Initialize the peer so it shows up in prometheus with a 0 count
 		s.promPeerTimeout.WithLabelValues(s.config.HostIP, pod.Status.HostIP).Add(0)
@@ -518,6 +521,7 @@ func (s *Server) sendHeartbeat(peer *peer) {
 	})
 
 	if peer.podAddr == nil || peer.podAddr.String() == "" || peer.podAddr.String() == "0.0.0.0" {
+		log.Debug("Peer does not have valid pod address.")
 		return
 	}
 
