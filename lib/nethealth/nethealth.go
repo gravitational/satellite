@@ -379,8 +379,11 @@ func (s *Server) resyncNethealth(pods []corev1.Pod) {
 					"new_peer_addr": newAddr,
 					"old_peer_addr": peer.addr,
 				}).Info("Updating peer pod IP address.")
+
+				// update pod to host mapping
+				delete(s.addrToPeer, peer.addr.String())
 				peer.addr = newAddr
-				s.addrToPeer[pod.Status.PodIP] = pod.Status.HostIP // update pod to host mapping
+				s.addrToPeer[peer.addr.String()] = pod.Status.HostIP
 			}
 			continue
 		}

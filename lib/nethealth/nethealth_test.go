@@ -85,6 +85,49 @@ func TestResyncPeerList(t *testing.T) {
 	}
 }
 
+// TestPodIPChange verifies that peer data and mapping will be updated when the
+// nethealth pod IP changes.
+func TestPodIPChange(t *testing.T) {
+	server := testServer(t)
+	cases := []struct {
+		pods           []v1.Pod
+		initialPeers   map[string]*peer
+		initialLookup  map[string]string
+		expectedPeers  map[string]*peer
+		expectedLookup map[string]string
+		description    string
+	}{
+		{
+			description: "add a peer to the cluster",
+			pods: []v1.Pod{
+				newTestPod("172.28.128.102", "10.128.0.22"),
+			},
+			initialPeers: map[string]*peer{
+				"172.28.128.102": newTestPeer("172.28.128.102", "10.128.0.2", server.clock.Now()),
+			},
+			initialLookup: map[string]string{
+				"10.128.0.2": "172.28.128.102",
+			},
+			expectedPeers: map[string]*peer{
+				"172.28.128.102": newTestPeer("172.28.128.102", "10.128.0.22", server.clock.Now()),
+			},
+			expectedLookup: map[string]string{
+				"10.128.0.22": "172.28.128.102",
+			},
+		},
+	}
+
+	for _, tt := range cases {
+		server.peers = tt.initialPeers
+		server.addrToPeer = tt.initialLookup
+
+		server.resyncNethealth(tt.pods)
+		assert.Equal(t, tt.expectedPeers, server.peers, tt.description)
+		assert.Equal(t, tt.expectedLookup, server.addrToPeer, tt.description)
+	}
+
+}
+
 const testHostIP = "172.28.128.101"
 const testPodIP = "10.128.0.1"
 
