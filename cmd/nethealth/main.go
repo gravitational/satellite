@@ -53,6 +53,8 @@ func run() error {
 		crunPrometheusPort = crun.Flag("prom-port", "The prometheus port to bind to").Default("9801").Uint32()
 		crunNamespace      = crun.Flag("namespace", "The kubernetes namespace to watch for nethealth pods").
 					Default("monitoring").OverrideDefaultFromEnvar("POD_NAMESPACE").String()
+		crunNodeName = crun.Flag("node-name", "The name of the node we're running on").
+				OverrideDefaultFromEnvar("NODE_NAME").String()
 		crunHostIP   = crun.Flag("host-ip", "The host IP address").OverrideDefaultFromEnvar("HOST_IP").String()
 		crunSelector = crun.Flag("pod-selector", "The kubernetes selector to identify nethealth pods").
 				Default(nethealth.DefaultSelector).String()
@@ -86,6 +88,7 @@ func run() error {
 		config := nethealth.Config{
 			PrometheusPort: *crunPrometheusPort,
 			Namespace:      *crunNamespace,
+			NodeName:       *crunNodeName,
 			HostIP:         *crunHostIP,
 			Selector:       *crunSelector,
 		}

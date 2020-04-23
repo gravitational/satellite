@@ -81,7 +81,7 @@ func TestResyncPeerList(t *testing.T) {
 	for _, tt := range cases {
 		server.resyncNethealth(tt.pods)
 		assert.Equal(t, tt.expectedPeers, server.peers, tt.description)
-		assert.Equal(t, tt.expectedLookup, server.podToHost, tt.description)
+		assert.Equal(t, tt.expectedLookup, server.addrToPeer, tt.description)
 	}
 }
 
@@ -119,7 +119,7 @@ func newTestPod(hostIP, podIP string) v1.Pod {
 func newTestPeer(hostIP, podAddr string, ts time.Time) *peer {
 	return &peer{
 		hostIP:           hostIP,
-		podAddr:          &net.IPAddr{IP: net.ParseIP(podAddr)},
+		addr:             &net.IPAddr{IP: net.ParseIP(podAddr)},
 		lastStatusChange: ts,
 	}
 }
