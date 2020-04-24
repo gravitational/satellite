@@ -231,20 +231,39 @@ func (Codegen) Grpc() error {
 		fmt.Sprintf("--volume=%v:/go/src/github.com/gravitational/satellite:delegated", srcDir()),
 		fmt.Sprint("satellite-grpc-buildbox:", version()),
 		"sh", "-c",
-		"cd /go/src/github.com/gravitational/satellite/ && go run mage.go internal:grpc",
+		"cd /go/src/github.com/gravitational/satellite/ && go run mage.go internal:grpcAgent internal:grpcDebug",
 	))
 }
 
 type Internal mg.Namespace
 
-// Grpc (Internal) is called from codeGen:grpc target inside docker
-func (Internal) Grpc() error {
+// GrpcAgent (Internal) generates protobuf stubs for Agent server
+// The task is called from codeGen:grpc target inside docker
+func (Internal) GrpcAgent() error {
 	fmt.Println("\n=====> Running protoc...\n")
 	err := os.Chdir(filepath.Join(srcDir(), "agent/proto/agentpb"))
 	if err != nil {
-		return trace.Wrap(err)
+		return trace.ConvertSystemError(err)
 	}
 	protoFiles, err := filepath.Glob("*.proto")
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	args := []string{fmt.Sprint("-I=.:", os.Getenv("PROTO_INCLUDE")), "--gofast_out=plugins=grpc:."}
+	return trace.Wrap(sh.RunV(
+		"protoc",
+		append(args, protoFiles...)...,
+	))
+}
+
+// GrpcDebug (Internal) generates protobuf stubs for Debug server
+func (Internal) GrpcDebug() error {
+	fmt.Println("\n=====> Running protoc...\n")
+	err := os.Chdir(filepath.Join(srcDir(), "agent/proto"))
+	if err != nil {
+		return trace.ConvertSystemError(err)
+	}
+	protoFiles, err := filepath.Glob("debug/*.proto")
 	if err != nil {
 		return trace.Wrap(err)
 	}

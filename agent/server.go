@@ -23,12 +23,12 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"net/http/pprof"
 	"strings"
 	"time"
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	debugpb "github.com/gravitational/satellite/agent/proto/debug"
 	"github.com/gravitational/satellite/lib/rpc"
 
 	"github.com/gravitational/roundtrip"
@@ -186,24 +186,21 @@ func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []str
 	backend := grpc.NewServer(grpc.Creds(creds))
 	server := &server{agent: agent, Server: backend}
 	pb.RegisterAgentServer(backend, server)
+	debugServer := debugpb.NewServer()
+	debugpb.RegisterDebugServer(backend, debugServer)
 
-	// handler is a convenience multiplexer for both gRPC and HTTPS queries.
+	// statusHandler is a convenience multiplexer for both gRPC and HTTPS queries.
 	// The HTTPS endpoint returns the cluster status as JSON
-	healthHandler := grpcHandlerFunc(server, newHealthHandler(server))
-
+	statusHandler := grpcHandlerFunc(server, newHealthHandler(server))
 	for _, addr := range addrs {
-		handler := healthHandler
-		if addr.IP.IsLoopback() {
-			handler = grpcHandlerFunc(server, newHealthHandlerWithDebug(server))
-		}
-		srv := newHTTPServer(addr.String(), tlsConfig, handler)
+		srv := newHTTPServer(addr.String(), tlsConfig, statusHandler)
 		server.httpServers = append(server.httpServers, srv)
 
 		// TODO: separate Start function to start listening.
 		go func(srv *http.Server) {
 			err := srv.ListenAndServeTLS(certFile, keyFile)
 			if err == http.ErrServerClosed {
-				log.WithError(err).Debug("Server has been shutdown/closed.")
+				log.Debug("Server has been shut down/closed.")
 				return
 			}
 			if err != nil {
@@ -229,25 +226,6 @@ func newHTTPServer(address string, tlsConfig *tls.Config, handler http.Handler) 
 // from an HTTPS endpoint listening on the same RPC port as the agent.
 func newHealthHandler(s *server) http.Handler {
 	mux := http.NewServeMux()
-	handlerMux(mux, s)
-	return mux
-}
-
-// newHealthHandlerWithDebug creates an http.Handler that returns cluster status
-// from an HTTPS endpoint listening on the same RPC port as the agent.
-// Additionally, it provides debug endpoints if debugging is enabled
-func newHealthHandlerWithDebug(s *server) http.Handler {
-	mux := http.NewServeMux()
-	handlerMux(mux, s)
-	mux.HandleFunc("/debug/pprof/", debugHandler(pprof.Index))
-	mux.HandleFunc("/debug/pprof/cmdline", debugHandler(pprof.Cmdline))
-	mux.HandleFunc("/debug/pprof/profile", debugHandler(pprof.Profile))
-	mux.HandleFunc("/debug/pprof/symbol", debugHandler(pprof.Symbol))
-	mux.HandleFunc("/debug/pprof/trace", debugHandler(pprof.Trace))
-	return mux
-}
-
-func handlerMux(mux *http.ServeMux, s *server) {
 	mux.HandleFunc("/", handleStatus(s))
 
 	localStatusHandler := handleLocalStatus(s)
@@ -257,6 +235,7 @@ func handlerMux(mux *http.ServeMux, s *server) {
 	historyHandler := handleHistory(s)
 	mux.HandleFunc("/history", historyHandler)
 	mux.HandleFunc("/history/", historyHandler)
+	return mux
 }
 
 func handleLocalStatus(s *server) http.HandlerFunc {
