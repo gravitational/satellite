@@ -26,6 +26,7 @@ import (
 	"io/ioutil"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	debugpb "github.com/gravitational/satellite/agent/proto/debug"
 	"github.com/gravitational/satellite/lib/rpc"
 
 	"github.com/gravitational/trace"
@@ -81,12 +82,15 @@ type Client interface {
 	Timeline(context.Context, *pb.TimelineRequest) (*pb.TimelineResponse, error)
 	// UpdateTimeline requests that the timeline be updated with the specified event.
 	UpdateTimeline(context.Context, *pb.UpdateRequest) (*pb.UpdateResponse, error)
+	// Profile streams the debug profile specified in req
+	Profile(ctx context.Context, req *debugpb.ProfileRequest) (debugpb.Debug_ProfileClient, error)
 	// Close closes the RPC client connection.
 	Close() error
 }
 
 type client struct {
 	pb.AgentClient
+	debugpb.DebugClient
 	conn        *grpc.ClientConn
 	callOptions []grpc.CallOption
 }
@@ -131,11 +135,9 @@ func NewClientWithCreds(ctx context.Context, addr string, creds credentials.Tran
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to dial")
 	}
-
-	c := pb.NewAgentClient(conn)
-
 	return &client{
-		AgentClient: c,
+		AgentClient: pb.NewAgentClient(conn),
+		DebugClient: debugpb.NewDebugClient(conn),
 		conn:        conn,
 		// TODO: provide option to initialize client with more call options.
 		callOptions: []grpc.CallOption{grpc.FailFast(false)},
@@ -191,6 +193,15 @@ func (r *client) Timeline(ctx context.Context, req *pb.TimelineRequest) (timelin
 // UpdateTimeline request the update the timeline with a new event.
 func (r *client) UpdateTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateResponse, error) {
 	resp, err := r.AgentClient.UpdateTimeline(ctx, req, r.callOptions...)
+	if err != nil {
+		return nil, ConvertGRPCError(err)
+	}
+	return resp, nil
+}
+
+// Profile streams the debug profile specified in req
+func (r *client) Profile(ctx context.Context, req *debugpb.ProfileRequest) (debugpb.Debug_ProfileClient, error) {
+	resp, err := r.DebugClient.Profile(ctx, req, r.callOptions...)
 	if err != nil {
 		return nil, ConvertGRPCError(err)
 	}
