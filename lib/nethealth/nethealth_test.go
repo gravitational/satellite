@@ -30,7 +30,8 @@ import (
 
 const ns = "test-namespace"
 
-func TestResyncPeerList(t *testing.T) {
+// TestAddPeer verifies peers can be successfully added to the cluster.
+func TestAddPeer(t *testing.T) {
 	server := testServer(t)
 	cases := []struct {
 		pods           []v1.Pod
@@ -98,7 +99,7 @@ func TestPodIPChange(t *testing.T) {
 		description    string
 	}{
 		{
-			description: "add a peer to the cluster",
+			description: "change pod IP of existing peer",
 			pods: []v1.Pod{
 				newTestPod("172.28.128.102", "10.128.0.22"),
 			},
@@ -114,6 +115,41 @@ func TestPodIPChange(t *testing.T) {
 			expectedLookup: map[string]string{
 				"10.128.0.22": "172.28.128.102",
 			},
+		},
+	}
+
+	for _, tt := range cases {
+		server.peers = tt.initialPeers
+		server.addrToPeer = tt.initialLookup
+
+		server.resyncNethealth(tt.pods)
+		assert.Equal(t, tt.expectedPeers, server.peers, tt.description)
+		assert.Equal(t, tt.expectedLookup, server.addrToPeer, tt.description)
+	}
+}
+
+// TestDeletePeer verifies that peer data and mapping will be deleted when a
+// peer leaves the cluster.
+func TestDeletePeer(t *testing.T) {
+	server := testServer(t)
+	cases := []struct {
+		pods           []v1.Pod
+		initialPeers   map[string]*peer
+		initialLookup  map[string]string
+		expectedPeers  map[string]*peer
+		expectedLookup map[string]string
+		description    string
+	}{
+		{
+			description: "delete a peer from the cluster",
+			initialPeers: map[string]*peer{
+				"172.28.128.102": newTestPeer("172.28.128.102", "10.128.0.2", server.clock.Now()),
+			},
+			initialLookup: map[string]string{
+				"10.128.0.2": "172.28.128.102",
+			},
+			expectedPeers:  map[string]*peer{},
+			expectedLookup: map[string]string{},
 		},
 	}
 
