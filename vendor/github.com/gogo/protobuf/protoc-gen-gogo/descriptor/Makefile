@@ -29,15 +29,8 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-install:
-	go install
-
-test: install generate-test-pbs
-	go test
-
-
-generate-test-pbs:
-	make install
-	make -C test_proto
-	make -C proto3_proto
-	make
+regenerate:
+	go install github.com/gogo/protobuf/protoc-gen-gogo
+	go install github.com/gogo/protobuf/protoc-gen-gostring
+	protoc --gogo_out=. -I=../../protobuf/google/protobuf ../../protobuf/google/protobuf/descriptor.proto
+	protoc --gostring_out=. -I=../../protobuf/google/protobuf ../../protobuf/google/protobuf/descriptor.proto
