@@ -100,7 +100,6 @@ func (Build) Healthz() error {
 	return trace.Wrap(sh.RunV(
 		"go", "build",
 		"-o", outPath("healthz"),
-		"-ldflags", flags(),
 		"github.com/gravitational/satellite/cmd/healthz",
 	))
 }
@@ -267,7 +266,7 @@ func (Internal) GrpcDebug() error {
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	args := []string{fmt.Sprint("-I=.:", os.Getenv("PROTO_INCLUDE")), "--gofast_out=plugins=grpc:."}
+	args := []string{fmt.Sprint("-I=.:", os.Getenv("PROTO_INCLUDE")), "--gofast_out=plugins=grpc,Mgogo.proto=github.com/gogo/protobuf/gogoproto:."}
 	return trace.Wrap(sh.RunV(
 		"protoc",
 		append(args, protoFiles...)...,

@@ -34,7 +34,16 @@ func (r *Server) Profile(req *ProfileRequest, stream Debug_ProfileServer) error 
 	if profile == nil {
 		return status.Errorf(codes.NotFound, "invalid profile: %v", req.Profile)
 	}
-	if err := profile.WriteTo(&byteWriter{stream: stream}, 0); err != nil {
+	var debug int
+	switch req.Output {
+	case OutputNormal:
+		debug = 1
+	case OutputBasic:
+		debug = 0
+	case OutputDebug:
+		debug = 2
+	}
+	if err := profile.WriteTo(&byteWriter{stream: stream}, debug); err != nil {
 		return status.Errorf(codes.Internal, "failed to stream profile: %v", err)
 	}
 	return nil

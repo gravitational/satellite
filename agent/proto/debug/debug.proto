@@ -17,6 +17,8 @@ syntax = "proto3";
 
 package debug;
 
+import "gogo.proto";
+
 // Debug allows to capture debug information
 service Debug {
   // Profile streams a specific debug profile
@@ -25,7 +27,22 @@ service Debug {
 
 // ProfileRequest describes the request of the Profile API
 message ProfileRequest {
+    // Profile specifies the profile name
     string profile = 1;
+    // Output specifies the output format.
+    enum Output {
+        option (gogoproto.goproto_enum_prefix) = false;
+        option (gogoproto.goproto_enum_stringer) = false;
+        option (gogoproto.enum_customname) = "Output";
+
+        // OutputNormal outputs the profile with additional details like comments or line numbers
+        Normal = 0 [(gogoproto.enumvalue_customname) = "OutputNormal"];
+        // OutputBasic outputs the profile in minimal form
+        Basic = 1 [(gogoproto.enumvalue_customname) = "OutputBasic"];
+        // OutputDebug outputs the profile in most detailed form
+        Debug = 2 [(gogoproto.enumvalue_customname) = "OutputDebug"];
+    }
+    Output output = 2;
 }
 
 // ProfileResponse describes the response of the Profile API

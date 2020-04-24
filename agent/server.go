@@ -281,23 +281,6 @@ func handleHistory(s *server) http.HandlerFunc {
 	}
 }
 
-func debugHandler(handler http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !debugEndpoint {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			return
-		}
-		handler(w, r)
-	}
-}
-
-// DebugRPC controls whether the debugging HTTP endpoint is active
-func DebugRPC(on bool) {
-	debugEndpoint = on
-}
-
-var debugEndpoint = false
-
 func splitAddrs(addrs []string) (result []net.TCPAddr, err error) {
 	result = make([]net.TCPAddr, 0, len(addrs))
 	for _, addr := range addrs {
