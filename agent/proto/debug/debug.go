@@ -28,7 +28,7 @@ func NewServer() *Server {
 	return &Server{}
 }
 
-// Profile executes the specifies debug profile and streams the results to the caller
+// Profile executes the specified debug profile and streams the results to the caller
 func (r *Server) Profile(req *ProfileRequest, stream Debug_ProfileServer) error {
 	profile := pprof.Lookup(req.Profile)
 	if profile == nil {
@@ -50,8 +50,7 @@ func (r *Server) Profile(req *ProfileRequest, stream Debug_ProfileServer) error 
 }
 
 // Server encapsulates a Debug service
-type Server struct {
-}
+type Server struct {}
 
 // Write writes the specified byte slice into the underlying stream
 func (r *byteWriter) Write(p []byte) (n int, err error) {
