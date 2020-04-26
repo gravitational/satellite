@@ -356,7 +356,6 @@
   version = "v1.2.0"
 
 [[projects]]
-  branch = "master"
   digest = "1:35f49695a600c368ad7811a672d583b3e004b44fe883a0a1eb2a6c0d75eaeb1b"
   name = "github.com/jonboulle/clockwork"
   packages = ["."]
