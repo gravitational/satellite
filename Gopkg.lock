@@ -538,7 +538,7 @@
   pruneopts = "UT"
   revision = "9ebd8dcf727178553227307b785304594abef057"
   source = "github.com/gravitational/logrus"
-  version = "v1.4.3-alpha.1"
+  version = "v1.4.3"
 
 [[projects]]
   digest = "1:1b21a2b4058a779f290c7341cd93267492e0ecea6c8b54f64a4a5fd7ff131034"

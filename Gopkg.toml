@@ -90,7 +90,7 @@ required = [
 [[constraint]]
   name = "github.com/sirupsen/logrus"
   source = "github.com/gravitational/logrus"
-  version = "v1.4.3-alpha.1"
+  version = "=v1.4.3"
 
 [[constraint]]
   name = "golang.org/x/net"
