@@ -356,7 +356,6 @@
   version = "v1.2.0"
 
 [[projects]]
-  branch = "master"
   digest = "1:35f49695a600c368ad7811a672d583b3e004b44fe883a0a1eb2a6c0d75eaeb1b"
   name = "github.com/jonboulle/clockwork"
   packages = ["."]
@@ -539,7 +538,7 @@
   pruneopts = "UT"
   revision = "9ebd8dcf727178553227307b785304594abef057"
   source = "github.com/gravitational/logrus"
-  version = "v1.4.3-alpha.1"
+  version = "v1.4.3"
 
 [[projects]]
   digest = "1:1b21a2b4058a779f290c7341cd93267492e0ecea6c8b54f64a4a5fd7ff131034"
