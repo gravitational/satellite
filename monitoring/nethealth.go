@@ -286,7 +286,7 @@ func (c *nethealthChecker) verifyNethealthLog(peers []string) error {
 			continue
 		}
 		packetLoss := data.packetLoss[len(data.packetLoss)-1]
-		log.Errorf("Overlay packet loss for node %s is higher than the allowed threshold of %.2f%%: %.2f%%",
+		log.Warnf("Overlay packet loss for node %s is higher than the allowed threshold of %.2f%%: %.2f%%",
 			peer, thresholdPercent, packetLoss*100)
 	}
 	return nil
