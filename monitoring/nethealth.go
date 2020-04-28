@@ -111,7 +111,7 @@ func (c *nethealthChecker) Check(ctx context.Context, reporter health.Reporter) 
 	if err != nil {
 		log.WithError(err).Warn("Failed to verify nethealth")
 
-		// Do not report failed probes for now until we fix issues with nethealth checker.
+		// TODO: uncomment once nethealth check issues are fixed.
 		// reporter.Add(NewProbeFromErr(c.Name(), "failed to verify nethealth", err))
 		return
 	}
@@ -148,6 +148,7 @@ func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) 
 		return trace.Wrap(err, "failed to update nethealth stats")
 	}
 
+	// TODO: replace with verifyNethealth once nethealth check issues are fixed.
 	return c.verifyNethealthLog(updated)
 }
 
