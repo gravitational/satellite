@@ -110,7 +110,9 @@ func (c *nethealthChecker) Check(ctx context.Context, reporter health.Reporter) 
 	err := c.check(ctx, reporter)
 	if err != nil {
 		log.WithError(err).Warn("Failed to verify nethealth")
-		reporter.Add(NewProbeFromErr(c.Name(), "failed to verify nethealth", err))
+
+		// Do not report failed probes for now until we fix issues with nethealth checker.
+		// reporter.Add(NewProbeFromErr(c.Name(), "failed to verify nethealth", err))
 		return
 	}
 	if reporter.NumProbes() == 0 {
@@ -146,7 +148,7 @@ func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) 
 		return trace.Wrap(err, "failed to update nethealth stats")
 	}
 
-	return c.verifyNethealth(updated, reporter)
+	return c.verifyNethealthLog(updated)
 }
 
 // getNethealthAddr returns the address of the local nethealth pod.
@@ -257,6 +259,34 @@ func (c *nethealthChecker) verifyNethealth(peers []string, reporter health.Repor
 		}
 		packetLoss := data.packetLoss[len(data.packetLoss)-1]
 		reporter.Add(nethealthFailureProbe(c.Name(), peer, packetLoss))
+	}
+	return nil
+}
+
+// verifyNethealthLog is temporary replacement function while we fix issues with
+// the nethealth checker. Does not report failed probes, only logs network
+// problems.
+func (c *nethealthChecker) verifyNethealthLog(peers []string) error {
+	for _, peer := range peers {
+		healthy, err := c.isHealthy(peer)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+		if healthy {
+			continue
+		}
+
+		// Report last recorded packet loss percentage
+		data, err := c.peerStats.Get(peer)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+		if len(data.packetLoss) == 0 {
+			continue
+		}
+		packetLoss := data.packetLoss[len(data.packetLoss)-1]
+		log.Errorf("Overlay packet loss for node %s is higher than the allowed threshold of %.2f%%: %.2f%%",
+			peer, thresholdPercent, packetLoss*100)
 	}
 	return nil
 }
