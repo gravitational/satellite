@@ -37,13 +37,14 @@ import (
 	"github.com/prometheus/common/expfmt"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 )
 
 // NethealthConfig specifies configuration for a nethealth checker.
 type NethealthConfig struct {
-	// AdvertiseIP specifies the advertised ip address of the host running this checker.
-	AdvertiseIP string
+	// NodeName specifies the kubernetes name of this node.
+	NodeName string
 	// NethealthPort specifies the port that nethealth is listening on.
 	NethealthPort int
 	// NetStatsInterval specifies the duration to store net stats.
@@ -56,8 +57,8 @@ type NethealthConfig struct {
 // value defaults where necessary.
 func (c *NethealthConfig) CheckAndSetDefaults() error {
 	var errors []error
-	if c.AdvertiseIP == "" {
-		errors = append(errors, trace.BadParameter("host advertise ip must be provided"))
+	if c.NodeName == "" {
+		errors = append(errors, trace.BadParameter("node name must be provided"))
 	}
 	if c.KubeConfig == nil {
 		errors = append(errors, trace.BadParameter("kubernetes access config must be provided"))
@@ -153,22 +154,24 @@ func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) 
 func (c *nethealthChecker) getNethealthAddr() (addr string, err error) {
 	opts := metav1.ListOptions{
 		LabelSelector: nethealthLabelSelector.String(),
+		FieldSelector: fields.OneTermEqualSelector("spec.nodeName", c.NodeName).String(),
+		Limit:         1,
 	}
 	pods, err := c.Client.CoreV1().Pods(nethealthNamespace).List(opts)
 	if err != nil {
 		return addr, utils.ConvertError(err) // this will convert error to a proper trace error, e.g. trace.NotFound
 	}
 
-	for _, pod := range pods.Items {
-		if pod.Status.HostIP == c.AdvertiseIP {
-			if pod.Status.PodIP == "" {
-				return addr, trace.NotFound("local nethealth pod IP has not been assigned yet.")
-			}
-			return fmt.Sprintf("http://%s:%d", pod.Status.PodIP, c.NethealthPort), nil
-		}
+	if len(pods.Items) < 1 {
+		return addr, trace.NotFound("nethealth pod not found on local node %s", c.NodeName)
 	}
 
-	return addr, trace.NotFound("unable to find nethealth pod running on host %s", c.AdvertiseIP)
+	pod := pods.Items[0]
+	if pod.Status.PodIP == "" {
+		return addr, trace.NotFound("local nethealth pod IP has not been assigned yet")
+	}
+
+	return fmt.Sprintf("http://%s:%d", pod.Status.PodIP, c.NethealthPort), nil
 }
 
 // updateStats updates netStats with new incoming data.
