@@ -43,7 +43,10 @@ type RPCServer interface {
 	LastSeen(context.Context, *pb.LastSeenRequest) (*pb.LastSeenResponse, error)
 	Time(context.Context, *pb.TimeRequest) (*pb.TimeResponse, error)
 	Timeline(context.Context, *pb.TimelineRequest) (*pb.TimelineResponse, error)
+	// UpdateTimeline updates the cluster timeline with the provided events.
 	UpdateTimeline(context.Context, *pb.UpdateRequest) (*pb.UpdateResponse, error)
+	// UpdateLocalTimeline updates the local timeline with the provided events.
+	UpdateLocalTimeline(context.Context, *pb.UpdateRequest) (*pb.UpdateResponse, error)
 	Stop()
 }
 
@@ -105,6 +108,15 @@ func (r *server) UpdateTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb
 		return nil, GRPCError(err)
 	}
 	if err := r.agent.RecordLastSeen(req.GetName(), req.GetEvent().GetTimestamp().ToTime()); err != nil {
+		return nil, GRPCError(err)
+	}
+	return &pb.UpdateResponse{}, nil
+}
+
+// UpdateLocalTimeline records a new event into the local timeline.
+// Duplicate requests will have no effect.
+func (r *server) UpdateLocalTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateResponse, error) {
+	if err := r.agent.RecordLocalEvents(ctx, []*pb.TimelineEvent{req.GetEvent()}); err != nil {
 		return nil, GRPCError(err)
 	}
 	return &pb.UpdateResponse{}, nil

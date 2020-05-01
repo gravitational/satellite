@@ -81,6 +81,8 @@ type Client interface {
 	Timeline(context.Context, *pb.TimelineRequest) (*pb.TimelineResponse, error)
 	// UpdateTimeline requests that the timeline be updated with the specified event.
 	UpdateTimeline(context.Context, *pb.UpdateRequest) (*pb.UpdateResponse, error)
+	// UpdateLocalTimeline requests that the local timeline be updated with the specified event.
+	UpdateLocalTimeline(context.Context, *pb.UpdateRequest) (*pb.UpdateResponse, error)
 	// Close closes the RPC client connection.
 	Close() error
 }
@@ -188,9 +190,18 @@ func (r *client) Timeline(ctx context.Context, req *pb.TimelineRequest) (timelin
 	return resp, nil
 }
 
-// UpdateTimeline request the update the timeline with a new event.
+// UpdateTimeline requests to update the cluster timeline with a new event.
 func (r *client) UpdateTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateResponse, error) {
 	resp, err := r.AgentClient.UpdateTimeline(ctx, req, r.callOptions...)
+	if err != nil {
+		return nil, ConvertGRPCError(err)
+	}
+	return resp, nil
+}
+
+// UpdateLocalTimeline requests to update the local timeline with a new event.
+func (r *client) UpdateLocalTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateResponse, error) {
+	resp, err := r.AgentClient.UpdateLocalTimeline(ctx, req, r.callOptions...)
 	if err != nil {
 		return nil, ConvertGRPCError(err)
 	}
