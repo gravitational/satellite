@@ -17,16 +17,22 @@ ARG BUILD_VERSION
 ARG RIGGING_IMAGE
 
 FROM $BUILD_IMAGE as build
+RUN apt-get update && apt-get install -y libcap2-bin && apt-get clean && rm -rf /var/lib/apt/lists/*
 ADD ./ /go/src/github.com/gravitational/satellite/
 RUN cd /go/src/github.com/gravitational/satellite/ && BUILD_VERSION=${BUILD_VERSION} go run mage.go build:nethealth
+
 
 #
 # Build nethealth container
 #
 FROM ${BASE_IMAGE}
-RUN apt-get update && apt-get install -y libcap2-bin && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /sbin/getcap /sbin
+COPY --from=build /sbin/setcap /sbin
+COPY --from=build /lib/x86_64-linux-gnu/libcap.so.2 /lib
 
 COPY --from=build /go/src/github.com/gravitational/satellite/build/nethealth /nethealth
 
-RUN /sbin/setcap 'cap_net_raw=+ep' /nethealth
+RUN ["/sbin/setcap", "cap_net_raw=+ep", "/nethealth"]
+
 CMD ["/nethealth"]  
