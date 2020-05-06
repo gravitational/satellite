@@ -350,7 +350,7 @@ func (s *NethealthSuite) newPacketLoss(values ...float64) []float64 {
 	return packetLoss
 }
 
-// newTestNode constructs a new ndoe with the provided node name.
+// newTestNode constructs a new node with the provided node name.
 func (s *NethealthSuite) newTestNode(name string) corev1.Node {
 	return corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{

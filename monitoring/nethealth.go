@@ -174,6 +174,9 @@ func (c *nethealthChecker) getNethealthAddr() (addr string, err error) {
 	}
 
 	pod := pods.Items[0]
+	if pod.Status.Phase != corev1.PodRunning {
+		return addr, trace.NotFound("unable to find running local nethealth pod")
+	}
 	if pod.Status.PodIP == "" {
 		return addr, trace.NotFound("local nethealth pod IP has not been assigned yet")
 	}
@@ -301,8 +304,8 @@ func (c *nethealthChecker) isHealthy(peer string) (healthy bool, err error) {
 func nethealthFailureProbe(name, peer string, packetLoss float64) *pb.Probe {
 	return &pb.Probe{
 		Checker: name,
-		Detail: fmt.Sprintf("overlay packet loss for node %s is higher than the allowed threshold of %.2f%%: %.2f%%",
-			peer, thresholdPercent, packetLoss*100),
+		Detail: fmt.Sprintf("overlay packet loss for node %s is higher than the allowed threshold of %d%%: %d%%",
+			peer, int(thresholdPercent), int(packetLoss*100)),
 		Status: pb.Probe_Failed,
 	}
 }
@@ -406,7 +409,7 @@ func getPeerName(labels []*dto.LabelPair) (peer string, err error) {
 	return "", trace.NotFound("unable to find %s label", peerLabel)
 }
 
-// filterNetData filters the networkData. Nethealth may retain metrics for nodes
+// filterNetData filters the netData. Nethealth may retain metrics for nodes
 // that are no longer part of the cluster. Metrics for these nodes should not
 // be further processed.
 func (c *nethealthChecker) filterNetData(netData map[string]networkData) (filtered map[string]networkData, err error) {
@@ -426,7 +429,7 @@ func filterByK8s(netData map[string]networkData, nodes []corev1.Node) (filtered 
 	for _, node := range nodes {
 		data, exists := netData[node.Name]
 		if !exists {
-			log.WithField("node", node.Name).Warn("missing nethealth data for peer")
+			log.WithField("node", node.Name).Warn("Missing nethealth data for peer.")
 			continue
 		}
 		filtered[node.Name] = data
