@@ -17,7 +17,7 @@ ARG BUILD_VERSION
 ARG RIGGING_IMAGE
 
 FROM $BUILD_IMAGE as build
-RUN apt-get update && apt-get install -y libcap2-bin && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN set -ex && apt-get update && apt-get install -y libcap2-bin && apt-get clean && rm -rf /var/lib/apt/lists/*
 ADD ./ /go/src/github.com/gravitational/satellite/
 RUN cd /go/src/github.com/gravitational/satellite/ && BUILD_VERSION=${BUILD_VERSION} go run mage.go build:nethealth
 
