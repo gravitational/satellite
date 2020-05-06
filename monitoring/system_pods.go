@@ -82,7 +82,14 @@ func (r *systemPodsChecker) Check(ctx context.Context, reporter health.Reporter)
 	err := r.check(ctx, reporter)
 	if err != nil {
 		log.WithError(err).Warn("Failed to verify critical system pods")
-		reporter.Add(NewProbeFromErr(r.Name(), "failed to verify critical system pods", err))
+		// TODO: set probe to critical
+		reporter.Add(&pb.Probe{
+			Checker:  r.Name(),
+			Detail:   "failed to verify critical system pods",
+			Error:    trace.UserMessage(err),
+			Status:   pb.Probe_Failed,
+			Severity: pb.Probe_Warning,
+		})
 		return
 	}
 	if reporter.NumProbes() == 0 {
@@ -193,9 +200,10 @@ func verifyConditionIsTrue(condition corev1.PodCondition) error {
 // check for the pod specified by podName and namespace.
 func systemPodsFailureProbe(checkerName, podName, namespace string) *pb.Probe {
 	return &pb.Probe{
-		Checker: checkerName,
-		Detail:  fmt.Sprintf("pod %s running in namespace %s is in an invalid state", podName, namespace),
-		Status:  pb.Probe_Failed,
+		Checker:  checkerName,
+		Detail:   fmt.Sprintf("pod %s running in namespace %s is in an invalid state", podName, namespace),
+		Status:   pb.Probe_Failed,
+		Severity: pb.Probe_Warning, // TODO: set probe to critical
 	}
 }
 
