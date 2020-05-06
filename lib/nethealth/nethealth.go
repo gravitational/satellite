@@ -311,6 +311,7 @@ func (s *Server) loop() {
 func (s *Server) loopServiceDiscovery() {
 	s.Info("Starting DNS service discovery for nethealth pod.")
 	ticker := s.clock.NewTicker(dnsDiscoveryInterval)
+	defer ticker.Stop()
 	query := s.config.ServiceDiscoveryQuery
 
 	previousNames := []string{}
@@ -373,6 +374,9 @@ func (s *Server) resyncPeerList() error {
 		if _, ok := peerMap[key]; !ok {
 			s.WithField("peer", key).Info("Deleting peer.")
 			delete(s.peers, key)
+			s.promPeerRTT.DeleteLabelValues(s.config.NodeName, key)
+			s.promPeerRequest.DeleteLabelValues(s.config.NodeName, key)
+			s.promPeerTimeout.DeleteLabelValues(s.config.NodeName, key)
 		}
 	}
 
