@@ -81,8 +81,8 @@ func (r *systemPodsChecker) Name() string {
 func (r *systemPodsChecker) Check(ctx context.Context, reporter health.Reporter) {
 	err := r.check(ctx, reporter)
 	if err != nil {
-		log.WithError(err).Warn("Failed to verify system pods")
-		reporter.Add(NewProbeFromErr(r.Name(), "failed to verify system pods", err))
+		log.WithError(err).Warn("Failed to verify critical system pods")
+		reporter.Add(NewProbeFromErr(r.Name(), "failed to verify critical system pods", err))
 		return
 	}
 	if reporter.NumProbes() == 0 {
@@ -93,7 +93,7 @@ func (r *systemPodsChecker) Check(ctx context.Context, reporter health.Reporter)
 func (r *systemPodsChecker) check(ctx context.Context, reporter health.Reporter) error {
 	pods, err := r.getPods()
 	if trace.IsNotFound(err) {
-		log.Debug("No system pods found.")
+		log.Debug("No critical system pods found.")
 		return nil // system pods were not found, log and treat gracefully
 	}
 	if err != nil {
@@ -104,7 +104,7 @@ func (r *systemPodsChecker) check(ctx context.Context, reporter health.Reporter)
 	return nil
 }
 
-// getPods returns a list of the local pods that have the system pod label.
+// getPods returns a list of the local pods that have the `critical` label.
 func (r *systemPodsChecker) getPods() ([]corev1.Pod, error) {
 	opts := metav1.ListOptions{
 		LabelSelector: systemPodsSelector.String(),
@@ -201,10 +201,10 @@ func systemPodsFailureProbe(checkerName, podName, namespace string) *pb.Probe {
 
 const systemPodsCheckerID = "system-pods-checker"
 
-// systemPodsSelector defines a label selector used to query system pods.
+// systemPodsSelector defines a label selector used to query critical system pods.
 var systemPodsSelector = utils.MustLabelSelector(
 	metav1.LabelSelectorAsSelector(
 		&metav1.LabelSelector{
 			MatchExpressions: []metav1.LabelSelectorRequirement{
-				{Key: "system-pod", Operator: metav1.LabelSelectorOpExists},
+				{Key: "critical", Operator: metav1.LabelSelectorOpExists},
 			}}))
