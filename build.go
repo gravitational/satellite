@@ -39,7 +39,7 @@ var (
 	nethealthRegistryImage = env("NETHEALTH_REGISTRY_IMAGE", "quay.io/gravitational/nethealth-dev")
 
 	// baseImage is the base OS image to use for containers
-	baseImage = "ubuntu:19.10"
+	baseImage = "gcr.io/distroless/base-debian10"
 
 	// buildVersion allows override of the version string from env variable
 	buildVersion = env("BUILD_VERSION", "")
