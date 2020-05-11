@@ -112,7 +112,13 @@ func (c *nethealthChecker) Check(ctx context.Context, reporter health.Reporter) 
 	err := c.check(ctx, reporter)
 	if err != nil {
 		log.WithError(err).Warn("Failed to verify nethealth")
-		reporter.Add(NewProbeFromErr(c.Name(), "failed to verify nethealth", err))
+		reporter.Add(&pb.Probe{
+			Checker:  c.Name(),
+			Detail:   "failed to verify nethealth",
+			Error:    trace.UserMessage(err),
+			Status:   pb.Probe_Failed,
+			Severity: pb.Probe_Warning,
+		})
 		return
 	}
 	if reporter.NumProbes() == 0 {
@@ -306,7 +312,8 @@ func nethealthFailureProbe(name, peer string, packetLoss float64) *pb.Probe {
 		Checker: name,
 		Detail: fmt.Sprintf("overlay packet loss for node %s is higher than the allowed threshold of %d%%: %d%%",
 			peer, int(thresholdPercent), int(packetLoss*100)),
-		Status: pb.Probe_Failed,
+		Status:   pb.Probe_Failed,
+		Severity: pb.Probe_Warning,
 	}
 }
 
