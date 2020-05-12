@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"net/url"
 	"sync"
 	"time"
 
@@ -181,10 +180,10 @@ func (c *nethealthChecker) getNethealthAddr() (addr string, err error) {
 
 	pod := pods.Items[0]
 	if pod.Status.Phase != corev1.PodRunning {
-		return addr, trace.NotFound("unable to find running local nethealth pod")
+		return addr, trace.NotFound("local nethealth pod %v is not Running: %v", pod.Name, pod.Status.Phase)
 	}
 	if pod.Status.PodIP == "" {
-		return addr, trace.NotFound("local nethealth pod IP has not been assigned yet")
+		return addr, trace.NotFound("local nethealth pod %v has not been assigned an IP", pod.Name)
 	}
 
 	return fmt.Sprintf("http://%s:%d", pod.Status.PodIP, c.NethealthPort), nil
@@ -337,7 +336,7 @@ func fetchNethealthMetrics(ctx context.Context, addr string) ([]byte, error) {
 	//      # TYPE nethealth_echo_timeout_total counter
 	//      nethealth_echo_timeout_total{node_name="10.128.0.96",peer_name="10.128.0.70"} 37
 	//      nethealth_echo_timeout_total{node_name="10.128.0.96",peer_name="10.128.0.97"} 0
-	resp, err := client.Get(ctx, client.Endpoint("metrics"), url.Values{})
+	resp, err := client.Get(ctx, client.Endpoint("metrics"), nil)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
