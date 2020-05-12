@@ -26,6 +26,8 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	. "gopkg.in/check.v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type NethealthSuite struct{}
@@ -281,6 +283,58 @@ func (s *NethealthSuite) TestParseMetricsFailure(c *C) {
 	}
 }
 
+// TestFilterByK8s verifies filterByK8s properly filters the incoming networkData.
+func (s *NethealthSuite) TestFilterByK8s(c *C) {
+	var testCases = []struct {
+		comment  CommentInterface
+		expected map[string]networkData
+		netData  map[string]networkData
+		nodes    []corev1.Node
+	}{
+		{
+			comment: Commentf("Expected original data set."),
+			expected: map[string]networkData{
+				"node-1": {},
+			},
+			netData: map[string]networkData{
+				"node-1": {},
+			},
+			nodes: []corev1.Node{
+				s.newTestNode("node-1"),
+			},
+		},
+		{
+			comment:  Commentf("Expected no network data."),
+			expected: map[string]networkData{},
+			netData: map[string]networkData{
+				"node-1": {},
+			},
+		},
+		{
+			comment: Commentf("Expected filtered data set."),
+			expected: map[string]networkData{
+				"node-1": {},
+				"node-2": {},
+			},
+			netData: map[string]networkData{
+				"node-1": {},
+				"node-2": {},
+				"node-3": {},
+			},
+			nodes: []corev1.Node{
+				s.newTestNode("node-1"),
+				s.newTestNode("node-2"),
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		netData, err := filterByK8s(testCase.netData, testCase.nodes)
+		c.Assert(err, IsNil, testCase.comment)
+		c.Assert(netData, test.DeepCompare, testCase.expected, testCase.comment)
+	}
+}
+
 // newNethealthChecker returns a new nethealth checker to be used for testing.
 func (s *NethealthSuite) newNethealthChecker() *nethealthChecker {
 	return &nethealthChecker{
@@ -294,6 +348,15 @@ func (s *NethealthSuite) newPacketLoss(values ...float64) []float64 {
 	packetLoss := make([]float64, 0, testCapacity)
 	packetLoss = append(packetLoss, values...)
 	return packetLoss
+}
+
+// newTestNode constructs a new node with the provided node name.
+func (s *NethealthSuite) newTestNode(name string) corev1.Node {
+	return corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
 }
 
 // textToMetrics converts the string into a map of MetricFamilies.
