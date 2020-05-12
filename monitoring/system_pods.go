@@ -22,6 +22,7 @@ import (
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/lib/kubernetes"
 	"github.com/gravitational/satellite/utils"
 
 	"github.com/gravitational/trace"
@@ -117,7 +118,7 @@ func (r *systemPodsChecker) getPods() ([]corev1.Pod, error) {
 		LabelSelector: systemPodsSelector.String(),
 		FieldSelector: fields.OneTermEqualSelector("spec.nodeName", r.NodeName).String(),
 	}
-	pods, err := r.Client.CoreV1().Pods("").List(opts)
+	pods, err := r.Client.CoreV1().Pods(kubernetes.AllNamespaces).List(opts)
 	if err != nil {
 		return nil, utils.ConvertError(err)
 	}
@@ -165,7 +166,7 @@ func verifyConditions(conditions []corev1.PodCondition) error {
 }
 
 // verifyCondition verifies the provided pod condition.
-// The pod is expected to have `Initialized` and`PodScheduled` set to true.
+// The pod is expected to have `Initialized` and `PodScheduled` set to true.
 // The pod does not need to have `Ready` or `ContainersReady` set to true.
 func verifyCondition(condition corev1.PodCondition) error {
 	// https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-conditions
@@ -208,11 +209,12 @@ func systemPodsFailureProbe(checkerName, podName, namespace string) *pb.Probe {
 }
 
 const systemPodsCheckerID = "system-pods-checker"
+const systemPodKey = "gravitational.io/critical-pod"
 
 // systemPodsSelector defines a label selector used to query critical system pods.
 var systemPodsSelector = utils.MustLabelSelector(
 	metav1.LabelSelectorAsSelector(
 		&metav1.LabelSelector{
 			MatchExpressions: []metav1.LabelSelectorRequirement{
-				{Key: "critical", Operator: metav1.LabelSelectorOpExists},
+				{Key: systemPodKey, Operator: metav1.LabelSelectorOpExists},
 			}}))
