@@ -838,6 +838,14 @@ func (r *mockClient) UpdateTimeline(ctx context.Context, req *pb.UpdateRequest) 
 	return &pb.UpdateResponse{}, nil
 }
 
+// UpdateLocalTimeline requests to update the local timeline with a new event.
+func (r *mockClient) UpdateLocalTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateResponse, error) {
+	if err := r.agent.RecordLocalEvents(ctx, []*pb.TimelineEvent{req.GetEvent()}); err != nil {
+		return nil, GRPCError(err)
+	}
+	return &pb.UpdateResponse{}, nil
+}
+
 // Close closes the RPC client connection.
 func (r *mockClient) Close() error {
 	return nil
