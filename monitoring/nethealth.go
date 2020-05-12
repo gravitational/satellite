@@ -180,10 +180,10 @@ func (c *nethealthChecker) getNethealthAddr() (addr string, err error) {
 
 	pod := pods.Items[0]
 	if pod.Status.Phase != corev1.PodRunning {
-		return addr, trace.NotFound("unable to find running local nethealth pod")
+		return addr, trace.NotFound("local nethealth pod %v is not Running: %v", pod.Name, pod.Status.Phase)
 	}
 	if pod.Status.PodIP == "" {
-		return addr, trace.NotFound("local nethealth pod IP has not been assigned yet")
+		return addr, trace.NotFound("local nethealth pod %v has not been assigned an IP", pod.Name)
 	}
 
 	return fmt.Sprintf("http://%s:%d", pod.Status.PodIP, c.NethealthPort), nil
