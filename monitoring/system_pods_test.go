@@ -17,40 +17,235 @@ limitations under the License.
 package monitoring
 
 import (
+	"github.com/gravitational/satellite/agent/health"
+	"github.com/gravitational/satellite/lib/test"
+
+	"github.com/gravitational/trace"
 	. "gopkg.in/check.v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type SystemPodsSuite struct{}
+type SystemPodsSuite struct {
+	systemPodsChecker
+}
 
-var _ = Suite(&SystemPodsSuite{})
+var _ = Suite(&SystemPodsSuite{
+	systemPodsChecker: systemPodsChecker{
+		SystemPodsConfig: SystemPodsConfig{
+			NodeName: "test-node",
+		},
+	},
+})
 
-// TestVerifyPodStatus verifies that the checker can correctly identify valid
-// pod status.
-func (r *SystemPodsSuite) TestVerifyPodStatus(c *C) {
+// TestValidPodStatus verifies that the checker can identify healthy pods.
+func (r *SystemPodsSuite) TestValidPodStatus(c *C) {
 	var testCases = []struct {
 		comment CommentInterface
-		status  corev1.PodStatus
+		pod     corev1.Pod
 	}{
 		{
-			comment: Commentf("Pod is pending. Expected no errors."),
-			status:  corev1.PodStatus{Phase: corev1.PodPending},
+			comment: Commentf("Pod Succeeded."),
+			pod: corev1.Pod{
+				Status: corev1.PodStatus{
+					Phase: corev1.PodSucceeded,
+				},
+			},
 		},
 		{
-			comment: Commentf("Pod has succeeded. Expected no errors."),
-			status:  corev1.PodStatus{Phase: corev1.PodSucceeded},
+			comment: Commentf("Pod Unknown."),
+			pod: corev1.Pod{
+				Status: corev1.PodStatus{
+					Phase: corev1.PodUnknown,
+				},
+			},
 		},
 		{
-			comment: Commentf("Pod is running. Expected no errors."),
-			status:  corev1.PodStatus{Phase: corev1.PodRunning},
+			comment: Commentf("Pod Running && Containers Running."),
+			pod: corev1.Pod{
+				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							State: corev1.ContainerState{
+								Running: &corev1.ContainerStateRunning{},
+							},
+						},
+					},
+				},
+			},
 		},
 		{
-			comment: Commentf("Pod is in unknown state. Expected no errors."),
-			status:  corev1.PodStatus{Phase: corev1.PodUnknown},
+			comment: Commentf("Pod Pending && Uninitialized && InitContainers Running."),
+			pod: corev1.Pod{
+				Status: corev1.PodStatus{
+					Phase: corev1.PodPending,
+					Conditions: []corev1.PodCondition{
+						{
+							Type:   corev1.PodInitialized,
+							Status: corev1.ConditionFalse,
+						},
+					},
+					InitContainerStatuses: []corev1.ContainerStatus{
+						{
+							State: corev1.ContainerState{
+								Running: &corev1.ContainerStateRunning{},
+							},
+						},
+					},
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							State: corev1.ContainerState{
+								Waiting: &corev1.ContainerStateWaiting{},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			comment: Commentf("Pod Pending && Initialized && Containers Running."),
+			pod: corev1.Pod{
+				Status: corev1.PodStatus{
+					Phase: corev1.PodPending,
+					Conditions: []corev1.PodCondition{
+						{
+							Type:   corev1.PodInitialized,
+							Status: corev1.ConditionTrue,
+						},
+					},
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							State: corev1.ContainerState{
+								Running: &corev1.ContainerStateRunning{},
+							},
+						},
+					},
+				},
+			},
 		},
 	}
 
 	for _, testCase := range testCases {
-		c.Assert(verifyPodStatus(testCase.status), IsNil, testCase.comment)
+		reporter := &health.Probes{}
+		r.verifyPods([]corev1.Pod{testCase.pod}, reporter)
+		c.Assert(reporter, test.DeepCompare, &health.Probes{}, testCase.comment)
+	}
+}
+
+// TestInvalidPodStatus verifies that the checker can identify unhealthy pods.
+func (r *SystemPodsSuite) TestInvalidPodStatus(c *C) {
+	var testCases = []struct {
+		comment  CommentInterface
+		pod      corev1.Pod
+		expected health.Reporter
+	}{
+		{
+			comment: Commentf("Pod Failed."),
+			pod: corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "pod-failed",
+					Namespace: "test",
+				},
+				Status: corev1.PodStatus{
+					Phase:  corev1.PodFailed,
+					Reason: "TestReason",
+				},
+			},
+			expected: &health.Probes{systemPodsFailureProbe(r.Name(), "test", "pod-failed", trace.BadParameter("pod Failed: TestReason"))},
+		},
+		{
+			comment: Commentf("Pod Pending && Uninitialized && InitContainers Waiting"),
+			pod: corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "pod-pending",
+					Namespace: "test",
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodPending,
+					Conditions: []corev1.PodCondition{
+						{
+							Type:   corev1.PodInitialized,
+							Status: corev1.ConditionFalse,
+						},
+					},
+					InitContainerStatuses: []corev1.ContainerStatus{
+						{
+							Name: "init-waiting",
+							State: corev1.ContainerState{
+								Waiting: &corev1.ContainerStateWaiting{
+									Reason: "ImagePullBackOff",
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: &health.Probes{systemPodsFailureProbe(r.Name(), "test", "pod-pending", trace.BadParameter("init-waiting Waiting: ImagePullBackOff"))},
+		},
+		{
+			comment: Commentf("Pod Pending && Initialized && Container Waiting"),
+			pod: corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "pod-pending",
+					Namespace: "test",
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodPending,
+					Conditions: []corev1.PodCondition{
+						{
+							Type:   corev1.PodInitialized,
+							Status: corev1.ConditionTrue,
+						},
+					},
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Name: "cont-waiting",
+							State: corev1.ContainerState{
+								Waiting: &corev1.ContainerStateWaiting{
+									Reason: "ContainerCreating",
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: &health.Probes{systemPodsFailureProbe(r.Name(), "test", "pod-pending", trace.BadParameter("cont-waiting Waiting: ContainerCreating"))},
+		},
+		{
+			comment: Commentf("Pod Running && Container Waiting"),
+			pod: corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "pod-running",
+					Namespace: "test",
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Name: "cont-running",
+							State: corev1.ContainerState{
+								Running: &corev1.ContainerStateRunning{},
+							},
+						},
+						{
+							Name: "cont-waiting",
+							State: corev1.ContainerState{
+								Waiting: &corev1.ContainerStateWaiting{
+									Reason: "CrashLoopBackOff",
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: &health.Probes{systemPodsFailureProbe(r.Name(), "test", "pod-running", trace.BadParameter("cont-waiting Waiting: CrashLoopBackOff"))},
+		},
+	}
+
+	for _, testCase := range testCases {
+		reporter := &health.Probes{}
+		r.verifyPods([]corev1.Pod{testCase.pod}, reporter)
+		c.Assert(reporter, test.DeepCompare, testCase.expected, testCase.comment)
 	}
 }
