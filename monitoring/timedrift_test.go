@@ -181,6 +181,11 @@ func (a *mockedTimeAgentClient) UpdateTimeline(ctx context.Context,
 	return nil, nil
 }
 
+func (a *mockedTimeAgentClient) UpdateLocalTimeline(ctx context.Context,
+	req *agentpb.UpdateRequest) (*agentpb.UpdateResponse, error) {
+	return nil, nil
+}
+
 func (a *mockedTimeAgentClient) Close() error {
 	return nil
 }
