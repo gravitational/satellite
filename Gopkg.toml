@@ -125,8 +125,8 @@ required = [
   name = "github.com/cloudfoundry/gosigar"
 
 [[constraint]]
-  name = "gopkg.in/tomb.v2"
-  branch = "v2"
+  name = "golang.org/x/sync"
+  revision = "43a5402ce75a95522677f77c619865d66b8c57ab"
 
 [[override]]
   name = "github.com/json-iterator/go"
