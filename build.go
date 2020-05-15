@@ -175,7 +175,7 @@ func (Test) Unit() error {
 	mg.Deps(Build.BuildContainer)
 	fmt.Println("\n=====> Running Satellite Unit Tests...\n")
 	return trace.Wrap(sh.RunV(
-		"docker", "run", "-it", "--rm=true",
+		"docker", "run", "-t", "--rm",
 		fmt.Sprintf("--volume=%v:/go/src/github.com/gravitational/satellite", srcDir()),
 		`--env="GOCACHE=/go/src/github.com/gravitational/satellite/build/cache/go"`,
 		`-w=/go/src/github.com/gravitational/satellite/`,
@@ -189,7 +189,7 @@ func (Test) Lint() error {
 	mg.Deps(Build.BuildContainer)
 	fmt.Println("\n=====> Linting Satellite...\n")
 	return trace.Wrap(sh.RunV(
-		"docker", "run", "-it", "--rm=true",
+		"docker", "run", "-t", "--rm",
 		fmt.Sprintf("--volume=%v:/go/src/github.com/gravitational/satellite", srcDir()),
 		`--env="GOCACHE=/go/src/github.com/gravitational/satellite/build/cache/go"`,
 		fmt.Sprint("satellite-build:", version()),

@@ -176,13 +176,9 @@ func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []str
 		server.httpServers = append(server.httpServers, srv)
 
 		// TODO: separate Start function to start listening.
-		agent.t.Go(func() error {
+		agent.g.Go(func() error {
 			err := srv.ListenAndServeTLS(certFile, keyFile)
-			if err == http.ErrServerClosed {
-				log.Debug("Server has been shut down/closed.")
-				return nil
-			}
-			if err != nil {
+			if err != http.ErrServerClosed {
 				log.WithError(err).Errorf("Failed to serve on %v.", srv.Addr)
 			}
 			return trace.Wrap(err)
@@ -191,7 +187,7 @@ func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []str
 
 	if agent.debugListener != nil {
 		debugpb.RegisterDebugServer(backend, debugpb.NewServer())
-		agent.t.Go(func() error {
+		agent.g.Go(func() error {
 			return backend.Serve(agent.debugListener)
 		})
 	}

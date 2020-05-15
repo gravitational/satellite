@@ -22,8 +22,8 @@ import (
 	"syscall"
 
 	"github.com/gravitational/satellite/agent"
-	"github.com/gravitational/trace"
 
+	"github.com/gravitational/trace"
 	log "github.com/sirupsen/logrus"
 )
 

@@ -41,7 +41,7 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/tomb.v2"
+	"golang.org/x/sync/errgroup"
 )
 
 // Config defines satellite configuration.
@@ -176,7 +176,13 @@ type agent struct {
 	// filter out events that have already been recorded by this agent.
 	lastSeen *ttlmap.TTLMap
 
-	t tomb.Tomb
+	// cancel is used to cancel the internal processes
+	// running as part of g
+	cancel context.CancelFunc
+	// ctx defines the context that all internal processes bind to
+	ctx context.Context
+	// g manages a group of groutines running internal agent's processes
+	g *errgroup.Group
 }
 
 // New creates an instance of an agent based on configuration options given in config.
@@ -226,17 +232,22 @@ func New(config *Config) (*agent, error) {
 		}
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	g, ctx := errgroup.WithContext(ctx)
 	agent := &agent{
+		Config:                  *config,
+		ClusterMembership:       serfClient,
+		ClusterTimeline:         clusterTimeline,
+		LocalTimeline:           localTimeline,
 		dialRPC:                 client.DefaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
 		localStatus:             emptyNodeStatus(config.Name),
 		metricsListener:         metricsListener,
 		debugListener:           debugListener,
 		lastSeen:                lastSeen,
-		Config:                  *config,
-		ClusterMembership:       serfClient,
-		ClusterTimeline:         clusterTimeline,
-		LocalTimeline:           localTimeline,
+		ctx:                     ctx,
+		cancel:                  cancel,
+		g:                       g,
 	}
 
 	agent.rpc, err = newRPCServer(agent, config.CAFile, config.CertFile, config.KeyFile, config.RPCAddrs)
@@ -273,11 +284,18 @@ func (r *agent) GetConfig() Config {
 	return r.Config
 }
 
+// Run starts the agent and block until it exits.
+// Returns the error the agent exited with
+func (r *agent) Run() (err error) {
+	r.Start()
+	return trace.Wrap(r.g.Wait())
+}
+
 // Start starts the agent's background tasks.
 func (r *agent) Start() error {
-	r.t.Go(r.recycleLoop)
-	r.t.Go(r.statusUpdateLoop)
-	r.t.Go(r.serveMetrics)
+	r.g.Go(r.recycleLoop)
+	r.g.Go(r.statusUpdateLoop)
+	r.g.Go(r.serveMetrics)
 	return nil
 }
 
@@ -286,9 +304,8 @@ func (r *agent) Start() error {
 func (r *agent) serveMetrics() error {
 	http.Handle("/metrics", promhttp.Handler())
 	err := http.Serve(r.metricsListener, nil)
-	if err == http.ErrServerClosed {
-		log.Debug("Metrics listener has been shut down.")
-		return nil
+	if err != http.ErrServerClosed {
+		log.WithError(err).Warn("Failed to serve metrics.")
 	}
 	return trace.Wrap(err)
 }
@@ -339,8 +356,10 @@ func (r *agent) Close() (err error) {
 		}
 	}
 	r.rpc.Stop()
-	r.t.Kill(nil)
-	r.t.Wait()
+	r.cancel()
+	if err := r.g.Wait(); err != nil {
+		errors = append(errors, err)
+	}
 	if err := r.ClusterMembership.Close(); err != nil {
 		errors = append(errors, err)
 	}
@@ -528,7 +547,7 @@ func (r *agent) recycleLoop() error {
 				log.WithError(err).Warn("Error recycling status.")
 			}
 
-		case <-r.t.Dying():
+		case <-r.ctx.Done():
 			log.Info("Recycle loop is stopping.")
 			return nil
 		}
@@ -545,11 +564,11 @@ func (r *agent) statusUpdateLoop() error {
 	for {
 		select {
 		case <-ticker.Chan():
-			if err := r.updateStatus(r.t.Context(nil)); err != nil {
+			if err := r.updateStatus(r.ctx); err != nil {
 				log.WithError(err).Warn("Failed to updates status.")
 			}
 
-		case <-r.t.Dying():
+		case <-r.ctx.Done():
 			log.Info("Status update loop is stopping.")
 			return nil
 		}
@@ -644,7 +663,7 @@ func (r *agent) collectLocalStatus(ctx context.Context) (status *pb.NodeStatus, 
 	r.localStatus = status
 	r.Unlock()
 
-	/// TODO: handle recording of timeline outside of collection.
+	// TODO: handle recording of timeline outside of collection.
 	if err := r.LocalTimeline.RecordEvents(ctx, changes); err != nil {
 		return status, trace.Wrap(err, "failed to record local timeline events")
 	}
@@ -673,7 +692,7 @@ func (r *agent) getLocalStatus(ctx context.Context, respc chan<- *statusResponse
 	}
 	select {
 	case respc <- resp:
-	case <-r.t.Dying():
+	case <-ctx.Done():
 	}
 }
 
@@ -745,7 +764,7 @@ func (r *agent) getStatusFrom(ctx context.Context, member membership.ClusterMemb
 	}
 	select {
 	case respc <- resp:
-	case <-r.t.Dying():
+	case <-ctx.Done():
 	}
 }
 
