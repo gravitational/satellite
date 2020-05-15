@@ -127,7 +127,7 @@ func (r *systemPodsChecker) getPods() ([]corev1.Pod, error) {
 }
 
 // verifyPods verifies the pods are in a valid state. Reports a failed probe for
-// any pods that are in an invalid state.
+// each failed pod.
 func (r *systemPodsChecker) verifyPods(pods []corev1.Pod, reporter health.Reporter) {
 	for _, pod := range pods {
 		switch pod.Status.Phase {
@@ -148,7 +148,7 @@ func (r *systemPodsChecker) verifyPods(pods []corev1.Pod, reporter health.Report
 				reporter.Add(systemPodsFailureProbe(r.Name(), pod.Namespace, pod.Name, err))
 			}
 		case corev1.PodFailed:
-			err := trace.BadParameter("pod Failed: %v", pod.Status.Reason)
+			err := trace.BadParameter("pod failed: %v", pod.Status.Reason)
 			reporter.Add(systemPodsFailureProbe(r.Name(), pod.Namespace, pod.Name, err))
 			continue
 		default:
@@ -172,21 +172,10 @@ func isInitialized(conditions []corev1.PodCondition) bool {
 func verifyContainers(containerStatuses []corev1.ContainerStatus) error {
 	for _, status := range containerStatuses {
 		if status.State.Waiting != nil {
-			return trace.BadParameter("%v Waiting: %v", status.Name, status.State.Waiting.Reason)
+			return trace.BadParameter("%v waiting: %v", status.Name, status.State.Waiting.Reason)
 		}
 	}
 	return nil
-}
-
-// verifyInitialization verifies that the pod has been Inititalized or
-// InitContainers are still Running.
-func verifyInitialization(pod corev1.Pod) error {
-	for _, condition := range pod.Status.Conditions {
-		if condition.Type == corev1.PodInitialized && condition.Status == corev1.ConditionTrue {
-			return nil
-		}
-	}
-	return verifyContainers(pod.Status.InitContainerStatuses)
 }
 
 // systemPodsFailureProbe constructs a probe that represents a failed system pods
@@ -194,7 +183,7 @@ func verifyInitialization(pod corev1.Pod) error {
 func systemPodsFailureProbe(checkerName, namespace, podName string, err error) *pb.Probe {
 	return &pb.Probe{
 		Checker:  checkerName,
-		Detail:   fmt.Sprintf("pod %v/%v is not Running", namespace, podName),
+		Detail:   fmt.Sprintf("pod %v/%v is not running", namespace, podName),
 		Error:    trace.UserMessage(err),
 		Status:   pb.Probe_Failed,
 		Severity: pb.Probe_Warning, // TODO: set probe to critical
