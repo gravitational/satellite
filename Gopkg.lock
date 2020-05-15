@@ -754,6 +754,14 @@
   version = "v0.9.1"
 
 [[projects]]
+  branch = "v2"
+  digest = "1:5bb148b78468350091db2ffbb2370f35cc6dcd74d9378a31b1c7b86ff7528f08"
+  name = "gopkg.in/tomb.v2"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "d5d1b5820637886def9eef33e03a27a9f166942c"
+
+[[projects]]
   digest = "1:342378ac4dcb378a5448dd723f0784ae519383532f5e70ade24132c4c8693202"
   name = "gopkg.in/yaml.v2"
   packages = ["."]
@@ -1022,6 +1030,7 @@
     "google.golang.org/grpc/status",
     "gopkg.in/alecthomas/kingpin.v2",
     "gopkg.in/check.v1",
+    "gopkg.in/tomb.v2",
     "k8s.io/api/core/v1",
     "k8s.io/apimachinery/pkg/api/errors",
     "k8s.io/apimachinery/pkg/apis/meta/v1",

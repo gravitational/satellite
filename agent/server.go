@@ -133,11 +133,11 @@ func (r *server) stopHTTPServers(ctx context.Context) error {
 	for _, srv := range r.httpServers {
 		err := srv.Shutdown(ctx)
 		if err == http.ErrServerClosed {
-			log.WithError(err).Debug("Server has already been shutdown.")
+			log.WithError(err).Debug("Server has already been shut down.")
 			continue
 		}
 		if err != nil {
-			errors = append(errors, trace.Wrap(err, "failed to shutdown server running on: %s", srv.Addr))
+			errors = append(errors, trace.Wrap(err, "failed to shut down server running on: %s", srv.Addr))
 			continue
 		}
 	}
@@ -163,6 +163,43 @@ func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []str
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM(caCert)
 
+	backend := grpc.NewServer(grpc.Creds(creds))
+	server := &server{agent: agent, Server: backend}
+	pb.RegisterAgentServer(backend, server)
+
+	// statusHandler is a convenience multiplexer for both gRPC and HTTPS queries.
+	// The HTTPS endpoint returns the cluster status as JSON
+	statusHandler := grpcHandlerFunc(server, newHealthHandler(server))
+
+	for _, addr := range addrs {
+		srv := newHTTPServer(addr.String(), newTLSConfig(caCertPool), statusHandler)
+		server.httpServers = append(server.httpServers, srv)
+
+		// TODO: separate Start function to start listening.
+		agent.t.Go(func() error {
+			err := srv.ListenAndServeTLS(certFile, keyFile)
+			if err == http.ErrServerClosed {
+				log.Debug("Server has been shut down/closed.")
+				return nil
+			}
+			if err != nil {
+				log.WithError(err).Errorf("Failed to serve on %v.", srv.Addr)
+			}
+			return trace.Wrap(err)
+		})
+	}
+
+	if agent.debugListener != nil {
+		debugpb.RegisterDebugServer(backend, debugpb.NewServer())
+		agent.t.Go(func() error {
+			return backend.Serve(agent.debugListener)
+		})
+	}
+
+	return server, nil
+}
+
+func newTLSConfig(caCertPool *x509.CertPool) *tls.Config {
 	tlsConfig := &tls.Config{
 		ClientCAs:  caCertPool,
 		ClientAuth: tls.RequireAndVerifyClientCert,
@@ -182,34 +219,7 @@ func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []str
 		MinVersion:               tls.VersionTLS12,
 	}
 	tlsConfig.BuildNameToCertificate()
-
-	backend := grpc.NewServer(grpc.Creds(creds))
-	server := &server{agent: agent, Server: backend}
-	pb.RegisterAgentServer(backend, server)
-	debugServer := debugpb.NewServer()
-	debugpb.RegisterDebugServer(backend, debugServer)
-
-	// statusHandler is a convenience multiplexer for both gRPC and HTTPS queries.
-	// The HTTPS endpoint returns the cluster status as JSON
-	statusHandler := grpcHandlerFunc(server, newHealthHandler(server))
-	for _, addr := range addrs {
-		srv := newHTTPServer(addr.String(), tlsConfig, statusHandler)
-		server.httpServers = append(server.httpServers, srv)
-
-		// TODO: separate Start function to start listening.
-		go func(srv *http.Server) {
-			err := srv.ListenAndServeTLS(certFile, keyFile)
-			if err == http.ErrServerClosed {
-				log.Debug("Server has been shut down/closed.")
-				return
-			}
-			if err != nil {
-				log.WithError(err).Errorf("Failed to serve on %v.", srv.Addr)
-				return
-			}
-		}(srv)
-	}
-	return server, nil
+	return tlsConfig
 }
 
 // newHTTPServer constructs a new server using the provided config values.
