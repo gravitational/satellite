@@ -167,12 +167,23 @@ func isInitialized(conditions []corev1.PodCondition) bool {
 	return false
 }
 
-// verifyContainers verifies all containers are either Running or Terminated.
-// Report error and reason if a container is Waiting.
+// verifyContainers verifies all containers are in a healthy state.
+// Returns an error with state and reason if a container is in an unhealthy state.
 func verifyContainers(containerStatuses []corev1.ContainerStatus) error {
 	for _, status := range containerStatuses {
 		if status.State.Waiting != nil {
+			reason := status.State.Waiting.Reason
+			if reason == containerCreating || reason == podInitializing {
+				continue
+			}
 			return trace.BadParameter("%v waiting: %v", status.Name, status.State.Waiting.Reason)
+		}
+		if status.State.Terminated != nil {
+			reason := status.State.Terminated.Reason
+			if reason == containerCompleted {
+				continue
+			}
+			return trace.BadParameter("%v terminated: %v", status.Name, status.State.Terminated.Reason)
 		}
 	}
 	return nil
@@ -192,6 +203,21 @@ func systemPodsFailureProbe(checkerName, namespace, podName string, err error) *
 
 const systemPodsCheckerID = "system-pods-checker"
 const systemPodKey = "gravitational.io/critical-pod"
+
+// containerCreating state indicates that the container is being created.
+const containerCreating = "ContainerCreating"
+
+// containerCompleted state indicates that the container has terminated without error.
+const containerCompleted = "Completed"
+
+// podInitializing state indicates that the container is waiting on an initContainer to terminate.
+const podInitializing = "PodInitializing"
+
+// crashLoopBackOff state indicates that the container is in a crash loop.
+const crashLoopBackOff = "CrashLoopBackOff"
+
+// imagePullBackOff state indicates that the container image pull failed.
+const imagePullBackOff = "ImagePullBackOff"
 
 // systemPodsSelector defines a label selector used to query critical system pods.
 var systemPodsSelector = utils.MustLabelSelector(
