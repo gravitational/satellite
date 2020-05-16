@@ -61,11 +61,18 @@ func (r *SystemPodsSuite) TestValidPodStatus(c *C) {
 			},
 		},
 		{
-			comment: Commentf("Pod Running && Containers Running."),
+			comment: Commentf("Pod Running && Containers Completed/Running."),
 			pod: corev1.Pod{
 				Status: corev1.PodStatus{
 					Phase: corev1.PodRunning,
 					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							State: corev1.ContainerState{
+								Terminated: &corev1.ContainerStateTerminated{
+									Reason: containerCompleted,
+								},
+							},
+						},
 						{
 							State: corev1.ContainerState{
 								Running: &corev1.ContainerStateRunning{},
@@ -76,7 +83,35 @@ func (r *SystemPodsSuite) TestValidPodStatus(c *C) {
 			},
 		},
 		{
-			comment: Commentf("Pod Pending && Uninitialized && InitContainers Running."),
+			comment: Commentf("Pod Pending && Uninitialized && InitContainer Running/PodInitializing."),
+			pod: corev1.Pod{
+				Status: corev1.PodStatus{
+					Phase: corev1.PodPending,
+					Conditions: []corev1.PodCondition{
+						{
+							Type:   corev1.PodInitialized,
+							Status: corev1.ConditionFalse,
+						},
+					},
+					InitContainerStatuses: []corev1.ContainerStatus{
+						{
+							State: corev1.ContainerState{
+								Running: &corev1.ContainerStateRunning{},
+							},
+						},
+						{
+							State: corev1.ContainerState{
+								Waiting: &corev1.ContainerStateWaiting{
+									Reason: podInitializing,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			comment: Commentf("Pod Pending && Uninitialized && InitContainer Running && Container PodInitializing."),
 			pod: corev1.Pod{
 				Status: corev1.PodStatus{
 					Phase: corev1.PodPending,
@@ -96,7 +131,32 @@ func (r *SystemPodsSuite) TestValidPodStatus(c *C) {
 					ContainerStatuses: []corev1.ContainerStatus{
 						{
 							State: corev1.ContainerState{
-								Waiting: &corev1.ContainerStateWaiting{},
+								Waiting: &corev1.ContainerStateWaiting{
+									Reason: podInitializing,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			comment: Commentf("Pod Pending && Initialized && Container ContainerCreating"),
+			pod: corev1.Pod{
+				Status: corev1.PodStatus{
+					Phase: corev1.PodPending,
+					Conditions: []corev1.PodCondition{
+						{
+							Type:   corev1.PodInitialized,
+							Status: corev1.ConditionTrue,
+						},
+					},
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							State: corev1.ContainerState{
+								Waiting: &corev1.ContainerStateWaiting{
+									Reason: "ContainerCreating",
+								},
 							},
 						},
 					},
@@ -152,7 +212,9 @@ func (r *SystemPodsSuite) TestInvalidPodStatus(c *C) {
 					Reason: "TestReason",
 				},
 			},
-			expected: &health.Probes{systemPodsFailureProbe(r.Name(), "test", "pod-failed", trace.BadParameter("pod Failed: TestReason"))},
+			expected: &health.Probes{
+				systemPodsFailureProbe(r.Name(), "test", "pod-failed", trace.BadParameter("pod failed: TestReason")),
+			},
 		},
 		{
 			comment: Commentf("Pod Pending && Uninitialized && InitContainers Waiting"),
@@ -174,46 +236,20 @@ func (r *SystemPodsSuite) TestInvalidPodStatus(c *C) {
 							Name: "init-waiting",
 							State: corev1.ContainerState{
 								Waiting: &corev1.ContainerStateWaiting{
-									Reason: "ImagePullBackOff",
+									Reason: imagePullBackOff,
 								},
 							},
 						},
 					},
 				},
 			},
-			expected: &health.Probes{systemPodsFailureProbe(r.Name(), "test", "pod-pending", trace.BadParameter("init-waiting Waiting: ImagePullBackOff"))},
-		},
-		{
-			comment: Commentf("Pod Pending && Initialized && Container Waiting"),
-			pod: corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "pod-pending",
-					Namespace: "test",
-				},
-				Status: corev1.PodStatus{
-					Phase: corev1.PodPending,
-					Conditions: []corev1.PodCondition{
-						{
-							Type:   corev1.PodInitialized,
-							Status: corev1.ConditionTrue,
-						},
-					},
-					ContainerStatuses: []corev1.ContainerStatus{
-						{
-							Name: "cont-waiting",
-							State: corev1.ContainerState{
-								Waiting: &corev1.ContainerStateWaiting{
-									Reason: "ContainerCreating",
-								},
-							},
-						},
-					},
-				},
+			expected: &health.Probes{
+				systemPodsFailureProbe(r.Name(), "test", "pod-pending",
+					trace.BadParameter("init-waiting waiting: ImagePullBackOff")),
 			},
-			expected: &health.Probes{systemPodsFailureProbe(r.Name(), "test", "pod-pending", trace.BadParameter("cont-waiting Waiting: ContainerCreating"))},
 		},
 		{
-			comment: Commentf("Pod Running && Container Waiting"),
+			comment: Commentf("Pod Running && Container Copmleted/CrashLoopBackOff"),
 			pod: corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "pod-running",
@@ -223,23 +259,28 @@ func (r *SystemPodsSuite) TestInvalidPodStatus(c *C) {
 					Phase: corev1.PodRunning,
 					ContainerStatuses: []corev1.ContainerStatus{
 						{
-							Name: "cont-running",
+							Name: "cont-terminated",
 							State: corev1.ContainerState{
-								Running: &corev1.ContainerStateRunning{},
+								Terminated: &corev1.ContainerStateTerminated{
+									Reason: containerCompleted,
+								},
 							},
 						},
 						{
 							Name: "cont-waiting",
 							State: corev1.ContainerState{
 								Waiting: &corev1.ContainerStateWaiting{
-									Reason: "CrashLoopBackOff",
+									Reason: crashLoopBackOff,
 								},
 							},
 						},
 					},
 				},
 			},
-			expected: &health.Probes{systemPodsFailureProbe(r.Name(), "test", "pod-running", trace.BadParameter("cont-waiting Waiting: CrashLoopBackOff"))},
+			expected: &health.Probes{
+				systemPodsFailureProbe(r.Name(), "test", "pod-running",
+					trace.BadParameter("cont-waiting waiting: CrashLoopBackOff")),
+			},
 		},
 	}
 
