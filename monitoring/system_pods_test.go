@@ -249,7 +249,7 @@ func (r *SystemPodsSuite) TestInvalidPodStatus(c *C) {
 			},
 		},
 		{
-			comment: Commentf("Pod Running && Container Copmleted/CrashLoopBackOff"),
+			comment: Commentf("Pod Running && Container Completed/CrashLoopBackOff"),
 			pod: corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "pod-running",
