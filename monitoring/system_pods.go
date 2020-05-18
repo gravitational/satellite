@@ -128,17 +128,31 @@ func (r *systemPodsChecker) getPods() ([]corev1.Pod, error) {
 
 // verifyPods verifies the pods are in a valid state. Reports a failed probe for
 // each failed pod.
+// https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-phase
 func (r *systemPodsChecker) verifyPods(pods []corev1.Pod, reporter health.Reporter) {
 	for _, pod := range pods {
 		switch pod.Status.Phase {
+
+		// PodSucceeded indicates that all containers terminated without an error.
 		case corev1.PodSucceeded:
 			continue
+
+		// PodRunning usually indicates the pod is healthy, but the containers
+		// need to be further verified to check if any containers are in a
+		// CrashLoopBackOff state.
 		case corev1.PodRunning:
 			if err := verifyContainers(pod.Status.ContainerStatuses); err != nil {
 				reporter.Add(systemPodsFailureProbe(r.Name(), pod.Namespace, pod.Name, err))
 			}
+
+		// PodPending indicates that some containers are still in a waiting state.
+		// All initContainers and containers need to verified to ensure that
+		// a container is not stuck in an unhealthy state.
 		case corev1.PodPending:
 			var err error
+
+			// If the pod has already been initialized, skip initContainer
+			// verification and only verify containers.
 			if isInitialized(pod.Status.Conditions) {
 				err = verifyContainers(pod.Status.ContainerStatuses)
 			} else {
@@ -147,10 +161,14 @@ func (r *systemPodsChecker) verifyPods(pods []corev1.Pod, reporter health.Report
 			if err != nil {
 				reporter.Add(systemPodsFailureProbe(r.Name(), pod.Namespace, pod.Name, err))
 			}
+
+		// PodFailed indicates that a container terminated with an error.
 		case corev1.PodFailed:
 			err := trace.BadParameter("pod failed: %v", pod.Status.Reason)
 			reporter.Add(systemPodsFailureProbe(r.Name(), pod.Namespace, pod.Name, err))
 			continue
+
+		// Log any unexpected pod phases and contiune.
 		default:
 			log.WithField("phase", pod.Status.Phase).Warn("Pod is in an unknown phase.")
 		}
@@ -173,17 +191,15 @@ func verifyContainers(containerStatuses []corev1.ContainerStatus) error {
 	for _, status := range containerStatuses {
 		if status.State.Waiting != nil {
 			reason := status.State.Waiting.Reason
-			if reason == containerCreating || reason == podInitializing {
-				continue
+			if reason == errImagePullBackOff || reason == errCrashLoopBackOff || reason == errImagePull {
+				return trace.BadParameter("%v waiting: %v", status.Name, status.State.Waiting.Reason)
 			}
-			return trace.BadParameter("%v waiting: %v", status.Name, status.State.Waiting.Reason)
 		}
 		if status.State.Terminated != nil {
 			reason := status.State.Terminated.Reason
-			if reason == containerCompleted {
-				continue
+			if reason == containerError {
+				return trace.BadParameter("%v terminated: %v", status.Name, status.State.Terminated.Reason)
 			}
-			return trace.BadParameter("%v terminated: %v", status.Name, status.State.Terminated.Reason)
 		}
 	}
 	return nil
@@ -204,20 +220,32 @@ func systemPodsFailureProbe(checkerName, namespace, podName string, err error) *
 const systemPodsCheckerID = "system-pods-checker"
 const systemPodKey = "gravitational.io/critical-pod"
 
-// containerCreating state indicates that the container is being created.
-const containerCreating = "ContainerCreating"
+// NOTE: Currently, there is limited documentation k8s container state. Information
+// on container state can be found in kubelet pkg:
+// https://github.com/kubernetes/kubernetes/tree/master/pkg/kubelet
 
-// containerCompleted state indicates that the container has terminated without error.
-const containerCompleted = "Completed"
+// These states usually do not indiate an unhealthy pod.
+const (
+	// podInitializing state indicates that the container is waiting on an initContainer to terminate.
+	podInitializing = "PodInitializing"
+	// containerCreating state indicates that the container is being created.
+	containerCreating = "ContainerCreating"
+	// containerCompleted state indicates that the container has terminated without error.
+	containerCompleted = "Completed"
+)
 
-// podInitializing state indicates that the container is waiting on an initContainer to terminate.
-const podInitializing = "PodInitializing"
+// These states are indicative of a unhealthy pod.
+const (
+	// errCrashLoopBackOff state indicates that the container is in a crash loop.
+	errCrashLoopBackOff = "CrashLoopBackOff"
+	// errImagePullBackOff state indicates that the container image pull failed.
+	errImagePullBackOff = "ImagePullBackOff"
+	// errImagePull state indicates that the container image pull failed. General image pull error.
+	errImagePull = "ErrImagePull"
+)
 
-// crashLoopBackOff state indicates that the container is in a crash loop.
-const crashLoopBackOff = "CrashLoopBackOff"
-
-// imagePullBackOff state indicates that the container image pull failed.
-const imagePullBackOff = "ImagePullBackOff"
+// containerError state indicates that the container terminated with an error.
+const containerError = "Error"
 
 // systemPodsSelector defines a label selector used to query critical system pods.
 var systemPodsSelector = utils.MustLabelSelector(

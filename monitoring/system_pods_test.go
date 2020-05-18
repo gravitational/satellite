@@ -236,7 +236,7 @@ func (r *SystemPodsSuite) TestInvalidPodStatus(c *C) {
 							Name: "init-waiting",
 							State: corev1.ContainerState{
 								Waiting: &corev1.ContainerStateWaiting{
-									Reason: imagePullBackOff,
+									Reason: errImagePullBackOff,
 								},
 							},
 						},
@@ -270,7 +270,7 @@ func (r *SystemPodsSuite) TestInvalidPodStatus(c *C) {
 							Name: "cont-waiting",
 							State: corev1.ContainerState{
 								Waiting: &corev1.ContainerStateWaiting{
-									Reason: crashLoopBackOff,
+									Reason: errCrashLoopBackOff,
 								},
 							},
 						},
@@ -280,6 +280,32 @@ func (r *SystemPodsSuite) TestInvalidPodStatus(c *C) {
 			expected: &health.Probes{
 				systemPodsFailureProbe(r.Name(), "test", "pod-running",
 					trace.BadParameter("cont-waiting waiting: CrashLoopBackOff")),
+			},
+		},
+		{
+			comment: Commentf("Pod Running && Container Error"),
+			pod: corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "pod-running",
+					Namespace: "test",
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Name: "cont-terminated",
+							State: corev1.ContainerState{
+								Terminated: &corev1.ContainerStateTerminated{
+									Reason: containerError,
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: &health.Probes{
+				systemPodsFailureProbe(r.Name(), "test", "pod-running",
+					trace.BadParameter("cont-terminated terminated: Error")),
 			},
 		},
 	}
