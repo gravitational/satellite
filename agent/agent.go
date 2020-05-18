@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"net/http"
 	"os"
 	"path"
 	"runtime/debug"
@@ -39,7 +38,6 @@ import (
 	"github.com/gravitational/ttlmap"
 	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 )
@@ -295,19 +293,7 @@ func (r *agent) Run() (err error) {
 func (r *agent) Start() error {
 	r.g.Go(r.recycleLoop)
 	r.g.Go(r.statusUpdateLoop)
-	r.g.Go(r.serveMetrics)
 	return nil
-}
-
-// serveMetrics registers the prometheus metrics handler and starts accepting
-// connections on the metrics listener.
-func (r *agent) serveMetrics() error {
-	http.Handle("/metrics", promhttp.Handler())
-	err := http.Serve(r.metricsListener, nil)
-	if err == http.ErrServerClosed {
-		return nil
-	}
-	return trace.Wrap(err, "failed to service metrcs")
 }
 
 // IsMember returns true if this agent is a member of the serf cluster

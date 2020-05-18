@@ -33,6 +33,7 @@ import (
 
 	"github.com/gravitational/roundtrip"
 	"github.com/gravitational/trace"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -189,6 +190,19 @@ func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []str
 		debugpb.RegisterDebugServer(backend, debugpb.NewServer())
 		agent.g.Go(func() error {
 			return backend.Serve(agent.debugListener)
+		})
+	}
+
+	if agent.metricsListener != nil {
+		agent.g.Go(func() error {
+			srv := &http.Server{Handler: promhttp.Handler()}
+			server.httpServers = append(server.httpServers, srv)
+			http.Handle("/metrics", srv.Handler)
+			err := srv.Serve(agent.metricsListener)
+			if err == http.ErrServerClosed {
+				return nil
+			}
+			return trace.Wrap(err, "failed to service metrics")
 		})
 	}
 
