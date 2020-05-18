@@ -134,7 +134,7 @@ func (r *server) stopHTTPServers(ctx context.Context) error {
 	for _, srv := range r.httpServers {
 		err := srv.Shutdown(ctx)
 		if err == http.ErrServerClosed {
-			log.WithError(err).Debug("Server has already been shut down.")
+			log.WithField("server", srv.Addr).Debug("Server has already been shut down.")
 			continue
 		}
 		if err != nil {
@@ -202,7 +202,7 @@ func newRPCServer(agent *agent, caFile, certFile, keyFile string, rpcAddrs []str
 			if err == http.ErrServerClosed {
 				return nil
 			}
-			return trace.Wrap(err, "failed to service metrics")
+			return trace.Wrap(err, "failed to serve metrics: %v", err)
 		})
 	}
 
