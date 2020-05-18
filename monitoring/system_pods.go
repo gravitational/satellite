@@ -220,11 +220,11 @@ func systemPodsFailureProbe(checkerName, namespace, podName string, err error) *
 const systemPodsCheckerID = "system-pods-checker"
 const systemPodKey = "gravitational.io/critical-pod"
 
-// NOTE: Currently, there is limited documentation k8s container state. Information
-// on container state can be found in kubelet pkg:
+// NOTE: Currently, there is limited documentation on k8s container state.
+// Information on container state can be found in kubelet pkg:
 // https://github.com/kubernetes/kubernetes/tree/master/pkg/kubelet
 
-// These states usually do not indiate an unhealthy pod.
+// These states usually do not indicate an unhealthy pod.
 const (
 	// podInitializing state indicates that the container is waiting on an initContainer to terminate.
 	podInitializing = "PodInitializing"
