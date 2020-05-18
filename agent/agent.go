@@ -333,16 +333,6 @@ func (r *agent) Close() (err error) {
 	r.rpc.Stop()
 	r.cancel()
 	var errors []error
-	if r.metricsListener != nil {
-		if err := r.metricsListener.Close(); err != nil {
-			errors = append(errors, err)
-		}
-	}
-	if r.debugListener != nil {
-		if err := r.debugListener.Close(); err != nil {
-			errors = append(errors, err)
-		}
-	}
 	if err := r.g.Wait(); err != nil {
 		errors = append(errors, err)
 	}
