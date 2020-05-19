@@ -34,6 +34,7 @@ import (
 	"github.com/gravitational/satellite/lib/history/sqlite"
 	"github.com/gravitational/satellite/lib/membership"
 	"github.com/gravitational/satellite/lib/rpc/client"
+	"github.com/gravitational/satellite/utils"
 
 	"github.com/gravitational/trace"
 	"github.com/gravitational/ttlmap"
@@ -330,7 +331,7 @@ func (r *agent) Close() (err error) {
 	r.rpc.Stop()
 	r.cancel()
 	var errors []error
-	if err := r.g.Wait(); err != nil {
+	if err := r.g.Wait(); err != nil && !utils.IsContextCanceledError(err) {
 		errors = append(errors, err)
 	}
 	if err := r.ClusterMembership.Close(); err != nil {

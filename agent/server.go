@@ -30,6 +30,7 @@ import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	debugpb "github.com/gravitational/satellite/agent/proto/debug"
 	"github.com/gravitational/satellite/lib/rpc"
+	"github.com/gravitational/satellite/utils"
 
 	"github.com/gravitational/roundtrip"
 	"github.com/gravitational/trace"
@@ -63,7 +64,7 @@ type server struct {
 func (r *server) Status(ctx context.Context, req *pb.StatusRequest) (resp *pb.StatusResponse, err error) {
 	status, err := r.agent.Status()
 	if err != nil {
-		return nil, GRPCError(err)
+		return nil, utils.GRPCError(err)
 	}
 	return &pb.StatusResponse{Status: status}, nil
 }
@@ -79,7 +80,7 @@ func (r *server) LocalStatus(ctx context.Context, req *pb.LocalStatusRequest) (r
 func (r *server) LastSeen(ctx context.Context, req *pb.LastSeenRequest) (resp *pb.LastSeenResponse, err error) {
 	timestamp, err := r.agent.LastSeen(req.GetName())
 	if err != nil {
-		return nil, GRPCError(err)
+		return nil, utils.GRPCError(err)
 	}
 	return &pb.LastSeenResponse{
 		Timestamp: pb.NewTimeToProto(timestamp),
@@ -97,7 +98,7 @@ func (r *server) Time(ctx context.Context, req *pb.TimeRequest) (*pb.TimeRespons
 func (r *server) Timeline(ctx context.Context, req *pb.TimelineRequest) (*pb.TimelineResponse, error) {
 	events, err := r.agent.GetTimeline(ctx, req.GetParams())
 	if err != nil {
-		return nil, GRPCError(err)
+		return nil, utils.GRPCError(err)
 	}
 	return &pb.TimelineResponse{Events: events}, nil
 }
@@ -106,10 +107,10 @@ func (r *server) Timeline(ctx context.Context, req *pb.TimelineRequest) (*pb.Tim
 // Duplicate requests will have no effect.
 func (r *server) UpdateTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateResponse, error) {
 	if err := r.agent.RecordClusterEvents(ctx, []*pb.TimelineEvent{req.GetEvent()}); err != nil {
-		return nil, GRPCError(err)
+		return nil, utils.GRPCError(err)
 	}
 	if err := r.agent.RecordLastSeen(req.GetName(), req.GetEvent().GetTimestamp().ToTime()); err != nil {
-		return nil, GRPCError(err)
+		return nil, utils.GRPCError(err)
 	}
 	return &pb.UpdateResponse{}, nil
 }
