@@ -28,6 +28,10 @@ required = [
   go-tests = true
 
 [[constraint]]
+  name = "github.com/gogo/protobuf"
+  version = "=v1.2.1"
+
+[[constraint]]
   name = "github.com/mattn/go-sqlite3"
   version = "v1.13.0"
 
@@ -119,6 +123,10 @@ required = [
 [[constraint]]
   branch = "master"
   name = "github.com/cloudfoundry/gosigar"
+
+[[constraint]]
+  name = "golang.org/x/sync"
+  revision = "43a5402ce75a95522677f77c619865d66b8c57ab"
 
 [[override]]
   name = "github.com/json-iterator/go"

@@ -154,15 +154,17 @@
   version = "v4.1.0"
 
 [[projects]]
-  digest = "1:a7534feda0f15b5fd691e59e4fb6b7547e27df4b415a62e02c7cb71b3439c1b1"
+  digest = "1:33f49b72fdad072a03d13b31a42edfff08088b7c27198f4073b8213a58884f27"
   name = "github.com/gogo/protobuf"
   packages = [
+    "gogoproto",
     "proto",
+    "protoc-gen-gogo/descriptor",
     "sortkeys",
   ]
   pruneopts = "UT"
-  revision = "1adfc126b41513cc696b209667c8656ea7aac67c"
-  version = "v1.0.0"
+  revision = "ba06b47c162d49f2af050fb4c75bcbc86a159d5c"
+  version = "v1.2.1"
 
 [[projects]]
   digest = "1:f5ce1529abc1204444ec73779f44f94e2fa8fcdb7aca3c355b0c95947e4005c6"
@@ -630,6 +632,13 @@
   revision = "c57b0facaced709681d9f90397429b9430a74754"
 
 [[projects]]
+  digest = "1:b521f10a2d8fa85c04a8ef4e62f2d1e14d303599a55d64dabf9f5a02f84d35eb"
+  name = "golang.org/x/sync"
+  packages = ["errgroup"]
+  pruneopts = "UT"
+  revision = "43a5402ce75a95522677f77c619865d66b8c57ab"
+
+[[projects]]
   branch = "master"
   digest = "1:0cc09bfe0321a651b68c587f94585b76b0b6cf58db1f2701d6062bb91ac442f8"
   name = "golang.org/x/sys"
@@ -984,6 +993,7 @@
     "github.com/coreos/go-systemd/dbus",
     "github.com/davecgh/go-spew/spew",
     "github.com/dustin/go-humanize",
+    "github.com/gogo/protobuf/gogoproto",
     "github.com/golang/protobuf/proto",
     "github.com/gravitational/configure",
     "github.com/gravitational/configure/cstrings",
@@ -1012,6 +1022,7 @@
     "github.com/stretchr/testify/assert",
     "golang.org/x/net/icmp",
     "golang.org/x/net/ipv4",
+    "golang.org/x/sync/errgroup",
     "golang.org/x/sys/unix",
     "google.golang.org/grpc",
     "google.golang.org/grpc/codes",
