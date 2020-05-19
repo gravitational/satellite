@@ -142,6 +142,10 @@ func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) 
 	}
 
 	netData, err := parseMetrics(resp)
+	if trace.IsNotFound(err) {
+		log.Debug("Nethealth counters are uninitialized.")
+		return nil
+	}
 	if err != nil {
 		log.WithError(err).
 			WithField("nethealth-metrics", string(resp)).
