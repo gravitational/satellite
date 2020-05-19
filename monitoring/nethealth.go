@@ -129,7 +129,7 @@ func (c *nethealthChecker) Check(ctx context.Context, reporter health.Reporter) 
 func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) error {
 	peers, err := c.getPeers()
 	if err != nil {
-		log.Debug("Failed to discover nethealth peers.")
+		log.Debug("Failed to discover nethealth peers: %v.", err)
 		return nil
 	}
 	if len(peers) == 0 {
@@ -170,7 +170,7 @@ func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) 
 func (c *nethealthChecker) getPeers() (peers []string, err error) {
 	opts := metav1.ListOptions{
 		LabelSelector: nethealthLabelSelector.String(),
-		FieldSelector: fields.OneTermNotEqualSelector("metadata.name", c.NodeName).String(),
+		FieldSelector: fields.OneTermNotEqualSelector("spec.nodeName", c.NodeName).String(),
 	}
 	pods, err := c.Client.CoreV1().Pods(nethealthNamespace).List(opts)
 	if err != nil {
