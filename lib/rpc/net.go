@@ -23,10 +23,10 @@ import (
 	"github.com/gravitational/trace"
 )
 
-// SplitHostPort splits the specified host:port into host/port parts.
+// ParseTCPAddr parses the address given with hostPort as a TCP address.
 // If the input address does not have a port, defaultPort is appended.
 // Returns the extracted IP address and port as a net.TCPAddr
-func SplitHostPort(hostPort string, defaultPort int) (addr *net.TCPAddr, err error) {
+func ParseTCPAddr(hostPort string, defaultPort int) (addr *net.TCPAddr, err error) {
 	_, _, err = net.SplitHostPort(hostPort)
 	if ae, ok := err.(*net.AddrError); ok && ae.Err == "missing port in address" {
 		hostPort = fmt.Sprintf("%s:%d", hostPort, defaultPort)

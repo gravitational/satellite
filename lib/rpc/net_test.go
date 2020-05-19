@@ -59,7 +59,7 @@ func (*S) TestSplitsHostPort(c *C) {
 	}
 	for _, tc := range testCases {
 		comment := Commentf(tc.comment)
-		addr, err := SplitHostPort(tc.input, tc.defaultPort)
+		addr, err := ParseTCPAddr(tc.input, tc.defaultPort)
 		if tc.err != nil {
 			c.Assert(trace.Unwrap(err), FitsTypeOf, tc.err)
 		} else {

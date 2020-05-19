@@ -304,7 +304,7 @@ func handleHistory(s *server) http.HandlerFunc {
 func splitAddrs(addrs []string) (result []net.TCPAddr, err error) {
 	result = make([]net.TCPAddr, 0, len(addrs))
 	for _, addr := range addrs {
-		tcpAddr, err := rpc.SplitHostPort(addr, rpc.Port)
+		tcpAddr, err := rpc.ParseTCPAddr(addr, rpc.Port)
 		if err != nil {
 			return nil, trace.Wrap(err)
 		}

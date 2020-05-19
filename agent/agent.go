@@ -29,6 +29,7 @@ import (
 	"github.com/gravitational/satellite/agent/cache"
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/lib/ctxgroup"
 	"github.com/gravitational/satellite/lib/history"
 	"github.com/gravitational/satellite/lib/history/sqlite"
 	"github.com/gravitational/satellite/lib/membership"
@@ -39,7 +40,6 @@ import (
 	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
 )
 
 // Config defines satellite configuration.
@@ -77,8 +77,8 @@ type Config struct {
 	// MetricsAddr specifies the address to listen on for web interface and telemetry for Prometheus metrics.
 	MetricsAddr string
 
-	// DebugAddr specifies the location of the unix domain socket for debug endpoint
-	DebugAddr string
+	// DebugSocketPath specifies the location of the unix domain socket for debug endpoint
+	DebugSocketPath string
 
 	// Peers lists the nodes that are part of the initial serf cluster configuration.
 	// This is not a final cluster configuration and new nodes or node updates
@@ -177,10 +177,8 @@ type agent struct {
 	// cancel is used to cancel the internal processes
 	// running as part of g
 	cancel context.CancelFunc
-	// ctx manages the lifetime of the agent's internal processes
-	ctx context.Context
 	// g manages the internal agent's processes
-	g *errgroup.Group
+	g ctxgroup.Group
 }
 
 // New creates an instance of an agent based on configuration options given in config.
@@ -200,11 +198,11 @@ func New(config *Config) (*agent, error) {
 	}
 
 	var debugListener net.Listener
-	if config.DebugAddr != "" {
-		if err := os.Remove(config.DebugAddr); err != nil && !os.IsNotExist(err) {
+	if config.DebugSocketPath != "" {
+		if err := os.Remove(config.DebugSocketPath); err != nil && !os.IsNotExist(err) {
 			return nil, trace.ConvertSystemError(err)
 		}
-		debugListener, err = net.Listen("unix", config.DebugAddr)
+		debugListener, err = net.Listen("unix", config.DebugSocketPath)
 		if err != nil {
 			return nil, trace.Wrap(err)
 		}
@@ -231,7 +229,7 @@ func New(config *Config) (*agent, error) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	g, ctx := errgroup.WithContext(ctx)
+	g := ctxgroup.WithContext(ctx)
 	agent := &agent{
 		Config:                  *config,
 		ClusterMembership:       serfClient,
@@ -243,7 +241,6 @@ func New(config *Config) (*agent, error) {
 		metricsListener:         metricsListener,
 		debugListener:           debugListener,
 		lastSeen:                lastSeen,
-		ctx:                     ctx,
 		cancel:                  cancel,
 		g:                       g,
 	}
@@ -291,8 +288,8 @@ func (r *agent) Run() (err error) {
 
 // Start starts the agent's background tasks.
 func (r *agent) Start() error {
-	r.g.Go(r.recycleLoop)
-	r.g.Go(r.statusUpdateLoop)
+	r.g.GoCtx(r.recycleLoop)
+	r.g.GoCtx(r.statusUpdateLoop)
 	return nil
 }
 
@@ -512,7 +509,7 @@ func runChecker(ctx context.Context, checker health.Checker, probeCh chan<- heal
 }
 
 // recycleLoop periodically recycles the cache.
-func (r *agent) recycleLoop() error {
+func (r *agent) recycleLoop(ctx context.Context) error {
 	ticker := r.Clock.NewTicker(recycleTimeout)
 	defer ticker.Stop()
 
@@ -523,7 +520,7 @@ func (r *agent) recycleLoop() error {
 				log.WithError(err).Warn("Error recycling status.")
 			}
 
-		case <-r.ctx.Done():
+		case <-ctx.Done():
 			log.Info("Recycle loop is stopping.")
 			return nil
 		}
@@ -533,18 +530,18 @@ func (r *agent) recycleLoop() error {
 // statusUpdateLoop is a long running background process that periodically
 // updates the health status of the cluster by querying status of other active
 // cluster members.
-func (r *agent) statusUpdateLoop() error {
+func (r *agent) statusUpdateLoop(ctx context.Context) error {
 	ticker := r.Clock.NewTicker(StatusUpdateTimeout)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.Chan():
-			if err := r.updateStatus(r.ctx); err != nil {
+			if err := r.updateStatus(ctx); err != nil {
 				log.WithError(err).Warn("Failed to updates status.")
 			}
 
-		case <-r.ctx.Done():
+		case <-ctx.Done():
 			log.Info("Status update loop is stopping.")
 			return nil
 		}
