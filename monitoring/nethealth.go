@@ -310,8 +310,9 @@ func (c *nethealthChecker) isHealthy(peer string) (healthy bool, err error) {
 func nethealthFailureProbe(name, peer string, packetLoss float64) *pb.Probe {
 	return &pb.Probe{
 		Checker: name,
-		Detail: fmt.Sprintf("overlay packet loss for node %s is higher than the allowed threshold of %d%%: %d%%",
-			peer, int(thresholdPercent), int(packetLoss*100)),
+		Detail: fmt.Sprintf("overlay packet loss for node %s is higher than the allowed threshold of %d%%",
+			peer, int(thresholdPercent)),
+		Error:    fmt.Sprintf("current packet loss at %d%%", int(100*packetLoss)),
 		Status:   pb.Probe_Failed,
 		Severity: pb.Probe_Warning,
 	}
