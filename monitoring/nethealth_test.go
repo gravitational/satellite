@@ -289,7 +289,7 @@ func (s *NethealthSuite) TestFilterByK8s(c *C) {
 		comment  CommentInterface
 		expected map[string]networkData
 		netData  map[string]networkData
-		nodes    []corev1.Node
+		nodes    []string
 	}{
 		{
 			comment: Commentf("Expected original data set."),
@@ -299,8 +299,8 @@ func (s *NethealthSuite) TestFilterByK8s(c *C) {
 			netData: map[string]networkData{
 				"node-1": {},
 			},
-			nodes: []corev1.Node{
-				s.newTestNode("node-1"),
+			nodes: []string{
+				"node-1",
 			},
 		},
 		{
@@ -321,16 +321,15 @@ func (s *NethealthSuite) TestFilterByK8s(c *C) {
 				"node-2": {},
 				"node-3": {},
 			},
-			nodes: []corev1.Node{
-				s.newTestNode("node-1"),
-				s.newTestNode("node-2"),
+			nodes: []string{
+				"node-1",
+				"node-2",
 			},
 		},
 	}
 
 	for _, testCase := range testCases {
-		netData, err := filterByK8s(testCase.netData, testCase.nodes)
-		c.Assert(err, IsNil, testCase.comment)
+		netData := filterByK8s(testCase.netData, testCase.nodes)
 		c.Assert(netData, test.DeepCompare, testCase.expected, testCase.comment)
 	}
 }
