@@ -129,7 +129,7 @@ func (c *nethealthChecker) Check(ctx context.Context, reporter health.Reporter) 
 func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) error {
 	peers, err := c.getPeers()
 	if err != nil {
-		log.Debug("Failed to discover nethealth peers: %v.", err)
+		log.Debugf("Failed to discover nethealth peers: %v.", err)
 		return nil
 	}
 	if len(peers) == 0 {
