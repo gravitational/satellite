@@ -290,9 +290,10 @@ func (c *pingChecker) calculateRTT(serfClient agent.SerfClient, self, node serf.
 func (c *pingChecker) failureProbe(node string, latency int64) *pb.Probe {
 	return &pb.Probe{
 		Checker: c.Name(),
-		Detail: fmt.Sprintf("ping between %s and %s is higher than the allowed threshold of %dns",
-			c.self.Name, node, latencyThreshold.Nanoseconds()),
-		Error:  fmt.Sprintf("ping latency at %dns", latency),
-		Status: pb.Probe_Failed,
+		Detail: fmt.Sprintf("ping between %s and %s is higher than the allowed threshold of %dms",
+			c.self.Name, node, latencyThreshold.Milliseconds()),
+		Error:    fmt.Sprintf("ping latency at %dms", (latency / int64(time.Millisecond/time.Nanosecond))),
+		Status:   pb.Probe_Failed,
+		Severity: pb.Probe_Warning,
 	}
 }
