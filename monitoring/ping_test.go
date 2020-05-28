@@ -78,7 +78,7 @@ func (*PingSuite) TestPingChecker(c *check.C) {
 				},
 			},
 			Coords:      map[string]*coordinate.Coordinate{},
-			Status:      agentpb.NodeStatus_Degraded,
+			Status:      agentpb.NodeStatus_Running,
 			Description: "Testing missing coordinates for cluster members",
 		},
 		{
