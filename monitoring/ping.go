@@ -193,22 +193,22 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client agent.SerfClient
 			return trace.Wrap(err)
 		}
 
-		c.logger.Debugf("%s <-ping-> %s = %dns [latest]", c.self.Name, node.Name, rttNanoSec)
-		c.logger.Debugf("%s <-ping-> %s = %dns [%.2f percentile]",
+		latency95 := time.Duration(latencyHistogram.ValueAtQuantile(latencyQuantile))
+
+		c.logger.Debugf("%s <-ping-> %s = %dms [latest]",
+			c.self.Name, node.Name, (rttNanoSec / int64(time.Millisecond)))
+		c.logger.Debugf("%s <-ping-> %s = %dms [%.2f percentile]",
 			c.self.Name, node.Name,
-			latencyHistogram.ValueAtQuantile(latencyQuantile),
+			latency95.Milliseconds(),
 			latencyQuantile)
 
-		latencyPercentile := latencyHistogram.ValueAtQuantile(latencyQuantile)
-		if latencyPercentile >= latencyThreshold.Nanoseconds() {
-			c.logger.Warningf("%s <-ping-> %s = slow ping detected. Value %dns over threshold %s (%dns)",
-				c.self.Name, node.Name, latencyPercentile,
-				latencyThreshold.String(), latencyThreshold.Nanoseconds())
-			reporter.Add(c.failureProbe(node.Name, latencyPercentile))
+		if latency95 >= latencyThreshold {
+			c.logger.Warningf("%s <-ping-> %s = slow ping detected. Value %dms over threshold %dms",
+				c.self.Name, node.Name, latency95.Milliseconds(), latencyThreshold.Milliseconds())
+			reporter.Add(c.failureProbe(node.Name, latency95))
 		} else {
-			c.logger.Debugf("%s <-ping-> %s = ping okay. Value %dns within threshold %s (%dns)",
-				c.self.Name, node.Name, latencyPercentile,
-				latencyThreshold.String(), latencyThreshold.Nanoseconds())
+			c.logger.Debugf("%s <-ping-> %s = ping okay. Value %dms within threshold %dms",
+				c.self.Name, node.Name, latency95.Milliseconds(), latencyThreshold.Milliseconds())
 		}
 	}
 
@@ -287,12 +287,12 @@ func (c *pingChecker) calculateRTT(serfClient agent.SerfClient, self, node serf.
 
 // failureProbe constructs a new probe that represents a failed ping check
 // against the specified node.
-func (c *pingChecker) failureProbe(node string, latency int64) *pb.Probe {
+func (c *pingChecker) failureProbe(node string, latency time.Duration) *pb.Probe {
 	return &pb.Probe{
 		Checker: c.Name(),
 		Detail: fmt.Sprintf("ping between %s and %s is higher than the allowed threshold of %dms",
 			c.self.Name, node, latencyThreshold.Milliseconds()),
-		Error:    fmt.Sprintf("ping latency at %dms", (latency / int64(time.Millisecond))),
+		Error:    fmt.Sprintf("ping latency at %dms", latency.Milliseconds()),
 		Status:   pb.Probe_Failed,
 		Severity: pb.Probe_Warning,
 	}
