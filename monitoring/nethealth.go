@@ -111,14 +111,7 @@ func (c *nethealthChecker) Name() string {
 func (c *nethealthChecker) Check(ctx context.Context, reporter health.Reporter) {
 	err := c.check(ctx, reporter)
 	if err != nil {
-		log.WithError(err).Warn("Failed to verify nethealth")
-		reporter.Add(&pb.Probe{
-			Checker:  c.Name(),
-			Detail:   "failed to verify nethealth",
-			Error:    trace.UserMessage(err),
-			Status:   pb.Probe_Failed,
-			Severity: pb.Probe_Warning,
-		})
+		log.WithError(err).Debug("Failed to verify nethealth.")
 		return
 	}
 	if reporter.NumProbes() == 0 {
