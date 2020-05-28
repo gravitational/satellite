@@ -292,7 +292,7 @@ func (c *pingChecker) failureProbe(node string, latency int64) *pb.Probe {
 		Checker: c.Name(),
 		Detail: fmt.Sprintf("ping between %s and %s is higher than the allowed threshold of %dms",
 			c.self.Name, node, latencyThreshold.Milliseconds()),
-		Error:    fmt.Sprintf("ping latency at %dms", (latency / int64(time.Millisecond/time.Nanosecond))),
+		Error:    fmt.Sprintf("ping latency at %dms", (latency / int64(time.Millisecond))),
 		Status:   pb.Probe_Failed,
 		Severity: pb.Probe_Warning,
 	}
