@@ -46,7 +46,6 @@ func (r *SystemPodsConfig) checkAndSetDefaults() error {
 	var errors []error
 	if r.NodeName == "" {
 		errors = append(errors, trace.BadParameter("node name must be provided"))
-
 	}
 	if r.KubeConfig == nil {
 		errors = append(errors, trace.BadParameter("kubernetes access config must be provided"))
@@ -103,7 +102,8 @@ func (r *systemPodsChecker) check(ctx context.Context, reporter health.Reporter)
 	return nil
 }
 
-// getPods returns a list of the local pods that have the `critical` label.
+// getPods returns a list of the local pods that have the
+// `gravitational.io/critical-pod` label.
 func (r *systemPodsChecker) getPods() ([]corev1.Pod, error) {
 	opts := metav1.ListOptions{
 		LabelSelector: systemPodsSelector.String(),
@@ -137,7 +137,7 @@ func (r *systemPodsChecker) verifyPods(pods []corev1.Pod, reporter health.Report
 			}
 
 		// PodPending indicates that some containers are still in a waiting state.
-		// All initContainers and containers need to verified to ensure that
+		// All initContainers and containers need to be verified to ensure that
 		// a container is not stuck in an unhealthy state.
 		case corev1.PodPending:
 			var err error
