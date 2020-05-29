@@ -80,17 +80,8 @@ func (r *systemPodsChecker) Name() string {
 // Check verifies that all system pods are operational.
 // Implements health.Checker
 func (r *systemPodsChecker) Check(ctx context.Context, reporter health.Reporter) {
-	err := r.check(ctx, reporter)
-	if err != nil {
-		log.WithError(err).Warn("Failed to verify critical system pods")
-		// TODO: set probe to critical
-		reporter.Add(&pb.Probe{
-			Checker:  r.Name(),
-			Detail:   "failed to verify critical system pods",
-			Error:    trace.UserMessage(err),
-			Status:   pb.Probe_Failed,
-			Severity: pb.Probe_Warning,
-		})
+	if err := r.check(ctx, reporter); err != nil {
+		log.WithError(err).Debug("Failed to verify critical system pods.")
 		return
 	}
 	if reporter.NumProbes() == 0 {
@@ -166,11 +157,13 @@ func (r *systemPodsChecker) verifyPods(pods []corev1.Pod, reporter health.Report
 		case corev1.PodFailed:
 			err := trace.BadParameter("pod failed: %v", pod.Status.Reason)
 			reporter.Add(systemPodsFailureProbe(r.Name(), pod.Namespace, pod.Name, err))
-			continue
 
 		// Log any unexpected pod phases and contiune.
 		default:
-			log.WithField("phase", pod.Status.Phase).Warn("Pod is in an unknown phase.")
+			log.WithField("pod", pod.Name).
+				WithField("namespace", pod.Namespace).
+				WithField("phase", pod.Status.Phase).
+				Debug("Pod is in an unknown phase.")
 		}
 	}
 }
