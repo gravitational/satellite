@@ -156,6 +156,11 @@ type agent struct {
 	// filter out events that have already been recorded by this agent.
 	lastSeen *holster.TTLMap
 
+	// connectionStatuses keep track of the cluster connection statuses. This
+	// maps a member's serf name to its connection status. These statuses are
+	// used to report when a member goes online/offline.
+	connectionStatuses map[string]string
+
 	// Config is the agent configuration.
 	Config
 
@@ -211,6 +216,7 @@ func New(config *Config) (*agent, error) {
 		localStatus:             emptyNodeStatus(config.Name),
 		metricsListener:         metricsListener,
 		lastSeen:                lastSeen,
+		connectionStatuses:      make(map[string]string),
 		done:                    make(chan struct{}),
 		Config:                  *config,
 		ClusterMembership:       serfClient,
@@ -547,6 +553,11 @@ func (r *agent) statusUpdateLoop(ctx context.Context) {
 		case <-ticker.Chan():
 			if err := r.updateStatus(ctx); err != nil {
 				log.WithError(err).Warn("Failed to updates status.")
+				continue
+			}
+
+			if err := r.recordConnectionStatusChanges(ctx); err != nil {
+				log.WithError(err).Warn("Failed to record connection status changes.")
 			}
 		}
 	}
@@ -563,10 +574,55 @@ func (r *agent) updateStatus(ctx context.Context) error {
 	if status == nil {
 		return nil
 	}
+
 	if err := r.Cache.UpdateStatus(status); err != nil {
 		return trace.Wrap(err, "error updating system status in cache")
 	}
+
 	return nil
+}
+
+// recordConnectionStatusChanges records any connection status changes to the
+// cluster timeline.
+func (r *agent) recordConnectionStatusChanges(ctx context.Context) error {
+	if hasRoleMaster(r.Tags) {
+		members, err := r.ClusterMembership.Members()
+		if err != nil {
+			return trace.Wrap(err)
+		}
+
+		changes := diffConnectionStatuses(r.Clock, r.connectionStatuses, members)
+		if err := r.ClusterTimeline.RecordEvents(ctx, changes); err != nil {
+			return trace.Wrap(err)
+		}
+	}
+
+	return nil
+}
+
+// diffConnectionStatuses returns the differences of the connection statuses
+// stored in prevStatuses and the statuses of the currMembers. The diff is
+// returned as a list of timeline events.
+func diffConnectionStatuses(clock clockwork.Clock, prevStatuses map[string]string,
+	currMembers []membership.ClusterMember) (events []*pb.TimelineEvent) {
+	for _, member := range currMembers {
+		prevStatus, exists := prevStatuses[member.Name()]
+		prevStatuses[member.Name()] = member.Status()
+
+		// If the status has not changed or this is a new member, no need to record an event.
+		if !exists || prevStatus == member.Status() {
+			continue
+		}
+
+		if membership.MemberStatus(member.Status()) == membership.MemberAlive {
+			events = append(events, pb.NewNodeOnline(clock.Now(), member.Name()))
+			continue
+		}
+
+		events = append(events, pb.NewNodeOffline(clock.Now(), member.Name()))
+	}
+
+	return events
 }
 
 // collectStatus obtains the cluster status by querying statuses of
