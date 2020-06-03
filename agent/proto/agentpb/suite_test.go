@@ -24,14 +24,14 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-func TestSuite(t *testing.T) { TestingT(t) }
-
-func (s *ProtoSuite) SetUpSuite(c *C) {
+func init() {
 	if testing.Verbose() {
 		log.SetOutput(os.Stderr)
 		log.SetLevel(log.InfoLevel)
 	}
 }
+
+func TestSuite(t *testing.T) { TestingT(t) }
 
 type ProtoSuite struct{}
 

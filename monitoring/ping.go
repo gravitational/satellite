@@ -198,20 +198,16 @@ func (c *pingChecker) checkNodesRTT(nodes []serf.Member, client agent.SerfClient
 
 		latency95 := time.Duration(latencyHistogram.ValueAtQuantile(latencyQuantile))
 
-		c.logger.Debugf("%s <-ping-> %s = %dms [latest]",
-			c.self.Name, node.Name, (rttNanoSec / int64(time.Millisecond)))
-		c.logger.Debugf("%s <-ping-> %s = %dms [%.2f percentile]",
-			c.self.Name, node.Name,
-			latency95.Milliseconds(),
-			latencyQuantile)
+		c.logger.Debugf("%s <-ping-> %s = %s [latest]", c.self.Name, node.Name, time.Duration(rttNanoSec))
+		c.logger.Debugf("%s <-ping-> %s = %s [%.2f percentile]", c.self.Name, node.Name, latency95, latencyQuantile)
 
 		if latency95 >= latencyThreshold {
-			c.logger.Warningf("%s <-ping-> %s = slow ping detected. Value %dms over threshold %dms",
-				c.self.Name, node.Name, latency95.Milliseconds(), latencyThreshold.Milliseconds())
+			c.logger.Warningf("%s <-ping-> %s = slow ping detected. Value %s over threshold %s",
+				c.self.Name, node.Name, latency95, latencyThreshold)
 			reporter.Add(c.failureProbe(node.Name, latency95))
 		} else {
-			c.logger.Debugf("%s <-ping-> %s = ping okay. Value %dms within threshold %dms",
-				c.self.Name, node.Name, latency95.Milliseconds(), latencyThreshold.Milliseconds())
+			c.logger.Debugf("%s <-ping-> %s = ping okay. Value %s within threshold %s",
+				c.self.Name, node.Name, latency95, latencyThreshold)
 		}
 	}
 
@@ -293,9 +289,9 @@ func (c *pingChecker) calculateRTT(serfClient agent.SerfClient, self, node serf.
 func (c *pingChecker) failureProbe(node string, latency time.Duration) *pb.Probe {
 	return &pb.Probe{
 		Checker: c.Name(),
-		Detail: fmt.Sprintf("ping between %s and %s is higher than the allowed threshold of %dms",
-			c.self.Name, node, latencyThreshold.Milliseconds()),
-		Error:    fmt.Sprintf("ping latency at %dms", latency.Milliseconds()),
+		Detail: fmt.Sprintf("ping between %s and %s is higher than the allowed threshold of %s",
+			c.self.Name, node, latencyThreshold),
+		Error:    fmt.Sprintf("ping latency at %s", latency),
 		Status:   pb.Probe_Failed,
 		Severity: pb.Probe_Warning,
 	}
