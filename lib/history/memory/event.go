@@ -51,6 +51,10 @@ func (r memEvent) ProtoBuf() (event *pb.TimelineEvent) {
 		return pb.NewNodeAdded(r.timestamp, r.node)
 	case history.NodeRemoved:
 		return pb.NewNodeRemoved(r.timestamp, r.node)
+	case history.NodeOnline:
+		return pb.NewNodeOnline(r.timestamp, r.node)
+	case history.NodeOffline:
+		return pb.NewNodeOffline(r.timestamp, r.node)
 	case history.NodeDegraded:
 		return pb.NewNodeDegraded(r.timestamp, r.node)
 	case history.NodeHealthy:
@@ -202,6 +206,32 @@ type nodeRemoved struct {
 func (r *nodeRemoved) Insert(ctx context.Context, execer history.Execer) error {
 	const insertStmt = "timestamp,type,node"
 	return trace.Wrap(execer.Exec(ctx, insertStmt, r.ts.ToTime(), history.NodeRemoved, r.data.GetNode()))
+}
+
+// nodeOnline represents a node online event.
+//
+// Implements history.DataInserter.
+type nodeOnline struct {
+	ts   *pb.Timestamp
+	data *pb.NodeOnline
+}
+
+func (r *nodeOnline) Insert(ctx context.Context, execer history.Execer) error {
+	const insertStmt = "timestamp,type,node"
+	return trace.Wrap(execer.Exec(ctx, insertStmt, r.ts.ToTime(), history.NodeOnline, r.data.GetNode()))
+}
+
+// nodeOffline represents a node offline event.
+//
+// Implements history.DataInserter.
+type nodeOffline struct {
+	ts   *pb.Timestamp
+	data *pb.NodeOffline
+}
+
+func (r *nodeOffline) Insert(ctx context.Context, execer history.Execer) error {
+	const insertStmt = "timestamp,type,node"
+	return trace.Wrap(execer.Exec(ctx, insertStmt, r.ts.ToTime(), history.NodeOffline, r.data.GetNode()))
 }
 
 // nodeDegraded represents a node degraded event.

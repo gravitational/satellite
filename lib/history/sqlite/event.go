@@ -59,6 +59,10 @@ func (r sqlEvent) ProtoBuf() (event *pb.TimelineEvent) {
 		return pb.NewNodeAdded(r.Timestamp, r.Node.String)
 	case history.NodeRemoved:
 		return pb.NewNodeRemoved(r.Timestamp, r.Node.String)
+	case history.NodeOnline:
+		return pb.NewNodeOnline(r.Timestamp, r.Node.String)
+	case history.NodeOffline:
+		return pb.NewNodeOffline(r.Timestamp, r.Node.String)
 	case history.NodeDegraded:
 		return pb.NewNodeDegraded(r.Timestamp, r.Node.String)
 	case history.NodeHealthy:
@@ -103,6 +107,10 @@ func newDataInserter(event *pb.TimelineEvent) (row history.DataInserter, err err
 		return &nodeAdded{ts: event.GetTimestamp(), data: data.NodeAdded}, nil
 	case *pb.TimelineEvent_NodeRemoved:
 		return &nodeRemoved{ts: event.GetTimestamp(), data: data.NodeRemoved}, nil
+	case *pb.TimelineEvent_NodeOnline:
+		return &nodeOnline{ts: event.GetTimestamp(), data: data.NodeOnline}, nil
+	case *pb.TimelineEvent_NodeOffline:
+		return &nodeOffline{ts: event.GetTimestamp(), data: data.NodeOffline}, nil
 	case *pb.TimelineEvent_NodeHealthy:
 		return &nodeHealthy{ts: event.GetTimestamp(), data: data.NodeHealthy}, nil
 	case *pb.TimelineEvent_NodeDegraded:
@@ -166,6 +174,32 @@ type nodeRemoved struct {
 func (r *nodeRemoved) Insert(ctx context.Context, execer history.Execer) error {
 	const insertStmt = "INSERT INTO events (timestamp, type, node) VALUES (?,?,?)"
 	return trace.Wrap(execer.Exec(ctx, insertStmt, r.ts.ToTime(), history.NodeRemoved, r.data.GetNode()))
+}
+
+// nodeOnline represents a node online event.
+//
+// Implements history.DataInserter.
+type nodeOnline struct {
+	ts   *pb.Timestamp
+	data *pb.NodeOnline
+}
+
+func (r *nodeOnline) Insert(ctx context.Context, execer history.Execer) error {
+	const insertStmt = "INSERT INTO events (timestamp, type, node) VALUES (?,?,?)"
+	return trace.Wrap(execer.Exec(ctx, insertStmt, r.ts.ToTime(), history.NodeOnline, r.data.GetNode()))
+}
+
+// nodeOffline represents a node offline event.
+//
+// Implements history.DataInserter.
+type nodeOffline struct {
+	ts   *pb.Timestamp
+	data *pb.NodeOffline
+}
+
+func (r *nodeOffline) Insert(ctx context.Context, execer history.Execer) error {
+	const insertStmt = "INSERT INTO events (timestamp, type, node) VALUES (?,?,?)"
+	return trace.Wrap(execer.Exec(ctx, insertStmt, r.ts.ToTime(), history.NodeOffline, r.data.GetNode()))
 }
 
 // nodeDegraded represents a node degraded event.

@@ -52,6 +52,10 @@ const (
 	NodeAdded EventType = "NodeAdded"
 	// NodeRemoved indicates a node was removed from the cluster.
 	NodeRemoved EventType = "NodeRemoved"
+	// NodeOnline indicates a node is now active.
+	NodeOnline EventType = "NodeOnline"
+	// NodeOffline indicates a node is now inactive.
+	NodeOffline EventType = "NodeOffline"
 	// NodeDegraded indicates a node is in a degraded state.
 	NodeDegraded EventType = "NodeDegraded"
 	// NodeHealthy indicates a node is in a healthy state.
