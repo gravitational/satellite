@@ -29,6 +29,7 @@ import (
 	"github.com/gravitational/satellite/agent/backend/inmemory"
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	debugpb "github.com/gravitational/satellite/agent/proto/debug"
 	"github.com/gravitational/satellite/lib/history/memory"
 	"github.com/gravitational/satellite/lib/membership"
 	"github.com/gravitational/satellite/lib/rpc/client"
@@ -844,6 +845,10 @@ func (r *mockClient) UpdateLocalTimeline(ctx context.Context, req *pb.UpdateRequ
 		return nil, GRPCError(err)
 	}
 	return &pb.UpdateResponse{}, nil
+}
+
+func (r *mockClient) Profile(context.Context, *debugpb.ProfileRequest) (debugpb.Debug_ProfileClient, error) {
+	return nil, nil
 }
 
 // Close closes the RPC client connection.

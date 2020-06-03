@@ -128,6 +128,10 @@ required = [
   branch = "master"
   name = "github.com/codahale/hdrhistogram"
 
+[[constraint]]
+  name = "golang.org/x/sync"
+  branch = "master"
+
 [[override]]
   name = "github.com/gogo/protobuf"
   revision = "65acae22fc9d1fe290b33faa2bd64cdc20a463a0"
