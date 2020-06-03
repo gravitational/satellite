@@ -41,6 +41,18 @@ message NodeRemoved {
   string node = 1;
 }
 
+// NodeOnline event is when a cluster member becomes active.
+message NodeOnline {
+    // Node specifes the name of the node that is now active.
+    string node = 1;
+}
+
+// NodeOffline event is when a cluster member becomes inactive.
+message NodeOffline {
+    // Node specifies the name of the node that is now inactive.
+    string node = 1;
+}
+
 // NodeHealthy represents a change in node state to a healthy state.
 message NodeHealthy {
     // Node specifies name of the node that became healthy.

@@ -167,28 +167,32 @@ message TimelineEvent {
   
   // Data contains event specific data.
   oneof data {
-    // ClusterHealthy indicates the cluster is in a healthy state.
-    ClusterHealthy clusterHealthy = 2;
-    // ClusterDegraded indicates the cluster is in a degraded state.
-    ClusterDegraded clusterDegraded = 3;
-    // ClusterUpgrade indicates the gravity cluster was upgraded.
-    ClusterUpgrade clusterUpgrade = 4;
-    // NodeAdded indicates a node was added to the cluster.
-    NodeAdded nodeAdded = 5;
-    // NodeRemoved indicates a node was removed from the cluster.
-    NodeRemoved nodeRemoved = 6;
-    //NodeHealthy indicates a node is in a healthy state.
-    NodeHealthy nodeHealthy = 7;
-    // NodeDegraded indicates a node is in a degraded state.
-    NodeDegraded nodeDegraded = 8;
-    // ProbeSucceeded indicates a probe has succeeded.
-    ProbeSucceeded probeSucceeded = 9;
-    // ProbeFailed indicates a probe has failed.
-    ProbeFailed probeFailed = 10;
-    // LeaderElected indicates a new leader was elected.
-    LeaderElected leaderElected = 11;
     // UnknownEvent indicates a unknown event.
-    UnknownEvent unknownEvent = 12;
+    UnknownEvent unknownEvent = 2;
+    // ClusterHealthy indicates the cluster is in a healthy state.
+    ClusterHealthy clusterHealthy = 3;
+    // ClusterDegraded indicates the cluster is in a degraded state.
+    ClusterDegraded clusterDegraded = 4;
+    // ClusterUpgrade indicates the gravity cluster was upgraded.
+    ClusterUpgrade clusterUpgrade = 5;
+    // NodeAdded indicates a node was added to the cluster.
+    NodeAdded nodeAdded = 6;
+    // NodeRemoved indicates a node was removed from the cluster.
+    NodeRemoved nodeRemoved = 7;
+    //NodeHealthy indicates a node is in a healthy state.
+    NodeHealthy nodeHealthy = 8;
+    // NodeDegraded indicates a node is in a degraded state.
+    NodeDegraded nodeDegraded = 9;
+    // ProbeSucceeded indicates a probe has succeeded.
+    ProbeSucceeded probeSucceeded = 10;
+    // ProbeFailed indicates a probe has failed.
+    ProbeFailed probeFailed = 11;
+    // LeaderElected indicates a new leader was elected.
+    LeaderElected leaderElected = 12;
+    // NodeOnline indicates a node is now active.
+    NodeOnline nodeOnline = 13;
+    // NodeOffline indicates a node is now inactive.
+    NodeOffline nodeOffline = 14;
   }
 }
 

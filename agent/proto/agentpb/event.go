@@ -68,6 +68,24 @@ func NewNodeRemoved(timestamp time.Time, node string) *TimelineEvent {
 	return event
 }
 
+// NewNodeOnline constructs a new NodeOnline event with the provided data.
+func NewNodeOnline(timestamp time.Time, node string) *TimelineEvent {
+	event := newTimelineEvent(timestamp)
+	event.Data = &TimelineEvent_NodeOnline{
+		NodeOnline: &NodeOnline{Node: node},
+	}
+	return event
+}
+
+// NewNodeOffline constructs a new NodeOffline event with the provided data.
+func NewNodeOffline(timestamp time.Time, node string) *TimelineEvent {
+	event := newTimelineEvent(timestamp)
+	event.Data = &TimelineEvent_NodeOffline{
+		NodeOffline: &NodeOffline{Node: node},
+	}
+	return event
+}
+
 // NewNodeHealthy constructs a new NodeHealthy event with the provided data.
 func NewNodeHealthy(timestamp time.Time, node string) *TimelineEvent {
 	event := newTimelineEvent(timestamp)
