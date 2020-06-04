@@ -167,28 +167,28 @@ message TimelineEvent {
   
   // Data contains event specific data.
   oneof data {
-    // UnknownEvent indicates a unknown event.
-    UnknownEvent unknownEvent = 2;
     // ClusterHealthy indicates the cluster is in a healthy state.
-    ClusterHealthy clusterHealthy = 3;
+    ClusterHealthy clusterHealthy = 2;
     // ClusterDegraded indicates the cluster is in a degraded state.
-    ClusterDegraded clusterDegraded = 4;
+    ClusterDegraded clusterDegraded = 3;
     // ClusterUpgrade indicates the gravity cluster was upgraded.
-    ClusterUpgrade clusterUpgrade = 5;
+    ClusterUpgrade clusterUpgrade = 4;
     // NodeAdded indicates a node was added to the cluster.
-    NodeAdded nodeAdded = 6;
+    NodeAdded nodeAdded = 5;
     // NodeRemoved indicates a node was removed from the cluster.
-    NodeRemoved nodeRemoved = 7;
+    NodeRemoved nodeRemoved = 6;
     //NodeHealthy indicates a node is in a healthy state.
-    NodeHealthy nodeHealthy = 8;
+    NodeHealthy nodeHealthy = 7;
     // NodeDegraded indicates a node is in a degraded state.
-    NodeDegraded nodeDegraded = 9;
+    NodeDegraded nodeDegraded = 8;
     // ProbeSucceeded indicates a probe has succeeded.
-    ProbeSucceeded probeSucceeded = 10;
+    ProbeSucceeded probeSucceeded = 9;
     // ProbeFailed indicates a probe has failed.
-    ProbeFailed probeFailed = 11;
+    ProbeFailed probeFailed = 10;
     // LeaderElected indicates a new leader was elected.
-    LeaderElected leaderElected = 12;
+    LeaderElected leaderElected = 11;
+    // UnknownEvent indicates an unknown event.
+    UnknownEvent unknownEvent = 12;
     // NodeOnline indicates a node is now active.
     NodeOnline nodeOnline = 13;
     // NodeOffline indicates a node is now inactive.
