@@ -156,7 +156,7 @@ type agent struct {
 	// filter out events that have already been recorded by this agent.
 	lastSeen *holster.TTLMap
 
-	// connectionStatuses keep track of the cluster connection statuses. This
+	// connectionStatuses keeps track of the cluster connection statuses. This
 	// maps a member's serf name to its connection status. These statuses are
 	// used to report when a member goes online/offline.
 	connectionStatuses map[string]string
@@ -585,16 +585,18 @@ func (r *agent) updateStatus(ctx context.Context) error {
 // recordConnectionStatusChanges records any connection status changes to the
 // cluster timeline.
 func (r *agent) recordConnectionStatusChanges(ctx context.Context) error {
-	if hasRoleMaster(r.Tags) {
-		members, err := r.ClusterMembership.Members()
-		if err != nil {
-			return trace.Wrap(err)
-		}
+	if !hasRoleMaster(r.Tags) {
+		return nil
+	}
 
-		changes := diffConnectionStatuses(r.Clock, r.connectionStatuses, members)
-		if err := r.ClusterTimeline.RecordEvents(ctx, changes); err != nil {
-			return trace.Wrap(err)
-		}
+	members, err := r.ClusterMembership.Members()
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	changes := diffConnectionStatuses(r.Clock, r.connectionStatuses, members)
+	if err := r.ClusterTimeline.RecordEvents(ctx, changes); err != nil {
+		return trace.Wrap(err)
 	}
 
 	return nil
