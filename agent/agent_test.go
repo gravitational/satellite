@@ -424,6 +424,81 @@ func (r *AgentSuite) TestAgentProvidesLastSeen(c *C) {
 	}
 }
 
+// TestDiffConnectionStatuses verifies that diffConnectionStatuses correctly
+// calculates the changes in member connection statuses.
+func (r *AgentSuite) TestDiffConnectionStatuses(c *C) {
+	var testCases = []struct {
+		comment     CommentInterface
+		expected    []*pb.TimelineEvent
+		prevStatus  map[string]string
+		currMembers []membership.ClusterMember
+	}{
+		{
+			comment:    Commentf("Expected no events when prevStatus is empty."),
+			prevStatus: make(map[string]string),
+			currMembers: []membership.ClusterMember{
+				memberWithNameAndStatus("node-1", MemberAlive),
+			},
+		},
+		{
+			comment: Commentf("Expected no events if node statuses do not change."),
+			prevStatus: map[string]string{
+				"node-1": string(MemberAlive),
+				"node-2": string(MemberFailed),
+				"node-3": string(MemberLeaving),
+				"node-4": string(MemberLeft),
+			},
+			currMembers: []membership.ClusterMember{
+				memberWithNameAndStatus("node-1", MemberAlive),
+				memberWithNameAndStatus("node-2", MemberFailed),
+				memberWithNameAndStatus("node-3", MemberLeaving),
+				memberWithNameAndStatus("node-4", MemberLeft),
+			},
+		},
+		{
+			comment: Commentf("Expected NodeOffline events when nodes are no longer alive."),
+			expected: []*pb.TimelineEvent{
+				pb.NewNodeOffline(r.clock.Now(), "node-1"),
+				pb.NewNodeOffline(r.clock.Now(), "node-2"),
+				pb.NewNodeOffline(r.clock.Now(), "node-3"),
+			},
+			prevStatus: map[string]string{
+				"node-1": string(MemberAlive),
+				"node-2": string(MemberAlive),
+				"node-3": string(MemberAlive),
+			},
+			currMembers: []membership.ClusterMember{
+				memberWithNameAndStatus("node-1", MemberFailed),
+				memberWithNameAndStatus("node-2", MemberLeaving),
+				memberWithNameAndStatus("node-3", MemberLeft),
+			},
+		},
+		{
+			comment: Commentf("Expected NodeOnline events when nodes are alive."),
+			expected: []*pb.TimelineEvent{
+				pb.NewNodeOnline(r.clock.Now(), "node-1"),
+				pb.NewNodeOnline(r.clock.Now(), "node-2"),
+				pb.NewNodeOnline(r.clock.Now(), "node-3"),
+			},
+			prevStatus: map[string]string{
+				"node-1": string(MemberFailed),
+				"node-2": string(MemberLeaving),
+				"node-3": string(MemberLeft),
+			},
+			currMembers: []membership.ClusterMember{
+				memberWithNameAndStatus("node-1", MemberAlive),
+				memberWithNameAndStatus("node-2", MemberAlive),
+				memberWithNameAndStatus("node-3", MemberAlive),
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		events := diffConnectionStatuses(r.clock, testCase.prevStatus, testCase.currMembers)
+		c.Assert(events, test.DeepCompare, testCase.expected, testCase.comment)
+	}
+}
+
 // TestProvidesTimeline validates communication between cluster members. Members
 // should be able to notify all master nodes of their local timeline events.
 func (r *AgentSuite) TestProvidesTimeline(c *C) {
@@ -747,6 +822,19 @@ type mockClusterMember struct {
 func newMockClusterMember(agent *agent, status MemberStatus) *mockClusterMember {
 	return &mockClusterMember{
 		agent:  agent,
+		status: status,
+	}
+}
+
+// memberWithNameAndStatus initializes a new cluster member with the provided
+// name and status.
+func memberWithNameAndStatus(name string, status MemberStatus) *mockClusterMember {
+	return &mockClusterMember{
+		agent: &agent{
+			Config: Config{
+				Name: name,
+			},
+		},
 		status: status,
 	}
 }
