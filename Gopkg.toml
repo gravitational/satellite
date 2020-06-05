@@ -29,7 +29,7 @@ required = [
 
 [[constraint]]
   name = "github.com/gogo/protobuf"
-  version = "=v1.2.1"
+  version = "=v1.3.0"
 
 [[constraint]]
   name = "github.com/mattn/go-sqlite3"
