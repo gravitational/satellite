@@ -39,11 +39,15 @@ import (
 
 // NewStorageChecker creates a new instance of the volume checker
 // using the specified checker as configuration
-func NewStorageChecker(config StorageConfig) health.Checker {
+func NewStorageChecker(config StorageConfig) (health.Checker, error) {
+	if err := config.CheckAndSetDefaults(); err != nil {
+		return nil, trace.Wrap(err)
+	}
+
 	return &storageChecker{
 		StorageConfig: config,
 		osInterface:   &realOS{},
-	}
+	}, nil
 }
 
 // storageChecker verifies volume requirements
@@ -155,30 +159,48 @@ func (c *storageChecker) checkHighWatermark(ctx context.Context, reporter health
 		return trace.BadParameter("disk capacity at %v is 0", c.path)
 	}
 	checkerData := HighWatermarkCheckerData{
-		HighWatermark:  c.HighWatermark,
-		Path:           c.Path,
-		TotalBytes:     totalBytes,
-		AvailableBytes: availableBytes,
+		WatermarkCritical: c.HighWatermark,
+		WatermarkWarning:  c.HighWatermark - 10, // Set warning watermark 10% below the critical watermark
+		Path:              c.Path,
+		TotalBytes:        totalBytes,
+		AvailableBytes:    availableBytes,
 	}
 	checkerDataBytes, err := json.Marshal(checkerData)
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	if float64(totalBytes-availableBytes)/float64(totalBytes)*100 > float64(c.HighWatermark) {
+
+	diskUsagePercent := float64(totalBytes-availableBytes) / float64(totalBytes) * 100
+
+	if diskUsagePercent > float64(checkerData.WatermarkCritical) {
 		reporter.Add(&pb.Probe{
 			Checker:     DiskSpaceCheckerID,
-			Detail:      checkerData.FailureMessage(),
+			Detail:      checkerData.CriticalMessage(),
 			CheckerData: checkerDataBytes,
 			Status:      pb.Probe_Failed,
+			Severity:    pb.Probe_Critical,
 		})
-	} else {
+		return nil
+	}
+
+	if diskUsagePercent > float64(checkerData.WatermarkWarning) {
 		reporter.Add(&pb.Probe{
 			Checker:     DiskSpaceCheckerID,
-			Detail:      checkerData.SuccessMessage(),
+			Detail:      checkerData.WarningMessage(),
 			CheckerData: checkerDataBytes,
-			Status:      pb.Probe_Running,
+			Status:      pb.Probe_Failed,
+			Severity:    pb.Probe_Warning,
 		})
+		return nil
 	}
+
+	reporter.Add(&pb.Probe{
+		Checker:     DiskSpaceCheckerID,
+		Detail:      checkerData.SuccessMessage(),
+		CheckerData: checkerDataBytes,
+		Status:      pb.Probe_Running,
+	})
+
 	return nil
 }
 
