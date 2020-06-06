@@ -147,8 +147,13 @@ func (c *storageChecker) checkFsType(ctx context.Context, reporter health.Report
 	return nil
 }
 
+// checkHighWatermark checks the disk usage. A failed warning or critical probe
+// will be reported if the usage percentage is above the set thresholds.
+// If the WatermarkWarning percentage is higher than or equal to the
+// WatermarkCritical percentage, then the check will only ever report critical
+// probes.
 func (c *storageChecker) checkHighWatermark(ctx context.Context, reporter health.Reporter) error {
-	if c.HighWatermark == 0 {
+	if c.WatermarkCritical == 0 {
 		return nil
 	}
 	availableBytes, totalBytes, err := c.diskCapacity(c.path)
@@ -159,8 +164,8 @@ func (c *storageChecker) checkHighWatermark(ctx context.Context, reporter health
 		return trace.BadParameter("disk capacity at %v is 0", c.path)
 	}
 	checkerData := HighWatermarkCheckerData{
-		WatermarkCritical: c.HighWatermark,
-		WatermarkWarning:  c.HighWatermark - 10, // Set warning watermark 10% below the critical watermark
+		WatermarkCritical: c.WatermarkCritical,
+		WatermarkWarning:  c.WatermarkWarning,
 		Path:              c.Path,
 		TotalBytes:        totalBytes,
 		AvailableBytes:    availableBytes,
