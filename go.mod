@@ -11,6 +11,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.1.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dustin/go-humanize v0.0.0-20171111073723-bb3d318650d4
+	github.com/gogo/protobuf v1.2.2-0.20190723190241-65acae22fc9d
 	github.com/golang/protobuf v1.3.2
 	github.com/googleapis/gnostic v0.2.0 // indirect
 	github.com/gravitational/configure v0.0.0-20161002181724-4e0f2df8846e
@@ -41,6 +42,7 @@ require (
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.6.1
 	golang.org/x/net v0.0.0-20191004110552-13f9640d40b9
+	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	golang.org/x/sys v0.0.0-20200602225109-6fdc65e7d980
 	google.golang.org/grpc v1.23.0
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6

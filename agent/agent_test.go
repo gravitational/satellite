@@ -35,10 +35,10 @@ import (
 	"github.com/gravitational/satellite/lib/rpc/client"
 	"github.com/gravitational/satellite/lib/test"
 	"github.com/gravitational/satellite/utils"
-	"github.com/hashicorp/serf/coordinate"
 
 	"github.com/gravitational/trace"
 	"github.com/gravitational/ttlmap"
+	"github.com/hashicorp/serf/coordinate"
 	"github.com/jonboulle/clockwork"
 	log "github.com/sirupsen/logrus"
 	. "gopkg.in/check.v1"
@@ -842,7 +842,7 @@ func (r *mockClient) UpdateTimeline(ctx context.Context, req *pb.UpdateRequest) 
 // UpdateLocalTimeline requests to update the local timeline with a new event.
 func (r *mockClient) UpdateLocalTimeline(ctx context.Context, req *pb.UpdateRequest) (*pb.UpdateResponse, error) {
 	if err := r.agent.RecordLocalEvents(ctx, []*pb.TimelineEvent{req.GetEvent()}); err != nil {
-		return nil, GRPCError(err)
+		return nil, utils.GRPCError(err)
 	}
 	return &pb.UpdateResponse{}, nil
 }
