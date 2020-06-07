@@ -3,14 +3,15 @@ package client
 import (
 	"bufio"
 	"fmt"
-	"github.com/hashicorp/go-msgpack/codec"
-	"github.com/hashicorp/logutils"
-	"github.com/hashicorp/serf/coordinate"
 	"log"
 	"net"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/hashicorp/go-msgpack/codec"
+	"github.com/hashicorp/logutils"
+	"github.com/hashicorp/serf/coordinate"
 )
 
 const (
@@ -192,7 +193,22 @@ func (c *RPCClient) ForceLeave(node string) error {
 		Seq:     c.getSeq(),
 	}
 	req := forceLeaveRequest{
-		Node: node,
+		Node:  node,
+		Prune: false,
+	}
+	return c.genericRPC(&header, &req, nil)
+}
+
+//ForceLeavePrune uses ForceLeave but is used to reap the
+//node entirely
+func (c *RPCClient) ForceLeavePrune(node string) error {
+	header := requestHeader{
+		Command: forceLeaveCommand,
+		Seq:     c.getSeq(),
+	}
+	req := forceLeaveRequest{
+		Node:  node,
+		Prune: true,
 	}
 	return c.genericRPC(&header, &req, nil)
 }

@@ -1,7 +1,27 @@
-# Logrus <img src="http://i.imgur.com/hTeVwmJ.png" width="40" height="40" alt=":walrus:" class="emoji" title=":walrus:"/>&nbsp;[![Build Status](https://travis-ci.org/sirupsen/logrus.svg?branch=master)](https://travis-ci.org/sirupsen/logrus)&nbsp;[![GoDoc](https://godoc.org/github.com/sirupsen/logrus?status.svg)](https://godoc.org/github.com/sirupsen/logrus)
+# Logrus <img src="http://i.imgur.com/hTeVwmJ.png" width="40" height="40" alt=":walrus:" class="emoji" title=":walrus:"/> [![Build Status](https://travis-ci.org/sirupsen/logrus.svg?branch=master)](https://travis-ci.org/sirupsen/logrus) [![GoDoc](https://godoc.org/github.com/sirupsen/logrus?status.svg)](https://godoc.org/github.com/sirupsen/logrus)
 
 Logrus is a structured logger for Go (golang), completely API compatible with
 the standard library logger.
+
+**Logrus is in maintenance-mode.** We will not be introducing new features. It's
+simply too hard to do in a way that won't break many people's projects, which is
+the last thing you want from your Logging library (again...).
+
+This does not mean Logrus is dead. Logrus will continue to be maintained for
+security, (backwards compatible) bug fixes, and performance (where we are
+limited by the interface). 
+
+I believe Logrus' biggest contribution is to have played a part in today's
+widespread use of structured logging in Golang. There doesn't seem to be a
+reason to do a major, breaking iteration into Logrus V2, since the fantastic Go
+community has built those independently. Many fantastic alternatives have sprung
+up. Logrus would look like those, had it been re-designed with what we know
+about structured logging in Go today. Check out, for example,
+[Zerolog][zerolog], [Zap][zap], and [Apex][apex].
+
+[zerolog]: https://github.com/rs/zerolog
+[zap]: https://github.com/uber-go/zap
+[apex]: https://github.com/apex/log
 
 **Seeing weird case-sensitive problems?** It's in the past been possible to
 import Logrus as both upper- and lower-case. Due to the Go package environment,
@@ -360,9 +380,10 @@ Third party logging formatters:
 * [`GELF`](https://github.com/fabienm/go-logrus-formatters). Formats entries so they comply to Graylog's [GELF 1.1 specification](http://docs.graylog.org/en/2.4/pages/gelf.html).
 * [`logstash`](https://github.com/bshuster-repo/logrus-logstash-hook). Logs fields as [Logstash](http://logstash.net) Events.
 * [`prefixed`](https://github.com/x-cray/logrus-prefixed-formatter). Displays log entry source along with alternative layout.
-* [`zalgo`](https://github.com/aybabtme/logzalgo). Invoking the P͉̫o̳̼̊w̖͈̰͎e̬͔̭͂r͚̼̹̲ ̫͓͉̳͈ō̠͕͖̚f̝͍̠ ͕̲̞͖͑Z̖̫̤̫ͪa͉̬͈̗l͖͎g̳̥o̰̥̅!̣͔̲̻͊̄ ̙̘̦̹̦.
+* [`zalgo`](https://github.com/aybabtme/logzalgo). Invoking the Power of Zalgo.
 * [`nested-logrus-formatter`](https://github.com/antonfisher/nested-logrus-formatter). Converts logrus fields to a nested structure.
 * [`powerful-logrus-formatter`](https://github.com/zput/zxcTool). get fileName, log's line number and the latest function's name when print log; Sava log to files.
+* [`caption-json-formatter`](https://github.com/nolleh/caption_json_formatter). logrus's message json formatter with human-readable caption added.
 
 You can define your formatter by implementing the `Formatter` interface,
 requiring a `Format` method. `Format` takes an `*Entry`. `entry.Data` is a
