@@ -130,8 +130,11 @@ github.com/kr/pretty
 github.com/kr/text
 # github.com/kylelemons/godebug v0.0.0-20170820004349-d65d576e9348
 github.com/kylelemons/godebug/diff
-# github.com/magefile/mage v1.8.0
+# github.com/magefile/mage v1.9.0
+github.com/magefile/mage/internal
+github.com/magefile/mage/mage
 github.com/magefile/mage/mg
+github.com/magefile/mage/parse
 github.com/magefile/mage/sh
 # github.com/mattn/go-sqlite3 v1.13.0
 github.com/mattn/go-sqlite3

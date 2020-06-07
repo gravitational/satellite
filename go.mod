@@ -31,7 +31,7 @@ require (
 	github.com/jonboulle/clockwork v0.1.1-0.20190114141812-62fb9bc030d1
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/kylelemons/godebug v0.0.0-20170820004349-d65d576e9348
-	github.com/magefile/mage v1.8.0
+	github.com/magefile/mage v1.9.0
 	github.com/mattn/go-sqlite3 v1.13.0
 	github.com/miekg/dns v1.1.26
 	github.com/mitchellh/go-ps v1.0.0
