@@ -29,8 +29,8 @@ import (
 
 	"github.com/codahale/hdrhistogram"
 	"github.com/gravitational/trace"
+	"github.com/gravitational/ttlmap"
 	serf "github.com/hashicorp/serf/client"
-	"github.com/mailgun/holster"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -64,7 +64,7 @@ type pingChecker struct {
 	self           serf.Member
 	serfClient     agent.SerfClient
 	serfMemberName string
-	latencyStats   holster.TTLMap
+	latencyStats   ttlmap.TTLMap
 	mux            sync.Mutex
 	logger         log.FieldLogger
 }
@@ -100,7 +100,7 @@ func NewPingChecker(conf PingCheckerConfig) (c health.Checker, err error) {
 		return nil, trace.Wrap(err)
 	}
 
-	latencyTTLMap := holster.NewTTLMap(latencyStatsCapacity)
+	latencyTTLMap := ttlmap.NewTTLMap(latencyStatsCapacity)
 
 	client, err := conf.NewSerfClient(serf.Config{
 		Addr: conf.SerfRPCAddr,
