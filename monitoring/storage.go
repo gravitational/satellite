@@ -64,6 +64,10 @@ func (c *StorageConfig) CheckAndSetDefaults() error {
 		c.WatermarkCritical = DefaultCriticalWatermark
 	}
 
+	if c.WatermarkWarning > c.WatermarkCritical {
+		errors = append(errors, trace.BadParameter("warning watermark (%v) cannot be higher than critical watermark (%v)", c.WatermarkWarning, c.WatermarkCritical))
+	}
+
 	return trace.NewAggregate(errors...)
 }
 
