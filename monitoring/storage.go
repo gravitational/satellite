@@ -87,13 +87,13 @@ type HighWatermarkCheckerData struct {
 
 // WarningMessage returns warning watermark check message
 func (d HighWatermarkCheckerData) WarningMessage() string {
-	return fmt.Sprintf("disk utilization on %s exceeds %v percent (%s is available out of %s), see https://gravitational.com/telekube/docs/cluster/#garbage-collection",
-		d.Path, d.WatermarkWarning, humanize.Bytes(d.AvailableBytes), humanize.Bytes(d.TotalBytes))
+	return fmt.Sprintf("disk utilization on %s exceeds %v percent, cluster will degrade if usage exceeds %v percent (%s is available out of %s), see https://gravitational.com/gravity/docs/cluster/#garbage-collection",
+		d.Path, d.WatermarkWarning, d.WatermarkCritical, humanize.Bytes(d.AvailableBytes), humanize.Bytes(d.TotalBytes))
 }
 
 // CriticalMessage returns critical watermark check message
 func (d HighWatermarkCheckerData) CriticalMessage() string {
-	return fmt.Sprintf("disk utilization on %s exceeds %v percent (%s is available out of %s), see https://gravitational.com/telekube/docs/cluster/#garbage-collection",
+	return fmt.Sprintf("disk utilization on %s exceeds %v percent (%s is available out of %s), see https://gravitational.com/gravity/docs/cluster/#garbage-collection",
 		d.Path, d.WatermarkCritical, humanize.Bytes(d.AvailableBytes), humanize.Bytes(d.TotalBytes))
 }
 
