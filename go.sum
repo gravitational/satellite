@@ -13,8 +13,6 @@ github.com/DataDog/datadog-go v2.2.0+incompatible/go.mod h1:LButxg5PwREeZtORoXG3
 github.com/NYTimes/gziphandler v0.0.0-20170623195520-56545f4a5d46/go.mod h1:3wb06e3pkSAbeQ52E9H9iFoQsEEwGN64994WTCIhntQ=
 github.com/PuerkitoBio/purell v1.0.0/go.mod h1:c11w/QuzBsJSee3cPx9rAFu61PvFxuPbtSwDGJws/X0=
 github.com/PuerkitoBio/urlesc v0.0.0-20160726150825-5bd2802263f2/go.mod h1:uGdkoq3SwY9Y+13GIhn11/XLaGBb4BfwItxLd5jeuXE=
-github.com/a-palchikov/ttlmap v0.0.0-20200607134314-5bbd378b94a2 h1:xzkFEsfHn7QPBrDI6fcth4dhuliZt9DTCEyurU/VNGs=
-github.com/a-palchikov/ttlmap v0.0.0-20200607134314-5bbd378b94a2/go.mod h1:AK2y0lGR732J2QaOHOT00iNPzScpoDAac+sz65bA4Ls=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc h1:cAKDfWh5VpdgMhJosfJnn5/FoN2SRZ4p7fJNX58YPaU=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf h1:qet1QNfXsQxTZqLG4oE62mJzwPIB8+Tee4RNCL9ulrY=
@@ -107,8 +105,10 @@ github.com/gravitational/log v0.0.0-20200127200505-fdffa14162b0 h1:gxT3g2wRixRJ2
 github.com/gravitational/log v0.0.0-20200127200505-fdffa14162b0/go.mod h1:zJJqcfDBGf9G5qdBzs0Ai3FDwIvmvzl16nlClqcJyy4=
 github.com/gravitational/roundtrip v1.0.0 h1:eb+0EABfSKC8607CQ4oOyWCm9zVIfio/wW78TjQqLSc=
 github.com/gravitational/roundtrip v1.0.0/go.mod h1:qccpLd30tAJVSpx7aOEEnws4ZT3njPwdbtT8lNQxbAs=
-github.com/gravitational/trace v1.1.10-0.20200129130229-dd5b2e8eae86 h1:mriWUdfx6NZ3XCp1cEEt+DlwXS2lvst5gBhdn3+yh9A=
-github.com/gravitational/trace v1.1.10-0.20200129130229-dd5b2e8eae86/go.mod h1:RvdOUHE4SHqR3oXlFFKnGzms8a5dugHygGw1bqDstYI=
+github.com/gravitational/trace v1.1.11 h1:c+saoho5rBdj5lPEGzfHaYjh4Do4d+jX7hh4BgQtKc0=
+github.com/gravitational/trace v1.1.11/go.mod h1:RvdOUHE4SHqR3oXlFFKnGzms8a5dugHygGw1bqDstYI=
+github.com/gravitational/ttlmap v0.0.0-20200608174355-7e347b203ef0 h1:JmOlvnvlU4/JACZNMS99hpA9lxPZeHqB9lZXyucfyf0=
+github.com/gravitational/ttlmap v0.0.0-20200608174355-7e347b203ef0/go.mod h1:AK2y0lGR732J2QaOHOT00iNPzScpoDAac+sz65bA4Ls=
 github.com/gravitational/version v0.0.2-0.20170324200323-95d33ece5ce1 h1:9AGAaYUeEaTDLL+A/aHEq7+sdSnYSrcAonTIsAMhEHU=
 github.com/gravitational/version v0.0.2-0.20170324200323-95d33ece5ce1/go.mod h1:ugMA1hBRaKJiEFnzm/bueohGwnOQiZGkiVeaOGI019Y=
 github.com/gregjones/httpcache v0.0.0-20180305231024-9cad4c3443a7 h1:pdN6V1QBWetyv/0+wjACpqVH+eVULgEjkurDLq3goeM=
@@ -283,6 +283,8 @@ golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACk
 golang.org/x/crypto v0.0.0-20190923035154-9ee001bba392/go.mod h1:/lpIB1dKB+9EgE3H3cr1v9wB50oz8l4C4h62xy7jSTY=
 golang.org/x/crypto v0.0.0-20200220183623-bac4c82f6975 h1:/Tl7pH94bvbAAHBdZJT947M/+gp0+CqQXDtMRC0fseo=
 golang.org/x/crypto v0.0.0-20200220183623-bac4c82f6975/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
+golang.org/x/crypto v0.0.0-20200604202706-70a84ac30bf9 h1:vEg9joUBmeBcK9iSJftGNf3coIG4HqZElCPehJsfAYM=
+golang.org/x/crypto v0.0.0-20200604202706-70a84ac30bf9/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
 golang.org/x/exp v0.0.0-20190121172915-509febef88a4/go.mod h1:CJ0aWSM057203Lf6IL+f9T1iT9GByDxfZKAQTCR3kQA=
 golang.org/x/lint v0.0.0-20181026193005-c67002cb31c3/go.mod h1:UVdnD1Gm6xHRNCYTkRU2/jEulfH38KcIWyp/GAMgvoE=
 golang.org/x/lint v0.0.0-20190227174305-5b3e6a55c961/go.mod h1:wehouNa3lNwaWXcvxsM5YxQ5yQlVC4a0KAMCusXpPoU=

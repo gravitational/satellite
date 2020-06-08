@@ -17,8 +17,8 @@ require (
 	github.com/gravitational/configure v0.0.0-20161002181724-4e0f2df8846e
 	github.com/gravitational/log v0.0.0-20200127200505-fdffa14162b0 // indirect
 	github.com/gravitational/roundtrip v1.0.0
-	github.com/gravitational/trace v1.1.10-0.20200129130229-dd5b2e8eae86
-	github.com/gravitational/ttlmap v0.0.0-20171116003245-91fd36b9004c
+	github.com/gravitational/trace v1.1.11
+	github.com/gravitational/ttlmap v0.0.0-20200608174355-7e347b203ef0
 	github.com/gravitational/version v0.0.2-0.20170324200323-95d33ece5ce1
 	github.com/hashicorp/go-immutable-radix v1.1.0 // indirect
 	github.com/hashicorp/go-msgpack v0.5.5 // indirect
@@ -41,6 +41,7 @@ require (
 	github.com/prometheus/procfs v0.0.5
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.6.1
+	golang.org/x/crypto v0.0.0-20200604202706-70a84ac30bf9 // indirect
 	golang.org/x/net v0.0.0-20200602114024-627f9648deb9
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	golang.org/x/sys v0.0.0-20200602225109-6fdc65e7d980
@@ -51,5 +52,3 @@ require (
 	k8s.io/apimachinery v0.17.6
 	k8s.io/client-go v0.17.6
 )
-
-replace github.com/gravitational/ttlmap => github.com/a-palchikov/ttlmap v0.0.0-20200607134314-5bbd378b94a2

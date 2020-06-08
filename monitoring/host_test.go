@@ -67,7 +67,7 @@ func (*MonitoringSuite) TestValidatesHostEnviron(c *C) {
 			probes: health.Probes{
 				prober.newRaisedProbe(probe{
 					detail: "failed to validate host environment",
-					error:  "failed to query memory info",
+					error:  "failed to query memory info\n\tunable to read",
 				}),
 			},
 			getMemory: testFailingGetMemory(fmt.Errorf("unable to read")),
