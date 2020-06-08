@@ -105,7 +105,27 @@ func (_ *StorageSuite) TestStorage(c *C) {
 		StorageConfig: StorageConfig{
 			Path:          path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
 			WillBeCreated: true,
+			LowWatermark:  60,
+			HighWatermark: 80,
+		},
+		osInterface: testOS{mountList: mounts, bytesAvail: 2048},
+	}.probe(c, "low watermark is not reached", shallSucceed)
+
+	storageChecker{
+		StorageConfig: StorageConfig{
+			Path:          path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
+			WillBeCreated: true,
 			LowWatermark:  40,
+			HighWatermark: 60,
+		},
+		osInterface: testOS{mountList: mounts, bytesAvail: 2048},
+	}.probe(c, "low watermark is reached", shallFail)
+
+	storageChecker{
+		StorageConfig: StorageConfig{
+			Path:          path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
+			WillBeCreated: true,
+			LowWatermark:  20,
 			HighWatermark: 40,
 		},
 		osInterface: testOS{mountList: mounts, bytesAvail: 2048},
@@ -115,11 +135,11 @@ func (_ *StorageSuite) TestStorage(c *C) {
 		StorageConfig: StorageConfig{
 			Path:          path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
 			WillBeCreated: true,
-			LowWatermark:  60,
+			LowWatermark:  80,
 			HighWatermark: 60,
 		},
 		osInterface: testOS{mountList: mounts, bytesAvail: 2048},
-	}.probe(c, "high watermark is not reached", shallSucceed)
+	}.probe(c, "low watermark is higher than high watermark", shallFail)
 }
 
 func (_ *StorageSuite) TestMatchesFilesystem(c *C) {
