@@ -153,10 +153,6 @@ func (c *storageChecker) checkDiskUsage(ctx context.Context, reporter health.Rep
 	if c.HighWatermark == 0 {
 		return nil
 	}
-	if c.LowWatermark > c.HighWatermark {
-		return trace.BadParameter("low watermark (%v) cannot be higher than high watermark (%v)",
-			c.LowWatermark, c.HighWatermark)
-	}
 	availableBytes, totalBytes, err := c.diskCapacity(c.path)
 	if err != nil {
 		return trace.Wrap(err)

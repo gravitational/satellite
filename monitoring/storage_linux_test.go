@@ -130,16 +130,6 @@ func (_ *StorageSuite) TestStorage(c *C) {
 		},
 		osInterface: testOS{mountList: mounts, bytesAvail: 2048},
 	}.probe(c, "high watermark is reached", shallFail)
-
-	storageChecker{
-		StorageConfig: StorageConfig{
-			Path:          path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
-			WillBeCreated: true,
-			LowWatermark:  80,
-			HighWatermark: 60,
-		},
-		osInterface: testOS{mountList: mounts, bytesAvail: 2048},
-	}.probe(c, "low watermark is higher than high watermark", shallFail)
 }
 
 func (_ *StorageSuite) TestMatchesFilesystem(c *C) {

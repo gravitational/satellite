@@ -68,7 +68,7 @@ func (c *StorageConfig) CheckAndSetDefaults() error {
 	}
 
 	if c.LowWatermark > c.HighWatermark {
-		errors = append(errors, trace.BadParameter("low watermark (%v) cannot be higher than high watermark (%v)", c.LowWatermark, c.HighWatermark))
+		c.LowWatermark = c.HighWatermark
 	}
 
 	return trace.NewAggregate(errors...)
