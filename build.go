@@ -181,7 +181,7 @@ func (Test) Unit() error {
 		`--env="GOCACHE=/go/src/github.com/gravitational/satellite/build/cache/go"`,
 		`-w=/go/src/github.com/gravitational/satellite/`,
 		fmt.Sprint("satellite-build:", version()),
-		"go", "--", "test", "./...", "-race",
+		"go", "--", "test", "-mod", "vendor", "./...", "-race",
 	))
 }
 
