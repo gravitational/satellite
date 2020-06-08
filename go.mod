@@ -41,7 +41,7 @@ require (
 	github.com/prometheus/procfs v0.0.5
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.6.1
-	golang.org/x/net v0.0.0-20191004110552-13f9640d40b9
+	golang.org/x/net v0.0.0-20200602114024-627f9648deb9
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	golang.org/x/sys v0.0.0-20200602225109-6fdc65e7d980
 	google.golang.org/grpc v1.23.0
