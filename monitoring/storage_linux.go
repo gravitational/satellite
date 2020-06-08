@@ -150,7 +150,7 @@ func (c *storageChecker) checkFsType(ctx context.Context, reporter health.Report
 // checkDiskUsage checks the disk usage. A warning or critical probe will be
 // reported if the usage percentage is above the set thresholds.
 func (c *storageChecker) checkDiskUsage(ctx context.Context, reporter health.Reporter) error {
-	if c.WatermarkCritical == 0 {
+	if c.HighWatermark == 0 {
 		return nil
 	}
 	availableBytes, totalBytes, err := c.diskCapacity(c.path)
@@ -161,11 +161,11 @@ func (c *storageChecker) checkDiskUsage(ctx context.Context, reporter health.Rep
 		return trace.BadParameter("disk capacity at %v is 0", c.path)
 	}
 	checkerData := HighWatermarkCheckerData{
-		WatermarkCritical: c.WatermarkCritical,
-		WatermarkWarning:  c.WatermarkWarning,
-		Path:              c.Path,
-		TotalBytes:        totalBytes,
-		AvailableBytes:    availableBytes,
+		LowWatermark:   c.LowWatermark,
+		HighWatermark:  c.HighWatermark,
+		Path:           c.Path,
+		TotalBytes:     totalBytes,
+		AvailableBytes: availableBytes,
 	}
 	checkerDataBytes, err := json.Marshal(checkerData)
 	if err != nil {
@@ -174,7 +174,7 @@ func (c *storageChecker) checkDiskUsage(ctx context.Context, reporter health.Rep
 
 	diskUsagePercent := float64(totalBytes-availableBytes) / float64(totalBytes) * 100
 
-	if diskUsagePercent > float64(checkerData.WatermarkCritical) {
+	if diskUsagePercent > float64(checkerData.HighWatermark) {
 		reporter.Add(&pb.Probe{
 			Checker:     DiskSpaceCheckerID,
 			Detail:      checkerData.CriticalMessage(),
@@ -185,7 +185,7 @@ func (c *storageChecker) checkDiskUsage(ctx context.Context, reporter health.Rep
 		return nil
 	}
 
-	if diskUsagePercent > float64(checkerData.WatermarkWarning) {
+	if diskUsagePercent > float64(checkerData.LowWatermark) {
 		reporter.Add(&pb.Probe{
 			Checker:     DiskSpaceCheckerID,
 			Detail:      checkerData.WarningMessage(),

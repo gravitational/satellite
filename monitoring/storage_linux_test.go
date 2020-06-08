@@ -103,20 +103,20 @@ func (_ *StorageSuite) TestStorage(c *C) {
 
 	storageChecker{
 		StorageConfig: StorageConfig{
-			Path:              path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
-			WillBeCreated:     true,
-			WatermarkCritical: 40,
-			WatermarkWarning:  40,
+			Path:          path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
+			WillBeCreated: true,
+			LowWatermark:  40,
+			HighWatermark: 40,
 		},
 		osInterface: testOS{mountList: mounts, bytesAvail: 2048},
 	}.probe(c, "high watermark is reached", shallFail)
 
 	storageChecker{
 		StorageConfig: StorageConfig{
-			Path:              path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
-			WillBeCreated:     true,
-			WatermarkCritical: 60,
-			WatermarkWarning:  60,
+			Path:          path.Join("/tmp", fmt.Sprintf("%d", time.Now().Unix())),
+			WillBeCreated: true,
+			LowWatermark:  60,
+			HighWatermark: 60,
 		},
 		osInterface: testOS{mountList: mounts, bytesAvail: 2048},
 	}.probe(c, "high watermark is not reached", shallSucceed)
