@@ -88,7 +88,7 @@ func (c *storageChecker) check(ctx context.Context, reporter health.Reporter) er
 
 	return trace.NewAggregate(c.checkFsType(ctx, reporter),
 		c.checkCapacity(ctx, reporter),
-		c.checkHighWatermark(ctx, reporter),
+		c.checkDiskUsage(ctx, reporter),
 		c.checkWriteSpeed(ctx, reporter))
 }
 
@@ -147,12 +147,9 @@ func (c *storageChecker) checkFsType(ctx context.Context, reporter health.Report
 	return nil
 }
 
-// checkHighWatermark checks the disk usage. A failed warning or critical probe
-// will be reported if the usage percentage is above the set thresholds.
-// If the WatermarkWarning percentage is higher than or equal to the
-// WatermarkCritical percentage, then the check will only ever report critical
-// probes.
-func (c *storageChecker) checkHighWatermark(ctx context.Context, reporter health.Reporter) error {
+// checkDiskUsage checks the disk usage. A warning or critical probe will be
+// reported if the usage percentage is above the set thresholds.
+func (c *storageChecker) checkDiskUsage(ctx context.Context, reporter health.Reporter) error {
 	if c.WatermarkCritical == 0 {
 		return nil
 	}

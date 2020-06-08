@@ -42,6 +42,9 @@ type StorageConfig struct {
 	WatermarkCritical uint
 }
 
+// CheckAndSetDefaults validates this configuration object.
+// Config values that were not specified will be set to their default values if
+// available.
 func (c *StorageConfig) CheckAndSetDefaults() error {
 	var errors []error
 	if c.Path == "" {
