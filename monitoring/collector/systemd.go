@@ -19,7 +19,7 @@ package collector
 import (
 	"github.com/gravitational/satellite/monitoring"
 
-	"github.com/coreos/go-systemd/dbus"
+	"github.com/coreos/go-systemd/v22/dbus"
 	"github.com/gravitational/trace"
 	"github.com/prometheus/client_golang/prometheus"
 )

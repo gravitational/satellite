@@ -1,10 +1,15 @@
 package memberlist
 
 import (
+	"fmt"
 	"io"
 	"log"
+	"net"
 	"os"
+	"strings"
 	"time"
+
+	multierror "github.com/hashicorp/go-multierror"
 )
 
 type Config struct {
@@ -116,6 +121,10 @@ type Config struct {
 	// indirect UDP pings.
 	DisableTcpPings bool
 
+	// DisableTcpPingsForNode is like DisableTcpPings, but lets you control
+	// whether to perform TCP pings on a node-by-node basis.
+	DisableTcpPingsForNode func(nodeName string) bool
+
 	// AwarenessMaxMultiplier will increase the probe interval if the node
 	// becomes aware that it might be degraded and not meeting the soft real
 	// time requirements to reliably probe other nodes.
@@ -140,6 +149,16 @@ type Config struct {
 	GossipInterval      time.Duration
 	GossipNodes         int
 	GossipToTheDeadTime time.Duration
+
+	// GossipVerifyIncoming controls whether to enforce encryption for incoming
+	// gossip. It is used for upshifting from unencrypted to encrypted gossip on
+	// a running cluster.
+	GossipVerifyIncoming bool
+
+	// GossipVerifyOutgoing controls whether to enforce encryption for outgoing
+	// gossip. It is used for upshifting from unencrypted to encrypted gossip on
+	// a running cluster.
+	GossipVerifyOutgoing bool
 
 	// EnableCompression is used to control message compression. This can
 	// be used to reduce bandwidth usage at the cost of slightly more CPU
@@ -205,6 +224,44 @@ type Config struct {
 	// This is a legacy name for backward compatibility but should really be
 	// called PacketBufferSize now that we have generalized the transport.
 	UDPBufferSize int
+
+	// DeadNodeReclaimTime controls the time before a dead node's name can be
+	// reclaimed by one with a different address or port. By default, this is 0,
+	// meaning nodes cannot be reclaimed this way.
+	DeadNodeReclaimTime time.Duration
+
+	// RequireNodeNames controls if the name of a node is required when sending
+	// a message to that node.
+	RequireNodeNames bool
+	// CIDRsAllowed If nil, allow any connection (default), otherwise specify all networks
+	// allowed to connect (you must specify IPv6/IPv4 separately)
+	// Using [] will block all connections.
+	CIDRsAllowed []net.IPNet
+}
+
+// ParseCIDRs return a possible empty list of all Network that have been parsed
+// In case of error, it returns succesfully parsed CIDRs and the last error found
+func ParseCIDRs(v []string) ([]net.IPNet, error) {
+	nets := make([]net.IPNet, 0)
+	if v == nil {
+		return nets, nil
+	}
+	var errs error
+	hasErrors := false
+	for _, p := range v {
+		_, net, err := net.ParseCIDR(strings.TrimSpace(p))
+		if err != nil {
+			err = fmt.Errorf("invalid cidr: %s", p)
+			errs = multierror.Append(errs, err)
+			hasErrors = true
+		} else {
+			nets = append(nets, *net)
+		}
+	}
+	if !hasErrors {
+		errs = nil
+	}
+	return nets, errs
 }
 
 // DefaultLANConfig returns a sane set of configurations for Memberlist.
@@ -225,7 +282,7 @@ func DefaultLANConfig() *Config {
 		TCPTimeout:              10 * time.Second,       // Timeout after 10 seconds
 		IndirectChecks:          3,                      // Use 3 nodes for the indirect ping
 		RetransmitMult:          4,                      // Retransmit a message 4 * log(N+1) nodes
-		SuspicionMult:           5,                      // Suspect a node for 5 * log(N+1) * Interval
+		SuspicionMult:           4,                      // Suspect a node for 4 * log(N+1) * Interval
 		SuspicionMaxTimeoutMult: 6,                      // For 10k nodes this will give a max timeout of 120 seconds
 		PushPullInterval:        30 * time.Second,       // Low frequency
 		ProbeTimeout:            500 * time.Millisecond, // Reasonable RTT time for LAN
@@ -233,9 +290,11 @@ func DefaultLANConfig() *Config {
 		DisableTcpPings:         false,                  // TCP pings are safe, even with mixed versions
 		AwarenessMaxMultiplier:  8,                      // Probe interval backs off to 8 seconds
 
-		GossipNodes:         3,                      // Gossip to 3 nodes
-		GossipInterval:      200 * time.Millisecond, // Gossip more rapidly
-		GossipToTheDeadTime: 30 * time.Second,       // Same as push/pull
+		GossipNodes:          3,                      // Gossip to 3 nodes
+		GossipInterval:       200 * time.Millisecond, // Gossip more rapidly
+		GossipToTheDeadTime:  30 * time.Second,       // Same as push/pull
+		GossipVerifyIncoming: true,
+		GossipVerifyOutgoing: true,
 
 		EnableCompression: true, // Enable compression by default
 
@@ -246,6 +305,7 @@ func DefaultLANConfig() *Config {
 
 		HandoffQueueDepth: 1024,
 		UDPBufferSize:     1400,
+		CIDRsAllowed:      nil, // same as allow all
 	}
 }
 
@@ -263,6 +323,24 @@ func DefaultWANConfig() *Config {
 	conf.GossipInterval = 500 * time.Millisecond
 	conf.GossipToTheDeadTime = 60 * time.Second
 	return conf
+}
+
+// IPMustBeChecked return true if IPAllowed must be called
+func (c *Config) IPMustBeChecked() bool {
+	return len(c.CIDRsAllowed) > 0
+}
+
+// IPAllowed return an error if access to memberlist is denied
+func (c *Config) IPAllowed(ip net.IP) error {
+	if !c.IPMustBeChecked() {
+		return nil
+	}
+	for _, n := range c.CIDRsAllowed {
+		if n.Contains(ip) {
+			return nil
+		}
+	}
+	return fmt.Errorf("%s is not allowed", ip)
 }
 
 // DefaultLocalConfig works like DefaultConfig, however it returns a configuration

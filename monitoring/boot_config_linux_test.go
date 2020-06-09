@@ -137,7 +137,7 @@ func (*MonitoringSuite) TestValidatesBootConfig(c *C) {
 			probes: health.Probes{
 				prober.newRaisedProbe(probe{
 					detail: "failed to validate boot configuration",
-					error:  "failed to read kernel version",
+					error:  "failed to read kernel version\n\tunknown error",
 				}),
 			},
 			comment: "fails if kernel version cannot be determined",

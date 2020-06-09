@@ -1,4 +1,4 @@
-// +build ignore
+// +build nobuild
 
 /*
 Copyright 2018 Gravitational, Inc.

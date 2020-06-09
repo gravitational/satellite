@@ -44,7 +44,7 @@ type Logger struct {
 type exitFunc func(int)
 
 type MutexWrap struct {
-	lock     sync.RWMutex
+	lock     sync.Mutex
 	disabled bool
 }
 
@@ -54,21 +54,9 @@ func (mw *MutexWrap) Lock() {
 	}
 }
 
-func (mw *MutexWrap) RLock() {
-	if !mw.disabled {
-		mw.lock.RLock()
-	}
-}
-
 func (mw *MutexWrap) Unlock() {
 	if !mw.disabled {
 		mw.lock.Unlock()
-	}
-}
-
-func (mw *MutexWrap) RUnlock() {
-	if !mw.disabled {
-		mw.lock.RUnlock()
 	}
 }
 
@@ -80,10 +68,10 @@ func (mw *MutexWrap) Disable() {
 // `Out` and `Hooks` directly on the default logger instance. You can also just
 // instantiate your own:
 //
-//    var log = &Logger{
+//    var log = &logrus.Logger{
 //      Out: os.Stderr,
-//      Formatter: new(JSONFormatter),
-//      Hooks: make(LevelHooks),
+//      Formatter: new(logrus.JSONFormatter),
+//      Hooks: make(logrus.LevelHooks),
 //      Level: logrus.DebugLevel,
 //    }
 //
@@ -112,8 +100,9 @@ func (logger *Logger) releaseEntry(entry *Entry) {
 	logger.entryPool.Put(entry)
 }
 
-// Adds a field to the log entry, note that it doesn't log until you call
-// Debug, Print, Info, Warn, Error, Fatal or Panic. It only creates a log entry.
+// WithField allocates a new entry and adds a field to it.
+// Debug, Print, Info, Warn, Error, Fatal or Panic must be then applied to
+// this new returned entry.
 // If you want multiple fields, use `WithFields`.
 func (logger *Logger) WithField(key string, value interface{}) *Entry {
 	entry := logger.newEntry()
@@ -305,20 +294,6 @@ func (logger *Logger) Exit(code int) {
 //In these cases user can choose to disable the lock.
 func (logger *Logger) SetNoLock() {
 	logger.mu.Disable()
-}
-
-func (logger *Logger) GetHooks() LevelHooks {
-	var hooks LevelHooks
-	logger.mu.RLock()
-	hooks = logger.Hooks
-	logger.mu.RUnlock()
-	return hooks
-}
-
-func (logger *Logger) SetHooks(hooks LevelHooks) {
-	logger.mu.Lock()
-	logger.Hooks = hooks
-	logger.mu.Unlock()
 }
 
 func (logger *Logger) level() Level {
