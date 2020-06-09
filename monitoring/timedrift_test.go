@@ -24,6 +24,7 @@ import (
 	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/agent/health"
 	"github.com/gravitational/satellite/agent/proto/agentpb"
+	debugpb "github.com/gravitational/satellite/agent/proto/debug"
 	"github.com/gravitational/satellite/lib/rpc/client"
 
 	"github.com/gravitational/trace"
@@ -183,6 +184,10 @@ func (a *mockedTimeAgentClient) UpdateTimeline(ctx context.Context,
 
 func (a *mockedTimeAgentClient) UpdateLocalTimeline(ctx context.Context,
 	req *agentpb.UpdateRequest) (*agentpb.UpdateResponse, error) {
+	return nil, nil
+}
+
+func (a *mockedTimeAgentClient) Profile(context.Context, *debugpb.ProfileRequest) (debugpb.Debug_ProfileClient, error) {
 	return nil, nil
 }
 
