@@ -283,7 +283,7 @@ func (r *SystemPodsSuite) TestInvalidPodStatus(c *C) {
 			},
 		},
 		{
-			comment: Commentf("Pod Running && Container Error"),
+			comment: Commentf("Pod Running && Exit Code 1"),
 			pod: corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "pod-running",
@@ -296,7 +296,8 @@ func (r *SystemPodsSuite) TestInvalidPodStatus(c *C) {
 							Name: "cont-terminated",
 							State: corev1.ContainerState{
 								Terminated: &corev1.ContainerStateTerminated{
-									Reason: containerError,
+									ExitCode: 1,
+									Reason:   containerError,
 								},
 							},
 						},
