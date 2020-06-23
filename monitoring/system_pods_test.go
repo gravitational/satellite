@@ -297,7 +297,7 @@ func (r *SystemPodsSuite) TestInvalidPodStatus(c *C) {
 							State: corev1.ContainerState{
 								Terminated: &corev1.ContainerStateTerminated{
 									ExitCode: 1,
-									Reason:   containerError,
+									Reason:   "TestReason",
 								},
 							},
 						},
@@ -306,7 +306,7 @@ func (r *SystemPodsSuite) TestInvalidPodStatus(c *C) {
 			},
 			expected: &health.Probes{
 				systemPodsFailureProbe(r.Name(), "test", "pod-running",
-					trace.BadParameter("cont-terminated terminated: Error")),
+					trace.BadParameter("cont-terminated terminated: TestReason")),
 			},
 		},
 	}
