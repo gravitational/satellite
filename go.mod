@@ -4,6 +4,7 @@ go 1.13
 
 require (
 	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878 // indirect
+	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/aws/aws-sdk-go v1.25.41
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/cloudfoundry/gosigar v1.1.1-0.20180406153506-1375283248c3
@@ -11,6 +12,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.1.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dustin/go-humanize v0.0.0-20171111073723-bb3d318650d4
+	github.com/fatih/color v1.9.0 // indirect
 	github.com/gogo/protobuf v1.2.2-0.20190723190241-65acae22fc9d
 	github.com/golang/protobuf v1.3.2
 	github.com/googleapis/gnostic v0.2.0 // indirect
@@ -22,9 +24,12 @@ require (
 	github.com/gravitational/version v0.0.2-0.20170324200323-95d33ece5ce1
 	github.com/hashicorp/go-immutable-radix v1.1.0 // indirect
 	github.com/hashicorp/go-msgpack v0.5.5 // indirect
+	github.com/hashicorp/go-multierror v1.1.0 // indirect
 	github.com/hashicorp/go-sockaddr v1.0.2 // indirect
 	github.com/hashicorp/go-uuid v1.0.2 // indirect
-	github.com/hashicorp/serf v0.9.2
+	github.com/hashicorp/mdns v1.0.1 // indirect
+	github.com/hashicorp/memberlist v0.2.2 // indirect
+	github.com/hashicorp/serf v0.8.3
 	github.com/imdario/mergo v0.3.6 // indirect
 	github.com/influxdata/influxdb v1.5.1
 	github.com/jmoiron/sqlx v1.2.0
@@ -32,9 +37,12 @@ require (
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/kylelemons/godebug v0.0.0-20170820004349-d65d576e9348
 	github.com/magefile/mage v1.9.0
+	github.com/mattn/go-colorable v0.1.6 // indirect
 	github.com/mattn/go-sqlite3 v1.13.0
 	github.com/miekg/dns v1.1.26
+	github.com/mitchellh/cli v1.1.0 // indirect
 	github.com/mitchellh/go-ps v1.0.0
+	github.com/posener/complete v1.2.3 // indirect
 	github.com/prometheus/client_golang v1.1.0
 	github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4
 	github.com/prometheus/common v0.6.0
