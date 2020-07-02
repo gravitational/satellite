@@ -37,7 +37,7 @@ import (
 	"github.com/gravitational/satellite/utils"
 
 	"github.com/gravitational/trace"
-	"github.com/gravitational/ttlmap"
+	"github.com/gravitational/ttlmap/v2"
 	"github.com/hashicorp/serf/coordinate"
 	"github.com/jonboulle/clockwork"
 	log "github.com/sirupsen/logrus"

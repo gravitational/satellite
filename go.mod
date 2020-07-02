@@ -18,13 +18,15 @@ require (
 	github.com/gravitational/log v0.0.0-20200127200505-fdffa14162b0 // indirect
 	github.com/gravitational/roundtrip v1.0.0
 	github.com/gravitational/trace v1.1.11
-	github.com/gravitational/ttlmap v0.0.0-20200608174355-7e347b203ef0
+	github.com/gravitational/ttlmap/v2 v2.0.0-20200702161230-1bbfd908876d
 	github.com/gravitational/version v0.0.2-0.20170324200323-95d33ece5ce1
 	github.com/hashicorp/go-immutable-radix v1.1.0 // indirect
 	github.com/hashicorp/go-msgpack v0.5.5 // indirect
+	github.com/hashicorp/go-multierror v1.1.0 // indirect
 	github.com/hashicorp/go-sockaddr v1.0.2 // indirect
 	github.com/hashicorp/go-uuid v1.0.2 // indirect
-	github.com/hashicorp/serf v0.9.2
+	github.com/hashicorp/memberlist v0.2.2 // indirect
+	github.com/hashicorp/serf v0.8.3
 	github.com/imdario/mergo v0.3.6 // indirect
 	github.com/influxdata/influxdb v1.5.1
 	github.com/jmoiron/sqlx v1.2.0
@@ -35,16 +37,16 @@ require (
 	github.com/mattn/go-sqlite3 v1.13.0
 	github.com/miekg/dns v1.1.26
 	github.com/mitchellh/go-ps v1.0.0
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.1.0
 	github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4
 	github.com/prometheus/common v0.6.0
 	github.com/prometheus/procfs v0.0.5
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.6.1
-	golang.org/x/crypto v0.0.0-20200604202706-70a84ac30bf9 // indirect
-	golang.org/x/net v0.0.0-20200602114024-627f9648deb9
+	golang.org/x/net v0.0.0-20200625001655-4c5254603344
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
-	golang.org/x/sys v0.0.0-20200602225109-6fdc65e7d980
+	golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae
 	google.golang.org/grpc v1.23.0
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15
