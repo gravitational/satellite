@@ -56,9 +56,6 @@ func (r *kernelChecker) Check(ctx context.Context, reporter health.Reporter) {
 		log.WithError(err).Debug("Failed to verify kernel version.")
 		return
 	}
-	if reporter.NumProbes() == 0 {
-		reporter.Add(r.successProbe())
-	}
 }
 
 func (r *kernelChecker) check(_ context.Context, reporter health.Reporter) error {
@@ -69,29 +66,31 @@ func (r *kernelChecker) check(_ context.Context, reporter health.Reporter) error
 
 	kernelVersion, err := parseKernelVersion(release)
 	if err != nil {
-		reporter.Add(r.warningProbe(fmt.Sprintf("Failed to determine kernel version: %v.", release), err))
-		return trace.Wrap(err, "failed to determine kernel version")
+		return trace.Wrap(err, "failed to determine kernel version: %s", release)
 	}
 
 	if !r.isSupportedVersion(*kernelVersion) {
-		reporter.Add(r.warningProbe(fmt.Sprintf("Installed linux kernel is not supported: %v.", release), err))
+		reporter.Add(r.warningProbe(release))
+		return nil
 	}
+
+	reporter.Add(r.successProbe(release))
 	return nil
 }
 
-func (r *kernelChecker) successProbe() *pb.Probe {
+func (r *kernelChecker) successProbe(installedVersion string) *pb.Probe {
 	return &pb.Probe{
 		Checker: r.Name(),
-		Detail:  "Installed linux kernel is supported.",
+		Detail:  fmt.Sprintf("Installed Linux kernel is supported: %s.", installedVersion),
 		Status:  pb.Probe_Running,
 	}
 }
 
-func (r *kernelChecker) warningProbe(detail string, err error) *pb.Probe {
+func (r *kernelChecker) warningProbe(installedVersion string) *pb.Probe {
 	return &pb.Probe{
-		Checker:  r.Name(),
-		Detail:   fmt.Sprintf("%s Gravity supports version %s and newer.", detail, r.MinKernelVersion.String()),
-		Error:    trace.UserMessage(err),
+		Checker: r.Name(),
+		Detail: fmt.Sprintf("Minimum recommended kernel version is %s (%s is installed).",
+			r.MinKernelVersion.String(), installedVersion),
 		Status:   pb.Probe_Failed,
 		Severity: pb.Probe_Warning,
 	}
