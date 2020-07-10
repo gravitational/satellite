@@ -35,22 +35,27 @@ func (s *KernelSuite) TestKernelSupported(c *C) {
 		{
 			comment:  Commentf("Exactly matches min kernel requirement."),
 			expected: true,
-			version:  KernelVersion{Release: 3, Major: 10, Minor: 1},
+			version:  KernelVersion{Release: 3, Major: 10, Minor: 1, Patch: 1127},
 		},
 		{
 			comment:  Commentf("Does not meet release version requirement."),
 			expected: false,
-			version:  KernelVersion{Release: 2, Major: 10, Minor: 1},
+			version:  KernelVersion{Release: 2},
 		},
 		{
 			comment:  Commentf("Does not meet major version requirement."),
 			expected: false,
-			version:  KernelVersion{Release: 3, Major: 9, Minor: 1},
+			version:  KernelVersion{Release: 3, Major: 9},
 		},
 		{
 			comment:  Commentf("Does not meet minor version requirement."),
 			expected: false,
 			version:  KernelVersion{Release: 3, Major: 10, Minor: 0},
+		},
+		{
+			comment:  Commentf("Does not meet patch number requirement."),
+			expected: false,
+			version:  KernelVersion{Release: 3, Major: 10, Minor: 0, Patch: 1126},
 		},
 	}
 	for _, testCase := range testCases {
@@ -60,4 +65,4 @@ func (s *KernelSuite) TestKernelSupported(c *C) {
 }
 
 // testMinKernelVersion is the minimum supported kernel version used for test cases.
-var testMinKernelVersion = KernelVersion{Release: 3, Major: 10, Minor: 1}
+var testMinKernelVersion = KernelVersion{Release: 3, Major: 10, Minor: 1, Patch: 1127}
