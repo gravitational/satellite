@@ -55,7 +55,22 @@ func (s *KernelSuite) TestKernelSupported(c *C) {
 		{
 			comment:  Commentf("Does not meet patch number requirement."),
 			expected: false,
-			version:  KernelVersion{Release: 3, Major: 10, Minor: 0, Patch: 1126},
+			version:  KernelVersion{Release: 3, Major: 10, Minor: 1, Patch: 1126},
+		},
+		{
+			comment:  Commentf("Minor version is greater than minimum supported version."),
+			expected: true,
+			version:  KernelVersion{Release: 3, Major: 10, Minor: 2, Patch: 1126},
+		},
+		{
+			comment:  Commentf("Major version is greater than minimum supported version."),
+			expected: true,
+			version:  KernelVersion{Release: 3, Major: 11, Minor: 0, Patch: 1126},
+		},
+		{
+			comment:  Commentf("Release version is greater than minimum supported version."),
+			expected: true,
+			version:  KernelVersion{Release: 4, Major: 9, Minor: 0, Patch: 1126},
 		},
 	}
 	for _, testCase := range testCases {
