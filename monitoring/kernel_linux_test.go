@@ -84,6 +84,11 @@ func (*KernelSuite) TestKernelVersionLessThan(c *C) {
 			version:  KernelVersion{Release: 2, Major: 11, Minor: 1, Patch: 1127},
 		},
 		{
+			comment:  Commentf("Older release version & greater major component."),
+			expected: true,
+			version:  monitoring.KernelVersion{Release: 2, Major: 11, Minor: 1, Patch: 1127},
+		},
+		{
 			comment:  Commentf("Older major component."),
 			expected: true,
 			version:  KernelVersion{Release: 3, Major: 9},
