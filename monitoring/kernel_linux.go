@@ -60,17 +60,24 @@ type KernelConstraintFunc func(KernelVersion) bool
 // the actual version.
 func KernelVersionLessThan(version KernelVersion) KernelConstraintFunc {
 	return func(testVersion KernelVersion) bool {
-		release := testVersion.Release <= version.Release
-		major := testVersion.Major <= version.Major
-		minor := testVersion.Minor <= version.Minor
-		patch := testVersion.Patch < version.Patch
+		if testVersion.Release != version.Release {
+			return testVersion.Release < version.Release
+		}
 
-		return release && major && minor && patch
+		if testVersion.Major != version.Major {
+			return testVersion.Major < version.Major
+		}
+
+		if testVersion.Minor != version.Minor {
+			return testVersion.Minor < version.Minor
+		}
+
+		return testVersion.Patch < version.Patch
 	}
 }
 
-// KernelVersionReader returns the textual kernel version.
-type KernelVersionReader func() (version string, err error)
+// kernelVersionReader returns the textual kernel version.
+type kernelVersionReader func() (version string, err error)
 
 // realKernelVersionReader reads and returns the currently installed Linux
 // kernel version.

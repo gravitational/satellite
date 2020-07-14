@@ -49,7 +49,7 @@ func (*MonitoringSuite) TestValidatesBootConfig(c *C) {
 	prober := newErrorProber(bootConfigParamID)
 	var testCases = []struct {
 		params              []BootConfigParam
-		kernelVersionReader KernelVersionReader
+		kernelVersionReader kernelVersionReader
 		bootConfigReader
 		probes  health.Probes
 		comment string
@@ -147,13 +147,13 @@ func testBootConfigFailingReader(err error) bootConfigReader {
 	}
 }
 
-func staticKernelVersion(version string) KernelVersionReader {
+func staticKernelVersion(version string) kernelVersionReader {
 	return func() (string, error) {
 		return version, nil
 	}
 }
 
-func testFailingKernelVersion(err error) KernelVersionReader {
+func testFailingKernelVersion(err error) kernelVersionReader {
 	return func() (string, error) {
 		return "", err
 	}

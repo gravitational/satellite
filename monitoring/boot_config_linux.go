@@ -45,7 +45,7 @@ type bootConfigParamChecker struct {
 	// Params is array of parameters to check for
 	Params []BootConfigParam
 	// kernelVersionReader specifies the kernel version reader function.
-	kernelVersionReader KernelVersionReader
+	kernelVersionReader kernelVersionReader
 	bootConfigReader
 }
 
