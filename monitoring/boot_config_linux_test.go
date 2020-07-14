@@ -44,58 +44,26 @@ func (*MonitoringSuite) TestReadsBootConfig(c *C) {
 	})
 }
 
-func (*MonitoringSuite) TestParsesKernelVersion(c *C) {
-	// setup
-	var testCases = []struct {
-		release  string
-		expected KernelVersion
-		comment  string
-	}{
-		{
-			release:  "4.4.0-112-generic",
-			expected: KernelVersion{4, 4, 0},
-			comment:  "ubuntu 16.04",
-		},
-		{
-			release:  "3.10.0-514.16.1.el7.x86_64",
-			expected: KernelVersion{3, 10, 0},
-			comment:  "centos 7.4",
-		},
-		{
-			release:  "4.9.0-4-amd64",
-			expected: KernelVersion{4, 9, 0},
-			comment:  "debian 9.3",
-		},
-	}
-
-	// exercise / verify
-	for _, testCase := range testCases {
-		version, err := parseKernelVersion(testCase.release)
-		c.Assert(err, IsNil)
-		c.Assert(version, test.DeepCompare, &testCase.expected, Commentf(testCase.comment))
-	}
-}
-
 func (*MonitoringSuite) TestValidatesBootConfig(c *C) {
 	// setup
 	prober := newErrorProber(bootConfigParamID)
 	var testCases = []struct {
-		params []BootConfigParam
-		kernelVersionReader
+		params              []BootConfigParam
+		kernelVersionReader KernelVersionReader
 		bootConfigReader
 		probes  health.Probes
 		comment string
 	}{
 		{
 			params:              staticParams("CONFIG_PARAM2", "CONFIG_PARAM3"),
-			kernelVersionReader: staticKernelVersion("4.4.0"),
+			kernelVersionReader: staticKernelVersion("4.4.0-0"),
 			bootConfigReader:    testBootConfigReader(testBootConfig),
 			probes:              health.Probes{prober.newSuccess()},
 			comment:             "all parameters available",
 		},
 		{
 			params:              staticParams("CONFIG_PARAM1", "CONFIG_PARAM2"),
-			kernelVersionReader: staticKernelVersion("4.4.0"),
+			kernelVersionReader: staticKernelVersion("4.4.0-0"),
 			bootConfigReader:    testBootConfigReader(testBootConfig),
 			probes: health.Probes{
 				prober.newRaised("required kernel boot config parameter CONFIG_PARAM1 missing"),
@@ -108,7 +76,7 @@ func (*MonitoringSuite) TestValidatesBootConfig(c *C) {
 					Name:             "CONFIG_PARAM4",
 					KernelConstraint: KernelVersionLessThan(KernelVersion{Release: 4, Major: 4}),
 				}},
-			kernelVersionReader: staticKernelVersion("4.5.0"),
+			kernelVersionReader: staticKernelVersion("4.5.0-0"),
 			bootConfigReader:    testBootConfigReader(testBootConfig),
 			probes:              health.Probes{prober.newSuccess()},
 			comment:             "parameter should be skipped due to kernel version",
@@ -119,14 +87,14 @@ func (*MonitoringSuite) TestValidatesBootConfig(c *C) {
 					Name:             "CONFIG_PARAM4",
 					KernelConstraint: KernelVersionLessThan(KernelVersion{Release: 4, Major: 4}),
 				}},
-			kernelVersionReader: staticKernelVersion("4.5.0"),
+			kernelVersionReader: staticKernelVersion("4.5.0-0"),
 			bootConfigReader:    testBootConfigReader(testBootConfig),
 			probes:              health.Probes{prober.newSuccess()},
 			comment:             "parameter should be skipped due to kernel version",
 		},
 		{
 			params:              staticParams("CONFIG_PARAM"),
-			kernelVersionReader: staticKernelVersion("4.5.0"),
+			kernelVersionReader: staticKernelVersion("4.5.0-0"),
 			bootConfigReader:    testBootConfigFailingReader(trace.NotFound("file or directory not found")),
 			probes:              health.Probes{prober.newSuccess()},
 			comment:             "skip test if boot configuration is unavailable",
@@ -144,7 +112,7 @@ func (*MonitoringSuite) TestValidatesBootConfig(c *C) {
 		},
 		{
 			params:              staticParams("CONFIG_PARAM4", "CONFIG_PARAM5"),
-			kernelVersionReader: staticKernelVersion("4.5.0"),
+			kernelVersionReader: staticKernelVersion("4.5.0-0"),
 			bootConfigReader:    testBootConfigReader(testBootConfig),
 			probes: health.Probes{
 				prober.newRaised("required kernel boot config parameter CONFIG_PARAM4 missing"),
@@ -179,13 +147,13 @@ func testBootConfigFailingReader(err error) bootConfigReader {
 	}
 }
 
-func staticKernelVersion(version string) kernelVersionReader {
+func staticKernelVersion(version string) KernelVersionReader {
 	return func() (string, error) {
 		return version, nil
 	}
 }
 
-func testFailingKernelVersion(err error) kernelVersionReader {
+func testFailingKernelVersion(err error) KernelVersionReader {
 	return func() (string, error) {
 		return "", err
 	}

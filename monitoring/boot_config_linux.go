@@ -23,9 +23,6 @@ import (
 	"io"
 	"os"
 	"regexp"
-	"strconv"
-	"strings"
-	"syscall"
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
@@ -47,7 +44,8 @@ func NewBootConfigParamChecker(params ...BootConfigParam) health.Checker {
 type bootConfigParamChecker struct {
 	// Params is array of parameters to check for
 	Params []BootConfigParam
-	kernelVersionReader
+	// kernelVersionReader specifies the kernel version reader function.
+	kernelVersionReader KernelVersionReader
 	bootConfigReader
 }
 
@@ -97,42 +95,6 @@ func GetStorageDriverBootConfigParams(drv string) health.Checker {
 	return NewBootConfigParamChecker(params...)
 }
 
-// KernelConstraintFunc is a function to determine if the kernel version
-// satisfies a particular condition
-type KernelConstraintFunc func(KernelVersion) bool
-
-// KernelVersionLessThan is a kernel constraint checker
-// that determines if the specified testVersion is less than
-// the actual version
-func KernelVersionLessThan(version KernelVersion) KernelConstraintFunc {
-	return func(testVersion KernelVersion) bool {
-		return testVersion.Release < version.Release ||
-			(testVersion.Release == version.Release &&
-				testVersion.Major < version.Major) ||
-			(testVersion.Major == version.Major &&
-				testVersion.Minor < version.Minor)
-	}
-}
-
-// KernelVersion describes an abbreviated version of a Linux kernel.
-// It contains only the kernel version (including major/minor components)
-// skips irrelevant details like patch or build number.
-//
-// Example:
-//  $ uname -r
-//  $ 4.4.9-112-generic
-//
-// The result will be:
-//  KernelVersion{Release: 4, Major: 4, Minor: 9}
-type KernelVersion struct {
-	// Release specifies the release of the kernel
-	Release int
-	// Major specifies the major version component
-	Major int
-	// Minor specifies the minor version component
-	Minor int
-}
-
 // check verifies boot configuration on host.
 func (c *bootConfigParamChecker) check(ctx context.Context, reporter health.Reporter) error {
 	release, err := c.kernelVersionReader()
@@ -140,7 +102,7 @@ func (c *bootConfigParamChecker) check(ctx context.Context, reporter health.Repo
 		return trace.Wrap(err, "failed to read kernel version")
 	}
 
-	kernelVersion, err := parseKernelVersion(release)
+	kernelVersion, err := ParseKernelVersion(release)
 	if err != nil {
 		return trace.Wrap(err, "failed to determine kernel version")
 	}
@@ -212,64 +174,9 @@ func parseBootConfig(r io.ReadCloser) (config map[string]string, err error) {
 	return config, nil
 }
 
-func realKernelVersionReader() (version string, err error) {
-	var uname syscall.Utsname
-	err = syscall.Uname(&uname)
-	if err != nil {
-		return "", trace.Wrap(err)
-	}
-
-	return string(int8string(uname.Release[:])), nil
-}
-
-// kernelVersionReader returns the textual kernel version
-type kernelVersionReader func() (version string, err error)
-
 // bootConfigReader reads the kernel boot configuration file
 // based on the specified kernel release version
 type bootConfigReader func(release string) (io.ReadCloser, error)
-
-func parseKernelVersion(input string) (*KernelVersion, error) {
-	parts := strings.Split(input, "-")
-	parts = strings.Split(parts[0], ".")
-	if len(parts) != 3 {
-		return nil, trace.BadParameter("invalid kernel version input: %q", input)
-	}
-	version, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return nil, trace.BadParameter(
-			"invalid kernel version: %v, expected a number",
-			parts[0])
-	}
-	major, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return nil, trace.BadParameter(
-			"invalid kernel version major: %v, expected a number",
-			parts[1])
-	}
-	minor, err := strconv.Atoi(parts[2])
-	if err != nil {
-		return nil, trace.BadParameter(
-			"invalid kernel version minor: %v, expected a number",
-			parts[2])
-	}
-	return &KernelVersion{
-		Release: version,
-		Major:   major,
-		Minor:   minor,
-	}, nil
-}
-
-func int8string(bytes []int8) (result []byte) {
-	result = make([]byte, 0, len(bytes))
-	for _, b := range bytes {
-		if b == 0 {
-			break
-		}
-		result = append(result, byte(b))
-	}
-	return result
-}
 
 const bootConfigParamID = "boot-config"
 
