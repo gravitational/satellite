@@ -90,7 +90,7 @@ func realKernelVersionReader() (version string, err error) {
 	return int8string(uname.Release[:]), nil
 }
 
-// ParseKernelVersion parses the input string into a KernelVersion struct. The
+// parseKernelVersion parses the input string into a KernelVersion struct. The
 // input is expected to be a valid Linux kernel version in the format
 // Release.Major.Minor-Patch... trailing components will be ignored.
 //
@@ -99,7 +99,7 @@ func realKernelVersionReader() (version string, err error) {
 //
 // The result will be:
 //  KernelVersion{Release: 4, Major: 4, Minor: 9, Patch: 112}
-func ParseKernelVersion(input string) (*KernelVersion, error) {
+func parseKernelVersion(input string) (*KernelVersion, error) {
 	// componentsLength defines the expected number of kernel version components.
 	const componentsLength = 4
 

@@ -102,7 +102,7 @@ func (c *bootConfigParamChecker) check(ctx context.Context, reporter health.Repo
 		return trace.Wrap(err, "failed to read kernel version")
 	}
 
-	kernelVersion, err := ParseKernelVersion(release)
+	kernelVersion, err := parseKernelVersion(release)
 	if err != nil {
 		return trace.Wrap(err, "failed to determine kernel version")
 	}
