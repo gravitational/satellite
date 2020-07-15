@@ -69,7 +69,7 @@ func (r *kernelChecker) check(_ context.Context, reporter health.Reporter) error
 		return trace.Wrap(err, "failed to read kernel version")
 	}
 
-	kernelVersion, err := ParseKernelVersion(release)
+	kernelVersion, err := parseKernelVersion(release)
 	if err != nil {
 		return trace.Wrap(err, "failed to determine kernel version: %s", release)
 	}
