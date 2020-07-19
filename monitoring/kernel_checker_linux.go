@@ -37,7 +37,7 @@ type kernelChecker struct {
 	// MinKernelVersion specifies the minimum supported kernel version.
 	MinKernelVersion KernelVersion
 	// kernelVersionReader specifies the kernel version reader function.
-	kernelVersionReader kernelVersionReader
+	kernelVersionReader
 }
 
 // NewKernelChecker returns a new instance of kernel checker.

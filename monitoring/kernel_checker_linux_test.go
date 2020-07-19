@@ -35,9 +35,9 @@ var _ = Suite(&KernelVersionSuite{})
 // supported/unsupported kernel versions.
 func (s *KernelVersionSuite) TestKernelSupported(c *C) {
 	var testCases = []struct {
-		comment             CommentInterface
-		kernelVersionReader kernelVersionReader
-		probe               *pb.Probe
+		comment CommentInterface
+		kernelVersionReader
+		probe *pb.Probe
 	}{
 		{
 			comment:             Commentf("RHEL 6.0"),
