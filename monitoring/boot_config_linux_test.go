@@ -48,8 +48,8 @@ func (*MonitoringSuite) TestValidatesBootConfig(c *C) {
 	// setup
 	prober := newErrorProber(bootConfigParamID)
 	var testCases = []struct {
-		params              []BootConfigParam
-		kernelVersionReader kernelVersionReader
+		params []BootConfigParam
+		kernelVersionReader
 		bootConfigReader
 		probes  health.Probes
 		comment string
