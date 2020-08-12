@@ -55,10 +55,8 @@ var _ = Suite(&AgentSuite{})
 
 func (r *AgentSuite) SetUpSuite(c *C) {
 	// Set logging level
-	if testing.Verbose() {
-		log.SetOutput(os.Stderr)
-		log.SetLevel(log.DebugLevel)
-	}
+	log.SetOutput(os.Stderr)
+	log.SetLevel(log.DebugLevel)
 
 	// Initialize credentials
 	dir := c.MkDir()
@@ -228,17 +226,17 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 		agents := make([]*agent, 0, len(testCase.agentConfigs))
 		for _, agentConfig := range testCase.agentConfigs {
 			agent, err := r.newAgent(agentConfig)
-			c.Assert(err, IsNil)
+			c.Assert(err, IsNil, testCase.comment)
 			c.Assert(r.becomeMember(testCase.membership, agent, agentConfig.memberStatus), IsNil)
 			agents = append(agents, agent)
 		}
 
 		test.WithTimeout(func(ctx context.Context) {
 			for _, agent := range agents {
-				c.Assert(agent.updateStatus(ctx), IsNil)
+				c.Assert(agent.updateStatus(ctx), IsNil, testCase.comment)
 			}
 			status, err := agents[len(agents)-1].Status()
-			c.Assert(err, IsNil)
+			c.Assert(err, IsNil, testCase.comment)
 
 			sortStatus(status)
 			c.Assert(status, test.DeepCompare, testCase.expected, testCase.comment)
@@ -285,7 +283,9 @@ func (r *AgentSuite) TestIsMember(c *C) {
 
 		test.WithTimeout(func(ctx context.Context) {
 			for _, agent := range agents {
-				c.Assert(agent.IsMember(), Equals, testCase.expected)
+				ok, err := agent.IsMember()
+				c.Assert(err, IsNil)
+				c.Assert(ok, Equals, testCase.expected)
 			}
 		})
 	}
@@ -321,13 +321,14 @@ func (r *AgentSuite) TestRecordLocalTimeline(c *C) {
 		},
 	}
 
+	client := newMockClusterMembership()
 	for _, testCase := range testCases {
 		agent, err := r.newAgent(testCase.agentConfig)
 		c.Assert(err, IsNil)
 		c.Assert(r.becomeActiveMember(testCase.membership, agent), IsNil)
 
 		test.WithTimeout(func(ctx context.Context) {
-			_, err := agent.collectLocalStatus(ctx)
+			_, err := agent.collectLocalStatus(ctx, client)
 			c.Assert(err, IsNil)
 
 			events, err := agent.LocalTimeline.GetEvents(ctx, nil)
@@ -511,12 +512,12 @@ func (r *AgentSuite) TestProvidesTimeline(c *C) {
 
 		test.WithTimeout(func(ctx context.Context) {
 			for _, master := range masters {
-				_, err := master.collectLocalStatus(ctx)
+				_, err := master.collectLocalStatus(ctx, testCase.membership)
 				c.Assert(err, IsNil)
 			}
 
 			for _, node := range nodes {
-				_, err := node.collectLocalStatus(ctx)
+				_, err := node.collectLocalStatus(ctx, testCase.membership)
 				c.Assert(err, IsNil)
 			}
 
@@ -577,10 +578,8 @@ func (r *AgentSuite) newAgent(config testAgentConfig) (*agent, error) {
 		}
 	}
 
-	clusterMembership := newMockClusterMembership()
-
+	client := newMockClusterMembership()
 	agent := &agent{
-		ClusterMembership:       clusterMembership,
 		ClusterTimeline:         memory.NewTimeline(config.clock, timelineCapacity),
 		LocalTimeline:           memory.NewTimeline(config.clock, timelineCapacity),
 		Config:                  agentConfig,
@@ -588,9 +587,10 @@ func (r *AgentSuite) newAgent(config testAgentConfig) (*agent, error) {
 		localStatus:             config.localStatus,
 		lastSeen:                lastSeen,
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
+		newSerfClient:           newMockClusterMembershipCtor,
 	}
 
-	if err := r.becomeActiveMember(clusterMembership, agent); err != nil {
+	if err := r.becomeActiveMember(client, agent); err != nil {
 		return nil, trace.Wrap(err)
 	}
 
@@ -672,6 +672,11 @@ type mockClusterMembership struct {
 	members map[string]membership.ClusterMember
 }
 
+func newMockClusterMembershipCtor() (membership.ClusterMembership, error) {
+	client := newMockClusterMembership()
+	return client, nil
+}
+
 func newMockClusterMembership() *mockClusterMembership {
 	return &mockClusterMembership{
 		members: make(map[string]membership.ClusterMember),
@@ -723,17 +728,10 @@ func (r *AgentSuite) becomeActiveMember(membership *mockClusterMembership, agent
 	return r.becomeMember(membership, agent, MemberAlive)
 }
 
-// func (r *AgentSuite) becomeInactiveMember(membership *mockClusterMembership, agent *agent) error {
-// 	return r.becomeMember(membership, agent, MemberLeft)
-// }
-
 func (r *AgentSuite) becomeMember(membership *mockClusterMembership, agent *agent, status MemberStatus) error {
 	if _, ok := membership.members[agent.Name]; ok {
 		return trace.BadParameter("member already added")
 	}
-
-	// Replace agent's cluster membership.
-	agent.ClusterMembership = membership
 
 	// Add agent to cluster membership.
 	membership.members[agent.Name] = newMockClusterMember(agent, status)

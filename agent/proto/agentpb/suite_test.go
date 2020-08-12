@@ -25,10 +25,8 @@ import (
 )
 
 func init() {
-	if testing.Verbose() {
-		log.SetOutput(os.Stderr)
-		log.SetLevel(log.InfoLevel)
-	}
+	log.SetOutput(os.Stderr)
+	log.SetLevel(log.InfoLevel)
 }
 
 func TestSuite(t *testing.T) { TestingT(t) }
