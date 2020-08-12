@@ -225,9 +225,9 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 	for _, testCase := range testCases {
 		agents := make([]*agent, 0, len(testCase.agentConfigs))
 		for _, agentConfig := range testCase.agentConfigs {
-			agent, err := r.newAgent(agentConfig)
+			agent, err := r.newAgent(agentConfig, testCase.membership)
 			c.Assert(err, IsNil, testCase.comment)
-			c.Assert(r.becomeMember(testCase.membership, agent, agentConfig.memberStatus), IsNil)
+			c.Assert(r.becomeMember(testCase.membership, agent, agentConfig.memberStatus), IsNil, testCase.comment)
 			agents = append(agents, agent)
 		}
 
@@ -275,17 +275,17 @@ func (r *AgentSuite) TestIsMember(c *C) {
 	for _, testCase := range testCases {
 		agents := make([]*agent, 0, len(testCase.agentConfigs))
 		for _, agentConfig := range testCase.agentConfigs {
-			agent, err := r.newAgent(agentConfig)
-			c.Assert(err, IsNil)
-			c.Assert(r.becomeActiveMember(testCase.membership, agent), IsNil)
+			agent, err := r.newAgent(agentConfig, testCase.membership)
+			c.Assert(err, IsNil, testCase.comment)
+			c.Assert(r.becomeActiveMember(testCase.membership, agent), IsNil, testCase.comment)
 			agents = append(agents, agent)
 		}
 
 		test.WithTimeout(func(ctx context.Context) {
 			for _, agent := range agents {
 				ok, err := agent.IsMember()
-				c.Assert(err, IsNil)
-				c.Assert(ok, Equals, testCase.expected)
+				c.Assert(err, IsNil, testCase.comment)
+				c.Assert(ok, Equals, testCase.expected, testCase.comment)
 			}
 		})
 	}
@@ -321,18 +321,17 @@ func (r *AgentSuite) TestRecordLocalTimeline(c *C) {
 		},
 	}
 
-	client := newMockClusterMembership()
 	for _, testCase := range testCases {
-		agent, err := r.newAgent(testCase.agentConfig)
-		c.Assert(err, IsNil)
-		c.Assert(r.becomeActiveMember(testCase.membership, agent), IsNil)
+		agent, err := r.newAgent(testCase.agentConfig, testCase.membership)
+		c.Assert(err, IsNil, testCase.comment)
+		c.Assert(r.becomeActiveMember(testCase.membership, agent), IsNil, testCase.comment)
 
 		test.WithTimeout(func(ctx context.Context) {
-			_, err := agent.collectLocalStatus(ctx, client)
-			c.Assert(err, IsNil)
+			_, err := agent.collectLocalStatus(ctx, testCase.membership)
+			c.Assert(err, IsNil, testCase.comment)
 
 			events, err := agent.LocalTimeline.GetEvents(ctx, nil)
-			c.Assert(err, IsNil)
+			c.Assert(err, IsNil, testCase.comment)
 			c.Assert(events, test.DeepCompare, testCase.expected, testCase.comment)
 		})
 	}
@@ -361,15 +360,15 @@ func (r *AgentSuite) TestRecordTimeline(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		agent, err := r.newAgent(testCase.agentConfig)
-		c.Assert(err, IsNil)
-		c.Assert(r.becomeActiveMember(testCase.membership, agent), IsNil)
+		agent, err := r.newAgent(testCase.agentConfig, testCase.membership)
+		c.Assert(err, IsNil, testCase.comment)
+		c.Assert(r.becomeActiveMember(testCase.membership, agent), IsNil, testCase.comment)
 
 		test.WithTimeout(func(ctx context.Context) {
-			c.Assert(agent.RecordClusterEvents(ctx, testCase.events), IsNil)
+			c.Assert(agent.RecordClusterEvents(ctx, testCase.events), IsNil, testCase.comment)
 
 			events, err := agent.ClusterTimeline.GetEvents(ctx, nil)
-			c.Assert(err, IsNil)
+			c.Assert(err, IsNil, testCase.comment)
 			c.Assert(events, test.DeepCompare, testCase.expected, testCase.comment)
 		})
 	}
@@ -410,17 +409,18 @@ func (r *AgentSuite) TestAgentProvidesLastSeen(c *C) {
 		},
 	}
 
+	client := newMockClusterMembership()
 	for _, testCase := range testCases {
-		agent, err := r.newAgent(testCase.agentConfig)
-		c.Assert(err, IsNil)
+		agent, err := r.newAgent(testCase.agentConfig, client)
+		c.Assert(err, IsNil, testCase.comment)
 
 		test.WithTimeout(func(ctx context.Context) {
 			for _, timestamp := range testCase.timestamps {
-				c.Assert(agent.RecordLastSeen(agent.Name, timestamp), IsNil)
+				c.Assert(agent.RecordLastSeen(agent.Name, timestamp), IsNil, testCase.comment)
 			}
 
 			timestamp, err := agent.LastSeen(agent.Name)
-			c.Assert(err, IsNil)
+			c.Assert(err, IsNil, testCase.comment)
 			c.Assert(timestamp, test.DeepCompare, testCase.expected, testCase.comment)
 		})
 	}
@@ -496,34 +496,34 @@ func (r *AgentSuite) TestProvidesTimeline(c *C) {
 	for _, testCase := range testCases {
 		masters := make([]*agent, 0, len(testCase.masterConfigs))
 		for _, masterConfig := range testCase.masterConfigs {
-			master, err := r.newAgent(masterConfig)
-			c.Assert(err, IsNil)
-			c.Assert(r.becomeActiveMember(testCase.membership, master), IsNil)
+			master, err := r.newAgent(masterConfig, testCase.membership)
+			c.Assert(err, IsNil, testCase.comment)
+			c.Assert(r.becomeActiveMember(testCase.membership, master), IsNil, testCase.comment)
 			masters = append(masters, master)
 		}
 
 		nodes := make([]*agent, 0, len(testCase.nodeConfigs))
 		for _, nodeConfig := range testCase.nodeConfigs {
-			node, err := r.newAgent(nodeConfig)
-			c.Assert(err, IsNil)
-			c.Assert(r.becomeActiveMember(testCase.membership, node), IsNil)
+			node, err := r.newAgent(nodeConfig, testCase.membership)
+			c.Assert(err, IsNil, testCase.comment)
+			c.Assert(r.becomeActiveMember(testCase.membership, node), IsNil, testCase.comment)
 			nodes = append(nodes, node)
 		}
 
 		test.WithTimeout(func(ctx context.Context) {
 			for _, master := range masters {
 				_, err := master.collectLocalStatus(ctx, testCase.membership)
-				c.Assert(err, IsNil)
+				c.Assert(err, IsNil, testCase.comment)
 			}
 
 			for _, node := range nodes {
 				_, err := node.collectLocalStatus(ctx, testCase.membership)
-				c.Assert(err, IsNil)
+				c.Assert(err, IsNil, testCase.comment)
 			}
 
 			for _, master := range masters {
 				events, err := master.GetTimeline(ctx, nil)
-				c.Assert(err, IsNil)
+				c.Assert(err, IsNil, testCase.comment)
 				c.Assert(events, test.DeepCompare, testCase.expected, testCase.comment)
 			}
 		})
@@ -554,7 +554,7 @@ func (config *testAgentConfig) setDefaults() {
 }
 
 // newAgent creates a new agent instance.
-func (r *AgentSuite) newAgent(config testAgentConfig) (*agent, error) {
+func (r *AgentSuite) newAgent(config testAgentConfig, client *mockClusterMembership) (*agent, error) {
 	// timelineCapacity specifies the default timeline capacity for tests.
 	const timelineCapacity = 256
 	// clusterCapacity specifies the max number of nodes in a test cluster.
@@ -578,7 +578,6 @@ func (r *AgentSuite) newAgent(config testAgentConfig) (*agent, error) {
 		}
 	}
 
-	client := newMockClusterMembership()
 	agent := &agent{
 		ClusterTimeline:         memory.NewTimeline(config.clock, timelineCapacity),
 		LocalTimeline:           memory.NewTimeline(config.clock, timelineCapacity),
@@ -587,7 +586,7 @@ func (r *AgentSuite) newAgent(config testAgentConfig) (*agent, error) {
 		localStatus:             config.localStatus,
 		lastSeen:                lastSeen,
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
-		newSerfClient:           newMockClusterMembershipCtor,
+		newSerfClient:           newClusterMembershipFrom(client),
 	}
 
 	if err := r.becomeActiveMember(client, agent); err != nil {
@@ -672,9 +671,10 @@ type mockClusterMembership struct {
 	members map[string]membership.ClusterMember
 }
 
-func newMockClusterMembershipCtor() (membership.ClusterMembership, error) {
-	client := newMockClusterMembership()
-	return client, nil
+func newClusterMembershipFrom(client *mockClusterMembership) func() (membership.ClusterMembership, error) {
+	return func() (membership.ClusterMembership, error) {
+		return client, nil
+	}
 }
 
 func newMockClusterMembership() *mockClusterMembership {
@@ -729,10 +729,6 @@ func (r *AgentSuite) becomeActiveMember(membership *mockClusterMembership, agent
 }
 
 func (r *AgentSuite) becomeMember(membership *mockClusterMembership, agent *agent, status MemberStatus) error {
-	if _, ok := membership.members[agent.Name]; ok {
-		return trace.BadParameter("member already added")
-	}
-
 	// Add agent to cluster membership.
 	membership.members[agent.Name] = newMockClusterMember(agent, status)
 
