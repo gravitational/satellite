@@ -586,7 +586,7 @@ func (r *AgentSuite) newAgent(config testAgentConfig, client *mockClusterMembers
 		localStatus:             config.localStatus,
 		lastSeen:                lastSeen,
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
-		newSerfClient:           newClusterMembershipFrom(client),
+		newSerfClientFunc:       newClusterMembershipFrom(client),
 	}
 
 	if err := r.becomeActiveMember(client, agent); err != nil {

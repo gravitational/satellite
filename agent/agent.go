@@ -178,7 +178,8 @@ type agent struct {
 	// g manages the internal agent's processes
 	g ctxgroup.Group
 
-	newSerfClient func() (membership.ClusterMembership, error)
+	// newSerfClientFunc is used to create a serf client on demand.
+	newSerfClientFunc func() (membership.ClusterMembership, error)
 }
 
 // New creates an instance of an agent based on configuration options given in config.
@@ -238,7 +239,7 @@ func New(config *Config) (*agent, error) {
 		cancel:                  cancel,
 		g:                       g,
 	}
-	agent.newSerfClient = agent.newSerfClientImpl
+	agent.newSerfClientFunc = agent.newSerfClient
 
 	agent.rpc, err = newRPCServer(agent, config.CAFile, config.CertFile, config.KeyFile, config.RPCAddrs)
 	if err != nil {
@@ -277,7 +278,7 @@ func (r *agent) Start() error {
 
 // IsMember returns true if this agent is a member of the serf cluster
 func (r *agent) IsMember() (ok bool, err error) {
-	client, err := r.newSerfClient()
+	client, err := r.newSerfClientFunc()
 	if err != nil {
 		return false, trace.Wrap(err)
 	}
@@ -301,7 +302,7 @@ func (r *agent) IsMember() (ok bool, err error) {
 
 // Join attempts to join a serf cluster identified by peers.
 func (r *agent) Join(peers []string) error {
-	client, err := r.newSerfClient()
+	client, err := r.newSerfClientFunc()
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -558,7 +559,7 @@ func (r *agent) collectStatus(ctx context.Context) (systemStatus *pb.SystemStatu
 	ctx, cancel := context.WithTimeout(ctx, StatusUpdateTimeout)
 	defer cancel()
 
-	client, err := r.newSerfClient()
+	client, err := r.newSerfClientFunc()
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -749,15 +750,18 @@ func (r *agent) recentLocalStatus() *pb.NodeStatus {
 	return r.localStatus
 }
 
-// newSerfClientImpl creates a new instance of the serf client and immediately applies the
-// the provided tags.
-func (r *agent) newSerfClientImpl() (membership.ClusterMembership, error) {
+// newSerfClient creates a new instance of the serf client and immediately
+// applies the the provided tags.
+//
+// It is responsibility of the caller to close the returned client.
+func (r *agent) newSerfClient() (membership.ClusterMembership, error) {
 	client, err := membership.NewSerfClient(r.Config.SerfConfig)
 	if err != nil {
-		return nil, trace.Wrap(err, "failed to connect to serf")
+		return nil, trace.Wrap(err, "failed to connect to serf agent: %v", r.Config.SerfConfig)
 	}
-	if err = client.UpdateTags(r.Config.Tags, nil); err != nil {
-		return nil, trace.Wrap(err, "failed to update serf agent tags")
+	err = client.UpdateTags(r.Config.Tags, nil)
+	if err != nil {
+		return nil, trace.Wrap(err, "failed to update serf agent tags: %v", r.Config.Tags)
 	}
 	return client, nil
 }
