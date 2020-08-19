@@ -1,5 +1,5 @@
 /*
-Copyright 2016 Gravitational, Inc.
+Copyright 2016-2020 Gravitational, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -149,6 +149,65 @@ func (_ *StorageSuite) TestMatchesFilesystem(c *C) {
 	}.probe(c, "discards rootfs", shallSucceed)
 }
 
+// TestPathOwnership validates the path uid/gid checker.
+func (*StorageSuite) TestPathOwnership(c *C) {
+	storageChecker{
+		StorageConfig: StorageConfig{
+			Path: c.MkDir(),
+			UID:  uint32P(2000),
+			GID:  uint32P(3000),
+		},
+		osInterface: testOS{uidGID: uidGID{uid: 2000, gid: 3000}},
+	}.probe(c, "UID and GID match", shallSucceed)
+
+	storageChecker{
+		StorageConfig: StorageConfig{
+			Path: c.MkDir(),
+			UID:  uint32P(2000),
+		},
+		osInterface: testOS{uidGID: uidGID{uid: 2000, gid: 3000}},
+	}.probe(c, "UID matches", shallSucceed)
+
+	storageChecker{
+		StorageConfig: StorageConfig{
+			Path: c.MkDir(),
+			GID:  uint32P(3000),
+		},
+		osInterface: testOS{uidGID: uidGID{uid: 2000, gid: 3000}},
+	}.probe(c, "GID matches", shallSucceed)
+
+	storageChecker{
+		StorageConfig: StorageConfig{
+			Path: c.MkDir(),
+			UID:  uint32P(3000),
+			GID:  uint32P(3000),
+		},
+		osInterface: testOS{uidGID: uidGID{uid: 2000, gid: 3000}},
+	}.probe(c, "UID doesn't match", shallFail)
+
+	storageChecker{
+		StorageConfig: StorageConfig{
+			Path: c.MkDir(),
+			UID:  uint32P(2000),
+			GID:  uint32P(4000),
+		},
+		osInterface: testOS{uidGID: uidGID{uid: 2000, gid: 3000}},
+	}.probe(c, "GID doesn't match", shallFail)
+
+	storageChecker{
+		StorageConfig: StorageConfig{
+			Path: c.MkDir(),
+			UID:  uint32P(3000),
+			GID:  uint32P(4000),
+		},
+		osInterface: testOS{uidGID: uidGID{uid: 2000, gid: 3000}},
+	}.probe(c, "UID and GID don't match", shallFail)
+}
+
+func uint32P(i uint32) *uint32 {
+	return &i
+}
+
 func (ch storageChecker) probe(c *C, msg string, success bool) {
 	var probes health.Probes
 
@@ -174,6 +233,7 @@ type testOS struct {
 	mountList
 	bytesPerSecond
 	bytesAvail
+	uidGID
 }
 
 func (r mountList) mounts() ([]sigar.FileSystem, error) {
@@ -192,3 +252,11 @@ func (r bytesAvail) diskCapacity(string) (uint64, uint64, error) {
 
 type bytesPerSecond uint64
 type bytesAvail uint64
+
+type uidGID struct {
+	uid, gid uint32
+}
+
+func (r uidGID) getUIDGID(string) (uint32, uint32, error) {
+	return r.uid, r.gid, nil
+}
