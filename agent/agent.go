@@ -551,12 +551,8 @@ func (r *agent) defaultUnknownStatus() *pb.NodeStatus {
 	return &pb.NodeStatus{
 		Name: r.Name,
 		MemberStatus: &pb.MemberStatus{
-			Name:   r.Name,
-			Addr:   r.RPCAddrs[0],
-			Status: pb.MemberStatus_None,
-			Tags:   r.Tags,
+			Name: r.Name,
 		},
-		Status: pb.NodeStatus_Unknown,
 	}
 }
 
@@ -774,18 +770,14 @@ func (r *agent) setLocalStatus(status *pb.NodeStatus) {
 	r.localStatus = status
 }
 
-// newSerfClient creates a new instance of the serf client and immediately
-// applies the the provided tags.
+// newSerfClient creates a new instance of the serf client.
 //
 // It is responsibility of the caller to close the returned client.
 func (r *agent) newSerfClient() (membership.ClusterMembership, error) {
 	client, err := membership.NewSerfClient(r.Config.SerfConfig)
 	if err != nil {
-		return nil, trace.Wrap(err, "failed to connect to serf agent: %v", r.Config.SerfConfig)
-	}
-	err = client.UpdateTags(r.Config.Tags, nil)
-	if err != nil {
-		return nil, trace.Wrap(err, "failed to update serf agent tags: %v", r.Config.Tags)
+		return nil, trace.Wrap(err, "failed to connect to serf agent: %#v",
+			r.Config.SerfConfig)
 	}
 	return client, nil
 }
