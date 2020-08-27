@@ -540,14 +540,8 @@ func (r *agent) statusUpdateLoop(ctx context.Context) error {
 func (r *agent) updateStatus(ctx context.Context) error {
 	ctxStatus, cancel := context.WithTimeout(ctx, r.statusQueryReplyTimeout)
 	defer cancel()
-	status, err := r.collectStatus(ctxStatus)
-	if err != nil {
-		return trace.Wrap(err, "error collecting system status")
-	}
-	if status == nil {
-		return nil
-	}
-	if err := r.Cache.UpdateStatus(status); err != nil {
+	status := r.collectStatus(ctxStatus)
+	if err := r.Cache.UpdateStatus(&status); err != nil {
 		return trace.Wrap(err, "error updating system status in cache")
 	}
 	return nil
@@ -555,25 +549,34 @@ func (r *agent) updateStatus(ctx context.Context) error {
 
 // collectStatus obtains the cluster status by querying statuses of
 // known cluster members.
-func (r *agent) collectStatus(ctx context.Context) (systemStatus *pb.SystemStatus, err error) {
+func (r *agent) collectStatus(ctx context.Context) pb.SystemStatus {
 	ctx, cancel := context.WithTimeout(ctx, StatusUpdateTimeout)
 	defer cancel()
 
 	client, err := r.newSerfClientFunc()
 	if err != nil {
-		return nil, trace.Wrap(err)
+		log.WithError(err).Error("Failed to create serf client.")
+		return pb.SystemStatus{
+			Status:    pb.SystemStatus_Degraded,
+			Timestamp: pb.NewTimeToProto(r.Clock.Now()),
+			Summary:   fmt.Sprintf("failed to create serf client: %v", err),
+		}
 	}
 	defer client.Close()
 
-	systemStatus = &pb.SystemStatus{
-		Status:    pb.SystemStatus_Unknown,
-		Timestamp: pb.NewTimeToProto(r.Clock.Now()),
-	}
-
 	members, err := client.Members()
 	if err != nil {
-		log.WithError(err).Warn("Failed to query serf members.")
-		return nil, trace.Wrap(err, "failed to query serf members")
+		log.WithError(err).Error("Failed to query serf members.")
+		return pb.SystemStatus{
+			Status:    pb.SystemStatus_Degraded,
+			Timestamp: pb.NewTimeToProto(r.Clock.Now()),
+			Summary:   fmt.Sprintf("failed to query serf members: %v", err),
+		}
+	}
+
+	systemStatus := pb.SystemStatus{
+		Status:    pb.SystemStatus_Unknown,
+		Timestamp: pb.NewTimeToProto(r.Clock.Now()),
 	}
 
 	log.Debugf("Started collecting statuses from members %v.", members)
@@ -610,9 +613,9 @@ L:
 		}
 	}
 
-	setSystemStatus(systemStatus, members)
+	setSystemStatus(&systemStatus, members)
 
-	return systemStatus, nil
+	return systemStatus
 }
 
 // collectLocalStatus executes monitoring tests on the local node.
