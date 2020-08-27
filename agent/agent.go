@@ -547,6 +547,19 @@ func (r *agent) updateStatus(ctx context.Context) error {
 	return nil
 }
 
+func (r *agent) defaultUnknownStatus() *pb.NodeStatus {
+	return &pb.NodeStatus{
+		Name: r.Name,
+		MemberStatus: &pb.MemberStatus{
+			Name:   r.Name,
+			Addr:   r.RPCAddrs[0],
+			Status: pb.MemberStatus_None,
+			Tags:   r.Tags,
+		},
+		Status: pb.NodeStatus_Unknown,
+	}
+}
+
 // collectStatus obtains the cluster status by querying statuses of
 // known cluster members.
 func (r *agent) collectStatus(ctx context.Context) pb.SystemStatus {
@@ -556,6 +569,7 @@ func (r *agent) collectStatus(ctx context.Context) pb.SystemStatus {
 	client, err := r.newSerfClientFunc()
 	if err != nil {
 		log.WithError(err).Error("Failed to create serf client.")
+		r.setLocalStatus(r.defaultUnknownStatus())
 		return pb.SystemStatus{
 			Status:    pb.SystemStatus_Degraded,
 			Timestamp: pb.NewTimeToProto(r.Clock.Now()),
@@ -567,6 +581,7 @@ func (r *agent) collectStatus(ctx context.Context) pb.SystemStatus {
 	members, err := client.Members()
 	if err != nil {
 		log.WithError(err).Error("Failed to query serf members.")
+		r.setLocalStatus(r.defaultUnknownStatus())
 		return pb.SystemStatus{
 			Status:    pb.SystemStatus_Degraded,
 			Timestamp: pb.NewTimeToProto(r.Clock.Now()),
@@ -751,6 +766,12 @@ func (r *agent) recentLocalStatus() *pb.NodeStatus {
 	r.Lock()
 	defer r.Unlock()
 	return r.localStatus
+}
+
+func (r *agent) setLocalStatus(status *pb.NodeStatus) {
+	r.Lock()
+	defer r.Unlock()
+	r.localStatus = status
 }
 
 // newSerfClient creates a new instance of the serf client and immediately
