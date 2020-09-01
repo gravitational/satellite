@@ -541,7 +541,7 @@ func (r *agent) updateStatus(ctx context.Context) error {
 	ctxStatus, cancel := context.WithTimeout(ctx, r.statusQueryReplyTimeout)
 	defer cancel()
 	status := r.collectStatus(ctxStatus)
-	if err := r.Cache.UpdateStatus(&status); err != nil {
+	if err := r.Cache.UpdateStatus(status); err != nil {
 		return trace.Wrap(err, "error updating system status in cache")
 	}
 	return nil
@@ -558,7 +558,7 @@ func (r *agent) defaultUnknownStatus() *pb.NodeStatus {
 
 // collectStatus obtains the cluster status by querying statuses of
 // known cluster members.
-func (r *agent) collectStatus(ctx context.Context) pb.SystemStatus {
+func (r *agent) collectStatus(ctx context.Context) *pb.SystemStatus {
 	ctx, cancel := context.WithTimeout(ctx, StatusUpdateTimeout)
 	defer cancel()
 
@@ -566,7 +566,7 @@ func (r *agent) collectStatus(ctx context.Context) pb.SystemStatus {
 	if err != nil {
 		log.WithError(err).Error("Failed to create serf client.")
 		r.setLocalStatus(r.defaultUnknownStatus())
-		return pb.SystemStatus{
+		return &pb.SystemStatus{
 			Status:    pb.SystemStatus_Degraded,
 			Timestamp: pb.NewTimeToProto(r.Clock.Now()),
 			Summary:   fmt.Sprintf("failed to create serf client: %v", err),
@@ -578,14 +578,14 @@ func (r *agent) collectStatus(ctx context.Context) pb.SystemStatus {
 	if err != nil {
 		log.WithError(err).Error("Failed to query serf members.")
 		r.setLocalStatus(r.defaultUnknownStatus())
-		return pb.SystemStatus{
+		return &pb.SystemStatus{
 			Status:    pb.SystemStatus_Degraded,
 			Timestamp: pb.NewTimeToProto(r.Clock.Now()),
 			Summary:   fmt.Sprintf("failed to query serf members: %v", err),
 		}
 	}
 
-	systemStatus := pb.SystemStatus{
+	systemStatus := &pb.SystemStatus{
 		Status:    pb.SystemStatus_Unknown,
 		Timestamp: pb.NewTimeToProto(r.Clock.Now()),
 	}
@@ -624,7 +624,7 @@ L:
 		}
 	}
 
-	setSystemStatus(&systemStatus, members)
+	setSystemStatus(systemStatus, members)
 
 	return systemStatus
 }
