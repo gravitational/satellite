@@ -58,6 +58,8 @@ func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 		times map[string]time.Time
 		// result is the time drift check result.
 		result []*agentpb.Probe
+		// slow indicates the server should respond slowly
+		slow bool
 	}{
 		{
 			comment: "Acceptable time drift",
@@ -117,6 +119,18 @@ func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 				s.c.failureProbe(node3, driftOverThreshold()),
 			},
 		},
+		{
+			comment: "Time drift takes too long to respond silently discarding results",
+			slow:    true,
+			nodes:   []serf.Member{node1, node2, node3},
+			times: map[string]time.Time{
+				node2.Name: s.clock.Now().Add(-driftOverThreshold()),
+				node3.Name: s.clock.Now().Add(driftOverThreshold()),
+			},
+			result: []*agentpb.Probe{
+				s.c.successProbe(),
+			},
+		},
 	}
 	for _, test := range tests {
 		checker := &timeDriftChecker{
@@ -126,7 +140,7 @@ func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 				Clock:      s.clock,
 			},
 			FieldLogger: logrus.WithField(trace.Component, "test"),
-			clients:     newClientsCache(test.times),
+			clients:     newClientsCache(test.times, test.slow),
 		}
 		var probes health.Probes
 		checker.Check(context.TODO(), &probes)
@@ -147,10 +161,12 @@ func driftUnderThreshold() time.Duration {
 
 type mockedTimeAgentClient struct {
 	time time.Time
+	// slow indicates whether the client should return results slowly
+	slow bool
 }
 
-func newMockedTimeAgentClient(time time.Time) *mockedTimeAgentClient {
-	return &mockedTimeAgentClient{time: time}
+func newMockedTimeAgentClient(time time.Time, slow bool) *mockedTimeAgentClient {
+	return &mockedTimeAgentClient{time: time, slow: slow}
 }
 
 func (a *mockedTimeAgentClient) Status(ctx context.Context) (*agentpb.SystemStatus, error) {
@@ -167,6 +183,9 @@ func (a *mockedTimeAgentClient) LastSeen(ctx context.Context,
 }
 
 func (a *mockedTimeAgentClient) Time(ctx context.Context, req *agentpb.TimeRequest) (*agentpb.TimeResponse, error) {
+	if a.slow {
+		return nil, context.DeadlineExceeded
+	}
 	return &agentpb.TimeResponse{
 		Timestamp: agentpb.NewTimeToProto(a.time),
 	}, nil
@@ -195,10 +214,10 @@ func (a *mockedTimeAgentClient) Close() error {
 	return nil
 }
 
-func newClientsCache(times map[string]time.Time) map[string]client.Client {
+func newClientsCache(times map[string]time.Time, slow bool) map[string]client.Client {
 	clients := make(map[string]client.Client)
 	for nodeName, nodeTime := range times {
-		clients[nodes[nodeName].Addr.String()] = newMockedTimeAgentClient(nodeTime)
+		clients[nodes[nodeName].Addr.String()] = newMockedTimeAgentClient(nodeTime, slow)
 	}
 	return clients
 }

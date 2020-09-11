@@ -40,6 +40,14 @@ const (
 	// timeDriftThreshold sets the default threshold of the acceptable time
 	// difference between nodes.
 	timeDriftThreshold = 300 * time.Millisecond
+
+	// timeDriftCheckTimeout drops time checks where the RPC call to the remote server take too long to respond.
+	// If the client or server is busy and the request takes time to be processed, this will cause an innaccurate
+	// comparison of the current time.
+	timeDriftCheckTimeout = 100 * time.Millisecond
+
+	// parallelRoutines indicates how many parallel queries we should run to peer nodes
+	parallelRoutines = 20
 )
 
 // timeDriftChecker is a checker that verifies that the time difference between
@@ -133,16 +141,43 @@ func (c *timeDriftChecker) check(ctx context.Context, r health.Reporter) (err er
 	if err != nil {
 		return trace.Wrap(err)
 	}
+
+	nodesC := make(chan serf.Member, len(nodes))
 	for _, node := range nodes {
-		drift, err := c.getTimeDrift(ctx, node)
-		if err != nil {
-			log.WithError(err).Debug("Failed to get time drift.")
-			continue
-		}
-		if isDriftHigh(drift) {
-			r.Add(c.failureProbe(node, drift))
-		}
+		nodesC <- node
 	}
+
+	var mutex sync.Mutex
+
+	var wg sync.WaitGroup
+
+	wg.Add(parallelRoutines)
+
+	for i := 0; i < parallelRoutines; i++ {
+		go func() {
+			for {
+				select {
+				case node := <-nodesC:
+					drift, err := c.getTimeDrift(ctx, node)
+					if err != nil {
+						log.WithError(err).Debug("Failed to get time drift.")
+						continue
+					}
+
+					if isDriftHigh(drift) {
+						mutex.Lock()
+						r.Add(c.failureProbe(node, drift))
+						mutex.Unlock()
+					}
+				default:
+					wg.Done()
+					return
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
 	return nil
 }
 
@@ -182,6 +217,11 @@ func (c *timeDriftChecker) getTimeDrift(ctx context.Context, node serf.Member) (
 	// Obtain this node's local timestamp.
 	t1Start := c.Clock.Now().UTC()
 
+	// if the RPC call takes a long duration it will result in an innaccurate comparison. Timeout the RPC
+	// call to reduce false positives on a slow server.
+	ctx, cancel := context.WithTimeout(ctx, timeDriftCheckTimeout)
+	defer cancel()
+
 	// Send "time" request to the specified node.
 	t2Response, err := agentClient.Time(ctx, &pb.TimeRequest{})
 	if err != nil {
@@ -203,7 +243,7 @@ func (c *timeDriftChecker) getTimeDrift(ctx context.Context, node serf.Member) (
 	// Finally calculate the time drift between this and the specified node
 	// using formula: T2 - T1Start - Latency.
 	t2 := t2Response.GetTimestamp().ToTime()
-	drift := t2.Sub(t1Start) - latency
+	drift := t2.Sub(c.Clock.Now().UTC()) - latency
 
 	c.WithField("node", node.Name).Debugf("T1Start: %v; T2: %v; Latency: %v; Drift: %v.",
 		t1Start, t2, latency, drift)
