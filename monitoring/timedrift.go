@@ -42,7 +42,7 @@ const (
 	timeDriftThreshold = 300 * time.Millisecond
 
 	// timeDriftCheckTimeout drops time checks where the RPC call to the remote server take too long to respond.
-	// If the client or server is busy and the request takes time to be processed, this will cause an innaccurate
+	// If the client or server is busy and the request takes time to be processed, this will cause an inaccurate
 	// comparison of the current time.
 	timeDriftCheckTimeout = 100 * time.Millisecond
 
@@ -217,7 +217,7 @@ func (c *timeDriftChecker) getTimeDrift(ctx context.Context, node serf.Member) (
 	// Obtain this node's local timestamp.
 	t1Start := c.Clock.Now().UTC()
 
-	// if the RPC call takes a long duration it will result in an innaccurate comparison. Timeout the RPC
+	// if the RPC call takes a long duration it will result in an inaccurate comparison. Timeout the RPC
 	// call to reduce false positives on a slow server.
 	ctx, cancel := context.WithTimeout(ctx, timeDriftCheckTimeout)
 	defer cancel()
@@ -241,9 +241,9 @@ func (c *timeDriftChecker) getTimeDrift(ctx context.Context, node serf.Member) (
 	latency := c.Clock.Now().UTC().Sub(t1Start) / 2
 
 	// Finally calculate the time drift between this and the specified node
-	// using formula: T2 - T1Start - Latency.
+	// using formula: now - t2 - latency.
 	t2 := t2Response.GetTimestamp().ToTime()
-	drift := t2.Sub(c.Clock.Now().UTC()) - latency
+	drift := c.Clock.Now().UTC().Sub(t2) - latency
 
 	c.WithField("node", node.Name).Debugf("T1Start: %v; T2: %v; Latency: %v; Drift: %v.",
 		t1Start, t2, latency, drift)
