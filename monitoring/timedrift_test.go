@@ -140,10 +140,17 @@ func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 				Clock:      s.clock,
 			},
 			FieldLogger: logrus.WithField(trace.Component, "test"),
-			clients:     newClientsCache(test.times, test.slow),
+			clients:     newClientsCache(test.times),
 		}
 		var probes health.Probes
-		checker.Check(context.TODO(), &probes)
+
+		ctx, cancel := context.WithCancel(context.Background())
+
+		if test.slow {
+			cancel()
+		}
+
+		checker.Check(ctx, &probes)
 		c.Assert(probes.GetProbes(), check.DeepEquals, test.result,
 			check.Commentf(test.comment))
 	}
@@ -161,12 +168,10 @@ func driftUnderThreshold() time.Duration {
 
 type mockedTimeAgentClient struct {
 	time time.Time
-	// slow indicates whether the client should return results slowly
-	slow bool
 }
 
-func newMockedTimeAgentClient(time time.Time, slow bool) *mockedTimeAgentClient {
-	return &mockedTimeAgentClient{time: time, slow: slow}
+func newMockedTimeAgentClient(time time.Time) *mockedTimeAgentClient {
+	return &mockedTimeAgentClient{time: time}
 }
 
 func (a *mockedTimeAgentClient) Status(ctx context.Context) (*agentpb.SystemStatus, error) {
@@ -183,8 +188,10 @@ func (a *mockedTimeAgentClient) LastSeen(ctx context.Context,
 }
 
 func (a *mockedTimeAgentClient) Time(ctx context.Context, req *agentpb.TimeRequest) (*agentpb.TimeResponse, error) {
-	if a.slow {
-		return nil, context.DeadlineExceeded
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
 	}
 	return &agentpb.TimeResponse{
 		Timestamp: agentpb.NewTimeToProto(a.time),
@@ -214,10 +221,10 @@ func (a *mockedTimeAgentClient) Close() error {
 	return nil
 }
 
-func newClientsCache(times map[string]time.Time, slow bool) map[string]client.Client {
+func newClientsCache(times map[string]time.Time) map[string]client.Client {
 	clients := make(map[string]client.Client)
 	for nodeName, nodeTime := range times {
-		clients[nodes[nodeName].Addr.String()] = newMockedTimeAgentClient(nodeTime, slow)
+		clients[nodes[nodeName].Addr.String()] = newMockedTimeAgentClient(nodeTime)
 	}
 	return clients
 }
