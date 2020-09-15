@@ -240,6 +240,16 @@ func (s *Server) Start() error {
 			s.Fatalf("ListenAndServe(): %s", err)
 		}
 	}()
+	go func() {
+		unixListener, err := net.Listen("unix", "/run/nethealth/nethealth.sock")
+		if err != nil {
+			panic(err)
+		}
+
+		if err := s.httpServer.Serve(unixListener); err != http.ErrServerClosed {
+			s.Fatalf("Unix Listen(): %s", err)
+		}
+	}()
 
 	s.Info("Started nethealth with config:")
 	s.Info("  PrometheusPort: ", s.config.PrometheusPort)

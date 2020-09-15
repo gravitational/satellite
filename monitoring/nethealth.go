@@ -20,8 +20,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io/ioutil"
 	"math"
-	"net/url"
+	"net"
+	"net/http"
 	"sync"
 	"time"
 
@@ -30,7 +32,6 @@ import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/utils"
 
-	"github.com/gravitational/roundtrip"
 	"github.com/gravitational/trace"
 	"github.com/gravitational/ttlmap/v2"
 	dto "github.com/prometheus/client_model/go"
@@ -39,6 +40,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+)
+
+const (
+	DefaultNethealthSocket = "/run/nethealth/nethealth.sock"
 )
 
 // NethealthConfig specifies configuration for a nethealth checker.
@@ -128,16 +133,7 @@ func (c *nethealthChecker) check(ctx context.Context, reporter health.Reporter) 
 		return nil
 	}
 
-	addr, err := c.getNethealthAddr()
-	if trace.IsNotFound(err) {
-		log.Debug("Nethealth pod was not found.")
-		return nil // pod was not found, log and treat gracefully
-	}
-	if err != nil {
-		return trace.Wrap(err) // received unexpected error, maybe network-related, will add error probe above
-	}
-
-	resp, err := fetchNethealthMetrics(ctx, addr)
+	resp, err := c.fetchNethealthMetrics(ctx)
 	if err != nil {
 		return trace.Wrap(err, "failed to fetch nethealth metrics")
 	}
@@ -331,12 +327,32 @@ func nethealthFailureProbe(name, peer string, packetLoss float64) *pb.Probe {
 
 // fetchNethealthMetrics collects the network metrics from the nethealth pod
 // specified by addr. Returns the resp as an array of bytes.
-func fetchNethealthMetrics(ctx context.Context, addr string) ([]byte, error) {
-	client, err := roundtrip.NewClient(addr, "")
-	if err != nil {
-		return nil, trace.Wrap(err, "failed to connect to nethealth service at %s.", addr)
-	}
+func (c *nethealthChecker) fetchNethealthMetrics(ctx context.Context) (res []byte, err error) {
+	/*if c.cachedNethealthAddress != "" {
+		c.cachedNethealthAddress, err = c.getNethealthAddr()
+		if trace.IsNotFound(err) {
+			log.Debug("Nethealth pod was not found.")
+			return nil, nil // pod was not found, log and treat gracefully
+		}
 
+		if err != nil {
+			return nil, trace.Wrap(err) // received unexpected error, maybe network-related, will add error probe above
+		}
+	}*/
+	/*
+		client, err := roundtrip.NewClient(c.cachedNethealthAddress, "")
+		if err != nil {
+			return nil, trace.Wrap(err, "failed to connect to nethealth service at %s.", c.cachedNethealthAddress)
+		}
+	*/
+
+	client := http.Client{
+		Transport: &http.Transport{
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+				return net.Dial("unix", DefaultNethealthSocket)
+			},
+		},
+	}
 	// The two relevant metrics exposed by nethealth are 'nethealth_echo_request_total' and
 	// 'nethealth_echo_timeout_total'. We expect a pair of request/timeout metrics per peer.
 	// Example metrics received from nethealth may look something like the output below:
@@ -349,11 +365,27 @@ func fetchNethealthMetrics(ctx context.Context, addr string) ([]byte, error) {
 	//      # TYPE nethealth_echo_timeout_total counter
 	//      nethealth_echo_timeout_total{node_name="10.128.0.96",peer_name="10.128.0.70"} 37
 	//      nethealth_echo_timeout_total{node_name="10.128.0.96",peer_name="10.128.0.97"} 0
-	resp, err := client.Get(ctx, client.Endpoint("metrics"), url.Values{})
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "unix/metrics", nil)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	return resp.Bytes(), nil
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		buffer, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, trace.ConvertSystemError(err)
+		}
+
+		return buffer, nil
+	}
+
+	return nil, trace.BadParameter("unexpected response from %s: %v", DefaultNethealthSocket, resp.Status)
 }
 
 // parseMetrics parses the provided data and returns the structured network
