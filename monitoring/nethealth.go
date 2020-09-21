@@ -30,6 +30,7 @@ import (
 	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/lib/nethealth"
 	"github.com/gravitational/satellite/utils"
 
 	"github.com/gravitational/trace"
@@ -40,10 +41,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
-)
-
-const (
-	DefaultNethealthSocket = "/run/nethealth/nethealth.sock"
 )
 
 // NethealthConfig specifies configuration for a nethealth checker.
@@ -345,11 +342,10 @@ func (c *nethealthChecker) fetchNethealthMetrics(ctx context.Context) (res []byt
 			return nil, trace.Wrap(err, "failed to connect to nethealth service at %s.", c.cachedNethealthAddress)
 		}
 	*/
-
 	client := http.Client{
 		Transport: &http.Transport{
 			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", DefaultNethealthSocket)
+				return net.Dial("unix", nethealth.DefaultNethealthSocket)
 			},
 		},
 	}
@@ -385,7 +381,7 @@ func (c *nethealthChecker) fetchNethealthMetrics(ctx context.Context) (res []byt
 		return buffer, nil
 	}
 
-	return nil, trace.BadParameter("unexpected response from %s: %v", DefaultNethealthSocket, resp.Status)
+	return nil, trace.BadParameter("unexpected response from %s: %v", nethealth.DefaultNethealthSocket, resp.Status)
 }
 
 // parseMetrics parses the provided data and returns the structured network

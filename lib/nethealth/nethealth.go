@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"reflect"
 	"sort"
 	"time"
@@ -65,6 +66,9 @@ const (
 	// responses while the routine is working on other operations.
 	// 2000 is chosen as double the maximum supported cluster size (1k)
 	RxQueueSize = 2000
+
+	// DefaultNethealthSocket is the default location of a unix domain socket that contains the prometheus metrics
+	DefaultNethealthSocket = "/run/nethealth/nethealth.sock"
 )
 
 const (
@@ -241,7 +245,9 @@ func (s *Server) Start() error {
 		}
 	}()
 	go func() {
-		unixListener, err := net.Listen("unix", "/run/nethealth/nethealth.sock")
+		_ = os.Remove(DefaultNethealthSocket)
+
+		unixListener, err := net.Listen("unix", DefaultNethealthSocket)
 		if err != nil {
 			panic(err)
 		}
