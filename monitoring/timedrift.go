@@ -210,8 +210,7 @@ func (c *timeDriftChecker) getTimeDrift(ctx context.Context, node serf.Member) (
 		return 0, trace.Wrap(err)
 	}
 
-	// Obtain this node's local timestamp.
-	t1Start := c.Clock.Now().UTC()
+	queryStart := c.Clock.Now().UTC()
 
 	// if the RPC call takes a long duration it will result in an inaccurate comparison. Timeout the RPC
 	// call to reduce false positives on a slow server.
@@ -219,7 +218,7 @@ func (c *timeDriftChecker) getTimeDrift(ctx context.Context, node serf.Member) (
 	defer cancel()
 
 	// Send "time" request to the specified node.
-	t2Response, err := agentClient.Time(ctx, &pb.TimeRequest{})
+	peerResponse, err := agentClient.Time(ctx, &pb.TimeRequest{})
 	if err != nil {
 		// If the agent we're making request to is of an older version,
 		// it may not support Time() method yet. This can happen, e.g.,
@@ -231,21 +230,21 @@ func (c *timeDriftChecker) getTimeDrift(ctx context.Context, node serf.Member) (
 		return 0, trace.Wrap(err)
 	}
 
-	// Calculate how much time has elapsed since T1Start. This value will
-	// roughly be the request roundtrip time, so the latency b/w the nodes
-	// is half that.
-	latency := c.Clock.Now().UTC().Sub(t1Start) / 2
+	queryEnd := c.Clock.Now().UTC()
 
-	// Finally calculate the time drift between this and the specified node
-	// using formula: t2 - now + latency.
-	//
-	// Example for 1ms difference: t2 = 0, now = 16ms, latency = 15 ms
-	// 0 - 16 = -16; -16 + 15 = -1 ms.
-	t2 := t2Response.GetTimestamp().ToTime()
-	drift := t2.Sub(c.Clock.Now().UTC()) + latency
+	// The request / response will take some time to perform over the network
+	// Use an adjustment of half the RTT time under the assumption that the request / response consume
+	// equal delays.
+	latencyAdjustment := queryEnd.Sub(queryStart) / 2
 
-	c.WithField("node", node.Name).Debugf("T1Start: %v; T2: %v; Latency: %v; Drift: %v.",
-		t1Start, t2, latency, drift)
+	adjustedPeerTime := peerResponse.GetTimestamp().ToTime().Add(latencyAdjustment)
+
+	// drift is relative to the current nodes time.
+	// if peer time > node time, return a positive duration
+	// if peer time < node time, return a negative duration
+	drift := adjustedPeerTime.Sub(queryEnd)
+	c.WithField("node", node.Name).Debugf("queryStart: %v; queryEnd: %v; peerTime: %v; adjustedPeerTime: %v drift: %v.",
+		queryStart, queryEnd, peerResponse.GetTimestamp().ToTime(), adjustedPeerTime, drift)
 	return drift, nil
 }
 

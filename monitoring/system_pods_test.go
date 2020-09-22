@@ -32,9 +32,7 @@ type SystemPodsSuite struct {
 
 var _ = Suite(&SystemPodsSuite{
 	systemPodsChecker: systemPodsChecker{
-		SystemPodsConfig: SystemPodsConfig{
-			NodeName: "test-node",
-		},
+		SystemPodsConfig: SystemPodsConfig{},
 	},
 })
 
