@@ -243,8 +243,8 @@ func (c *timeDriftChecker) getTimeDrift(ctx context.Context, node serf.Member) (
 	// if peer time > node time, return a positive duration
 	// if peer time < node time, return a negative duration
 	drift := adjustedPeerTime.Sub(queryEnd)
-	c.WithField("node", node.Name).Debugf("queryStart: %v; queryEnd: %v; peerTime: %v; latencyAdjust: %v drift: %v.",
-		queryStart, queryEnd, peerResponse.GetTimestamp().ToTime(), latencyAdjustment, drift)
+	c.WithField("node", node.Name).Debugf("queryStart: %v; queryEnd: %v; peerTime: %v; adjustedPeerTime: %v drift: %v.",
+		queryStart, queryEnd, peerResponse.GetTimestamp().ToTime(), adjustedPeerTime, drift)
 	return drift, nil
 }
 
