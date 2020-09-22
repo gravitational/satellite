@@ -38,7 +38,6 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	log "github.com/sirupsen/logrus"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 )
@@ -165,33 +164,6 @@ func (c *nethealthChecker) getPeers() (peers []string, err error) {
 		peers = append(peers, pod.Spec.NodeName)
 	}
 	return peers, nil
-}
-
-// getNethealthAddr returns the address of the local nethealth pod.
-func (c *nethealthChecker) getNethealthAddr() (addr string, err error) {
-	opts := metav1.ListOptions{
-		LabelSelector: nethealthLabelSelector.String(),
-		FieldSelector: fields.OneTermEqualSelector("spec.nodeName", c.NodeName).String(),
-		Limit:         1,
-	}
-	pods, err := c.Client.CoreV1().Pods(nethealthNamespace).List(opts)
-	if err != nil {
-		return addr, utils.ConvertError(err) // this will convert error to a proper trace error, e.g. trace.NotFound
-	}
-
-	if len(pods.Items) < 1 {
-		return addr, trace.NotFound("nethealth pod not found on local node %s", c.NodeName)
-	}
-
-	pod := pods.Items[0]
-	if pod.Status.Phase != corev1.PodRunning {
-		return addr, trace.NotFound("unable to find running local nethealth pod")
-	}
-	if pod.Status.PodIP == "" {
-		return addr, trace.NotFound("local nethealth pod IP has not been assigned yet")
-	}
-
-	return fmt.Sprintf("http://%s:%d", pod.Status.PodIP, c.NethealthPort), nil
 }
 
 // updateStats updates netStats with new incoming data.
