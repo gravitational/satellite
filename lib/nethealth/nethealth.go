@@ -264,7 +264,7 @@ func (s *Server) Start() error {
 	}
 
 	s.Info("Started nethealth with config:")
-	s.Info("  PrometheusSocker: ", s.config.PrometheusPort)
+	s.Info("  PrometheusSocket: ", s.config.PrometheusPort)
 	s.Info("  PrometheusPort: ", s.config.PrometheusPort)
 	s.Info("  Namespace: ", s.config.Namespace)
 	s.Info("  NodeName: ", s.config.NodeName)

@@ -295,7 +295,7 @@ func nethealthFailureProbe(name, peer string, packetLoss float64) *pb.Probe {
 }
 
 // fetchNethealthMetrics collects the network metrics from the nethealth pod.
-// Returns the resp as an array of bytes.
+// Returns the response as an array of bytes.
 func (c *nethealthChecker) fetchNethealthMetrics(ctx context.Context) (res []byte, err error) {
 	client := http.Client{
 		Transport: &http.Transport{
