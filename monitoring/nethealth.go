@@ -355,11 +355,15 @@ func (c *nethealthChecker) fetchNethealthMetrics(ctx context.Context) (res []byt
 	}
 	defer resp.Body.Close()
 
+	log.Warn("nethealth got response: ", resp.Status)
+
 	if resp.StatusCode == http.StatusOK {
 		buffer, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			return nil, trace.ConvertSystemError(err)
 		}
+
+		log.Warn("response: ", string(buffer))
 
 		return buffer, nil
 	}
