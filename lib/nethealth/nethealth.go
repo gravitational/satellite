@@ -81,6 +81,9 @@ const (
 )
 
 type Config struct {
+	// PrometheusSocket is the path to a unix socket that can be used to retrieve the prometheus metrics
+	PrometheusSocket string
+
 	// PrometheusPort is the port to bind to for serving prometheus metrics
 	PrometheusPort uint32
 
@@ -244,20 +247,24 @@ func (s *Server) Start() error {
 			s.Fatalf("ListenAndServe(): %s", err)
 		}
 	}()
-	go func() {
-		_ = os.Remove(DefaultNethealthSocket)
 
-		unixListener, err := net.Listen("unix", DefaultNethealthSocket)
+	if s.config.PrometheusSocket != "" {
+		_ = os.Remove(s.config.PrometheusSocket)
+
+		unixListener, err := net.Listen("unix", s.config.PrometheusSocket)
 		if err != nil {
-			panic(err)
+			return trace.Wrap(err)
 		}
 
-		if err := s.httpServer.Serve(unixListener); err != http.ErrServerClosed {
-			s.Fatalf("Unix Listen(): %s", err)
-		}
-	}()
+		go func() {
+			if err := s.httpServer.Serve(unixListener); err != http.ErrServerClosed {
+				s.Fatalf("Unix Listen(): %s", err)
+			}
+		}()
+	}
 
 	s.Info("Started nethealth with config:")
+	s.Info("  PrometheusSocker: ", s.config.PrometheusPort)
 	s.Info("  PrometheusPort: ", s.config.PrometheusPort)
 	s.Info("  Namespace: ", s.config.Namespace)
 	s.Info("  NodeName: ", s.config.NodeName)
