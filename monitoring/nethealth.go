@@ -300,9 +300,11 @@ func (c *nethealthChecker) fetchNethealthMetrics(ctx context.Context) (res []byt
 	client := http.Client{
 		Transport: &http.Transport{
 			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", c.NethealthSocketPath)
+				var d net.Dialer
+				return d.DialContext(ctx, "unix", c.NethealthSocketPath)
 			},
 		},
+		Timeout: time.Second,
 	}
 	// The two relevant metrics exposed by nethealth are 'nethealth_echo_request_total' and
 	// 'nethealth_echo_timeout_total'. We expect a pair of request/timeout metrics per peer.
