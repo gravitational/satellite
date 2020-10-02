@@ -150,13 +150,15 @@ type agent struct {
 	// debugListener is the unix domain socket listener for the debug endpoint
 	debugListener net.Listener
 
+	// clients is a map of grpc clients to the other servers
+	clients map[string]client.Client
+
 	// RPC server used by agent for client communication as well as
 	// status sync with other agents.
 	rpc RPCServer
 
-	// dialRPC is a factory function to create clients to other agents.
-	// If future, agent address discovery will happen through serf.
-	dialRPC client.DialRPC
+	// done is a channel used for cleanup.
+	done chan struct{}
 
 	// localStatus is the last obtained local node status.
 	localStatus *pb.NodeStatus
@@ -229,7 +231,6 @@ func New(config *Config) (*agent, error) {
 		Config:                  *config,
 		ClusterTimeline:         clusterTimeline,
 		LocalTimeline:           localTimeline,
-		dialRPC:                 client.DefaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
 		localStatus:             emptyNodeStatus(config.Name),
 		metricsListener:         metricsListener,
@@ -524,6 +525,10 @@ func (r *agent) statusUpdateLoop(ctx context.Context) error {
 	ticker := r.Clock.NewTicker(StatusUpdateTimeout)
 	defer ticker.Stop()
 
+	if err := r.updateStatus(ctx); err != nil {
+		log.WithError(err).Warn("Failed to updates status.")
+	}
+
 	for {
 		select {
 		case <-ticker.Chan():
@@ -705,7 +710,7 @@ func (r *agent) notifyMasters(ctx context.Context, client membership.ClusterMemb
 
 // notifyMaster push new timeline events to the specified member.
 func (r *agent) notifyMaster(ctx context.Context, member membership.ClusterMember, events []*pb.TimelineEvent) error {
-	client, err := member.Dial(ctx, r.CAFile, r.CertFile, r.KeyFile)
+	client, err := r.getClient(ctx, member)
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -730,7 +735,7 @@ func (r *agent) notifyMaster(ctx context.Context, member membership.ClusterMembe
 
 // getStatusFrom obtains node status from the node identified by member.
 func (r *agent) getStatusFrom(ctx context.Context, member membership.ClusterMember, respc chan<- *statusResponse) {
-	client, err := member.Dial(ctx, r.CAFile, r.CertFile, r.KeyFile)
+	client, err := r.getClient(ctx, member)
 	resp := &statusResponse{member: member}
 	if err != nil {
 		resp.err = trace.Wrap(err)
@@ -781,6 +786,26 @@ func (r *agent) newSerfClient() (membership.ClusterMembership, error) {
 		return nil, trace.Wrap(err, "failed to connect to serf agent: %#v",
 			r.Config.SerfConfig)
 	}
+	return client, nil
+}
+
+func (r *agent) getClient(ctx context.Context, member membership.ClusterMember) (client.Client, error) {
+	r.Lock()
+	if client, ok := r.clients[member.Name()]; ok {
+		return client, nil
+	}
+	r.Unlock()
+
+	client, err := member.Dial(ctx, r.CAFile, r.CertFile, r.KeyFile)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	defer client.Close()
+
+	r.Lock()
+	r.clients[member.Name()] = client
+	r.Unlock()
+
 	return client, nil
 }
 
