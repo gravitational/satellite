@@ -599,15 +599,23 @@ func (r *agent) collectStatus(ctx context.Context) *pb.SystemStatus {
 
 	log.Debugf("Started collecting statuses from members %v.", members)
 
-	ctxNode, cancelNode := context.WithTimeout(ctx, nodeStatusTimeout)
-	defer cancelNode()
-
 	statusCh := make(chan *statusResponse, len(members))
 	for _, member := range members {
+
 		if r.Name == member.Name() {
-			go r.getLocalStatus(ctxNode, statusCh, client)
+			go func() {
+				ctxNode, cancelNode := context.WithTimeout(ctx, nodeStatusTimeout)
+				defer cancelNode()
+
+				r.getLocalStatus(ctxNode, statusCh, client)
+			}()
 		} else {
-			go r.getStatusFrom(ctxNode, member, statusCh)
+			go func() {
+				ctxNode, cancelNode := context.WithTimeout(ctx, nodeStatusTimeout)
+				defer cancelNode()
+
+				r.getStatusFrom(ctxNode, member, statusCh)
+			}()
 		}
 	}
 
