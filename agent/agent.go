@@ -800,7 +800,6 @@ func (r *agent) getClient(ctx context.Context, member membership.ClusterMember) 
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	defer client.Close()
 
 	r.Lock()
 	r.clients[member.Name()] = client
