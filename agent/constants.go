@@ -74,9 +74,7 @@ const (
 	nodeStatusTimeout = time.Second
 
 	// checksTimeout specifies the amount of time to wait for a check to complete.
-	// The checksTimeout is smaller than the nodeStatusTimeout so that the checks
-	// can return results before the deadline.
-	checksTimeout = nodeStatusTimeout - (5 * time.Second)
+	checksTimeout = time.Minute
 
 	// probeTimeout specifies the amount of time to wait for a probe to complete.
 	// The probeTimeout is smaller than the checksTimeout so that the probe
