@@ -791,6 +791,10 @@ func (r *agent) newSerfClient() (membership.ClusterMembership, error) {
 
 func (r *agent) getClient(ctx context.Context, member membership.ClusterMember) (client.Client, error) {
 	r.Lock()
+	if r.clients == nil {
+		r.clients = make(map[string]client.Client)
+	}
+
 	if client, ok := r.clients[member.Name()]; ok {
 		return client, nil
 	}
