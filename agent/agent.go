@@ -604,14 +604,14 @@ func (r *agent) collectStatus(ctx context.Context) *pb.SystemStatus {
 
 		if r.Name == member.Name() {
 			go func() {
-				ctxNode, cancelNode := context.WithTimeout(ctx, 10*time.Second)
+				ctxNode, cancelNode := context.WithTimeout(ctx, nodeStatusTimeoutLocal)
 				defer cancelNode()
 
 				r.getLocalStatus(ctxNode, statusCh, client)
 			}()
 		} else {
 			go func() {
-				ctxNode, cancelNode := context.WithTimeout(ctx, nodeStatusTimeout)
+				ctxNode, cancelNode := context.WithTimeout(ctx, nodeStatusTimeoutRemote)
 				defer cancelNode()
 
 				r.getStatusFrom(ctxNode, member, statusCh)
