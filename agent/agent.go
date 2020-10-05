@@ -610,12 +610,12 @@ func (r *agent) collectStatus(ctx context.Context) *pb.SystemStatus {
 				r.getLocalStatus(ctxNode, statusCh, client)
 			}()
 		} else {
-			go func() {
+			go func(member membership.ClusterMember) {
 				ctxNode, cancelNode := context.WithTimeout(ctx, nodeStatusTimeoutRemote)
 				defer cancelNode()
 
 				r.getStatusFrom(ctxNode, member, statusCh)
-			}()
+			}(member)
 		}
 	}
 
