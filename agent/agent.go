@@ -628,7 +628,7 @@ L:
 	for i := 0; i < len(members); i++ {
 		select {
 		case status := <-statusCh:
-			log.Debugf("Retrieved status from %v: %v.", status.member, status.NodeStatus)
+			log.Debugf("Retrieved status from %v: %v.", status.member.Name(), status.NodeStatus)
 			nodeStatus := status.NodeStatus
 			if status.err != nil {
 				log.Debugf("Failed to query node %s(%v) status: %v.",
@@ -802,16 +802,26 @@ func (r *agent) newSerfClient() (membership.ClusterMembership, error) {
 	return client, nil
 }
 
-func (r *agent) getClient(ctx context.Context, member membership.ClusterMember) (client.Client, error) {
+func (r *agent) getClientFromCache(member string) client.Client {
 	r.Lock()
+	defer r.Unlock()
+
 	if r.clients == nil {
 		r.clients = make(map[string]client.Client)
 	}
 
-	if client, ok := r.clients[member.Name()]; ok {
+	if client, ok := r.clients[member]; ok {
+		return client
+	}
+
+	return nil
+}
+
+func (r *agent) getClient(ctx context.Context, member membership.ClusterMember) (client.Client, error) {
+	client := r.getClientFromCache(member.Name())
+	if client != nil {
 		return client, nil
 	}
-	r.Unlock()
 
 	client, err := member.Dial(ctx, r.CAFile, r.CertFile, r.KeyFile)
 	if err != nil {
