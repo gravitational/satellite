@@ -727,7 +727,6 @@ func (r *agent) notifyMaster(ctx context.Context, member membership.ClusterMembe
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	defer client.Close()
 
 	resp, err := client.LastSeen(ctx, &pb.LastSeenRequest{Name: r.Name})
 	if err != nil {
@@ -753,7 +752,6 @@ func (r *agent) getStatusFrom(ctx context.Context, member membership.ClusterMemb
 	if err != nil {
 		resp.err = trace.Wrap(err)
 	} else {
-		defer client.Close()
 		var status *pb.NodeStatus
 		status, err = client.LocalStatus(ctx)
 		if err != nil {
@@ -817,6 +815,8 @@ func (r *agent) getClientFromCache(member string) client.Client {
 	return nil
 }
 
+// getClient creates a client to the cluster member or returns one from cache.
+// The returned client should not be closed so it can be re-used from the cache.
 func (r *agent) getClient(ctx context.Context, member membership.ClusterMember) (client.Client, error) {
 	client := r.getClientFromCache(member.Name())
 	if client != nil {
