@@ -59,3 +59,13 @@ type ClusterMember interface {
 	// Status gets the member's status.
 	Status() string
 }
+
+// GetMemberNames converts a list of Cluster Members to a list of just the member names.
+func GetMemberNames(members []ClusterMember) []string {
+	res := make([]string, len(members))
+	for i, member := range members {
+		res[i] = member.Name()
+	}
+
+	return res
+}

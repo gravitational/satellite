@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/gravitational/satellite/agent/cache"
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
@@ -479,9 +480,13 @@ func runChecker(ctx context.Context, checker health.Checker, probeCh chan<- heal
 
 	checkCh := make(chan health.Probes, 1)
 	go func() {
+		started := time.Now()
+
 		var probes health.Probes
 		checker.Check(ctxProbe, &probes)
 		checkCh <- probes
+
+		log.Debugf("Checker %q complete in %v with probes: %v", checker.Name(), time.Since(started), spew.Sdump(probes))
 	}()
 
 	select {
@@ -597,7 +602,7 @@ func (r *agent) collectStatus(ctx context.Context) *pb.SystemStatus {
 		Timestamp: pb.NewTimeToProto(r.Clock.Now()),
 	}
 
-	log.Debugf("Started collecting statuses from members %v.", members)
+	log.Debugf("Started collecting statuses from members %v.", membership.GetMemberNames(members))
 
 	statusCh := make(chan *statusResponse, len(members))
 	for _, member := range members {
