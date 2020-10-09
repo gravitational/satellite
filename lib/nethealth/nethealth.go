@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"reflect"
 	"sort"
 	"time"
@@ -59,6 +60,15 @@ const (
 
 	// DefaultServiceDiscoveryQuery is the default name to query for service discovery changes
 	DefaultServiceDiscoveryQuery = "any.nethealth"
+
+	// RxQueueSize is the size of queued ping responses to process
+	// Main processing occurs in a single goroutine, so we need a large enough processing queue to hold onto all ping
+	// responses while the routine is working on other operations.
+	// 2000 is chosen as double the maximum supported cluster size (1k)
+	RxQueueSize = 2000
+
+	// DefaultNethealthSocket is the default location of a unix domain socket that contains the prometheus metrics
+	DefaultNethealthSocket = "/run/nethealth/nethealth.sock"
 )
 
 const (
@@ -71,6 +81,9 @@ const (
 )
 
 type Config struct {
+	// PrometheusSocket is the path to a unix socket that can be used to retrieve the prometheus metrics
+	PrometheusSocket string
+
 	// PrometheusPort is the port to bind to for serving prometheus metrics
 	PrometheusPort uint32
 
@@ -235,7 +248,23 @@ func (s *Server) Start() error {
 		}
 	}()
 
+	if s.config.PrometheusSocket != "" {
+		_ = os.Remove(s.config.PrometheusSocket)
+
+		unixListener, err := net.Listen("unix", s.config.PrometheusSocket)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+
+		go func() {
+			if err := s.httpServer.Serve(unixListener); err != http.ErrServerClosed {
+				s.Fatalf("Unix Listen(): %s", err)
+			}
+		}()
+	}
+
 	s.Info("Started nethealth with config:")
+	s.Info("  PrometheusSocket: ", s.config.PrometheusSocket)
 	s.Info("  PrometheusPort: ", s.config.PrometheusPort)
 	s.Info("  Namespace: ", s.config.Namespace)
 	s.Info("  NodeName: ", s.config.NodeName)

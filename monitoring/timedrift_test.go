@@ -57,6 +57,8 @@ func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 		times map[string]time.Time
 		// result is the time drift check result.
 		result []*agentpb.Probe
+		// slow indicates the server should respond slowly
+		slow bool
 	}{
 		{
 			comment: "Acceptable time drift",
@@ -116,6 +118,18 @@ func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 				s.c.failureProbe(node3, driftOverThreshold()),
 			},
 		},
+		{
+			comment: "Time drift takes too long to respond silently discarding results",
+			slow:    true,
+			nodes:   []serf.Member{node1, node2, node3},
+			times: map[string]time.Time{
+				node2.Name: s.clock.Now().Add(-driftOverThreshold()),
+				node3.Name: s.clock.Now().Add(driftOverThreshold()),
+			},
+			result: []*agentpb.Probe{
+				s.c.successProbe(),
+			},
+		},
 	}
 	for _, test := range tests {
 		checker := &timeDriftChecker{
@@ -128,7 +142,14 @@ func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 			clients:     newClientsCache(c, test.times),
 		}
 		var probes health.Probes
-		checker.Check(context.TODO(), &probes)
+
+		ctx, cancel := context.WithCancel(context.Background())
+
+		if test.slow {
+			cancel()
+		}
+
+		checker.Check(ctx, &probes)
 		c.Assert(probes.GetProbes(), check.DeepEquals, test.result,
 			check.Commentf(test.comment))
 	}
@@ -166,6 +187,11 @@ func (a *mockedTimeAgentClient) LastSeen(ctx context.Context,
 }
 
 func (a *mockedTimeAgentClient) Time(ctx context.Context, req *agentpb.TimeRequest) (*agentpb.TimeResponse, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
 	return &agentpb.TimeResponse{
 		Timestamp: agentpb.NewTimeToProto(a.time),
 	}, nil

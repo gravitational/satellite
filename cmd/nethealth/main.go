@@ -49,10 +49,12 @@ func run() error {
 		cversion = app.Command("version", "Display version")
 
 		// `run` command
-		crun               = app.Command("run", "Start nethealth agent")
-		crunPrometheusPort = crun.Flag("prom-port", "The prometheus port to bind to").Default("9801").Uint32()
-		crunNamespace      = crun.Flag("namespace", "The kubernetes namespace to watch for nethealth pods").
-					Default("monitoring").OverrideDefaultFromEnvar("POD_NAMESPACE").String()
+		crun                 = app.Command("run", "Start nethealth agent")
+		crunPrometheusPort   = crun.Flag("prom-port", "The prometheus port to bind to").Default("9801").Uint32()
+		crunPrometheusSocket = crun.Flag("prom-socket", "The unix-socket path to bind for prometheus metrics").
+					Default(nethealth.DefaultNethealthSocket).String()
+		crunNamespace = crun.Flag("namespace", "The kubernetes namespace to watch for nethealth pods").
+				Default("monitoring").OverrideDefaultFromEnvar("POD_NAMESPACE").String()
 		crunNodeName = crun.Flag("node-name", "The name of the node we're running on").
 				OverrideDefaultFromEnvar("NODE_NAME").String()
 		crunSelector = crun.Flag("pod-selector", "The kubernetes selector to identify nethealth pods").
@@ -82,10 +84,11 @@ func run() error {
 
 	case crun.FullCommand():
 		config := nethealth.Config{
-			PrometheusPort: *crunPrometheusPort,
-			Namespace:      *crunNamespace,
-			NodeName:       *crunNodeName,
-			Selector:       *crunSelector,
+			PrometheusPort:   *crunPrometheusPort,
+			PrometheusSocket: *crunPrometheusSocket,
+			Namespace:        *crunNamespace,
+			NodeName:         *crunNodeName,
+			Selector:         *crunSelector,
 		}
 
 		server, err := config.New()

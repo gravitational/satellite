@@ -29,13 +29,10 @@ import (
 	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 )
 
 // SystemPodsConfig specifies configuration for a system pods checker.
 type SystemPodsConfig struct {
-	// NodeName specifies the kubernetes name of this node.
-	NodeName string
 	// KubeConfig specifies kubernetes access configuration.
 	*KubeConfig
 }
@@ -44,9 +41,6 @@ type SystemPodsConfig struct {
 // value defaults where necessary.
 func (r *SystemPodsConfig) checkAndSetDefaults() error {
 	var errors []error
-	if r.NodeName == "" {
-		errors = append(errors, trace.BadParameter("node name must be provided"))
-	}
 	if r.KubeConfig == nil {
 		errors = append(errors, trace.BadParameter("kubernetes access config must be provided"))
 	}
@@ -107,7 +101,6 @@ func (r *systemPodsChecker) check(ctx context.Context, reporter health.Reporter)
 func (r *systemPodsChecker) getPods() ([]corev1.Pod, error) {
 	opts := metav1.ListOptions{
 		LabelSelector: systemPodsSelector.String(),
-		FieldSelector: fields.OneTermEqualSelector("spec.nodeName", r.NodeName).String(),
 	}
 	pods, err := r.Client.CoreV1().Pods(kubernetes.AllNamespaces).List(opts)
 	if err != nil {

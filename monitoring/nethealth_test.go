@@ -48,11 +48,11 @@ func (s *NethealthSuite) TestUpdateTimeoutStats(c *C) {
 				packetLoss: s.newPacketLoss(),
 			},
 			incomingData: []networkData{
-				networkData{},
-				networkData{},
-				networkData{},
-				networkData{},
-				networkData{},
+				{},
+				{},
+				{},
+				{},
+				{},
 			},
 		},
 		{
@@ -62,11 +62,11 @@ func (s *NethealthSuite) TestUpdateTimeoutStats(c *C) {
 				packetLoss:       s.newPacketLoss(),
 			},
 			incomingData: []networkData{
-				networkData{timeoutTotal: 1},
-				networkData{timeoutTotal: 2},
-				networkData{timeoutTotal: 3},
-				networkData{timeoutTotal: 4},
-				networkData{timeoutTotal: 5},
+				{timeoutTotal: 1},
+				{timeoutTotal: 2},
+				{timeoutTotal: 3},
+				{timeoutTotal: 4},
+				{timeoutTotal: 5},
 			},
 		},
 		{
@@ -76,11 +76,11 @@ func (s *NethealthSuite) TestUpdateTimeoutStats(c *C) {
 				packetLoss:       s.newPacketLoss(0, 0, 0, 0, 0),
 			},
 			incomingData: []networkData{
-				networkData{requestTotal: 1},
-				networkData{requestTotal: 2},
-				networkData{requestTotal: 3},
-				networkData{requestTotal: 4},
-				networkData{requestTotal: 5},
+				{requestTotal: 1},
+				{requestTotal: 2},
+				{requestTotal: 3},
+				{requestTotal: 4},
+				{requestTotal: 5},
 			},
 		},
 		{
@@ -91,11 +91,11 @@ func (s *NethealthSuite) TestUpdateTimeoutStats(c *C) {
 				packetLoss:       s.newPacketLoss(1, 1, 1, 1, 1),
 			},
 			incomingData: []networkData{
-				networkData{requestTotal: 1, timeoutTotal: 1},
-				networkData{requestTotal: 2, timeoutTotal: 2},
-				networkData{requestTotal: 3, timeoutTotal: 3},
-				networkData{requestTotal: 4, timeoutTotal: 4},
-				networkData{requestTotal: 5, timeoutTotal: 5},
+				{requestTotal: 1, timeoutTotal: 1},
+				{requestTotal: 2, timeoutTotal: 2},
+				{requestTotal: 3, timeoutTotal: 3},
+				{requestTotal: 4, timeoutTotal: 4},
+				{requestTotal: 5, timeoutTotal: 5},
 			},
 		},
 		{
@@ -106,12 +106,12 @@ func (s *NethealthSuite) TestUpdateTimeoutStats(c *C) {
 				packetLoss:       s.newPacketLoss(0, 0, 0, 0, 0),
 			},
 			incomingData: []networkData{
-				networkData{requestTotal: 1, timeoutTotal: 1},
-				networkData{requestTotal: 2, timeoutTotal: 1},
-				networkData{requestTotal: 3, timeoutTotal: 1},
-				networkData{requestTotal: 4, timeoutTotal: 1},
-				networkData{requestTotal: 5, timeoutTotal: 1},
-				networkData{requestTotal: 6, timeoutTotal: 1},
+				{requestTotal: 1, timeoutTotal: 1},
+				{requestTotal: 2, timeoutTotal: 1},
+				{requestTotal: 3, timeoutTotal: 1},
+				{requestTotal: 4, timeoutTotal: 1},
+				{requestTotal: 5, timeoutTotal: 1},
+				{requestTotal: 6, timeoutTotal: 1},
 			},
 		},
 	}
@@ -197,11 +197,11 @@ func (s *NethealthSuite) TestParseMetricsSuccess(c *C) {
 		{
 			comment: Commentf("Expected networkData for peers 10.128.0.70 and 10.128.0.97."),
 			expected: map[string]networkData{
-				"10.128.0.70": networkData{
+				"10.128.0.70": {
 					requestTotal: 236,
 					timeoutTotal: 37,
 				},
-				"10.128.0.97": networkData{
+				"10.128.0.97": {
 					requestTotal: 273,
 					timeoutTotal: 0,
 				},
