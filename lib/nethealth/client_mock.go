@@ -24,7 +24,7 @@ import (
 )
 
 // MockClient is a mock implementation of the nethealth Client. Instead of
-// reading metrics from live a live Prometheus metrics endpoint, metrics are
+// reading metrics from a live Prometheus metrics endpoint, metrics are
 // pre-loaded and stored in the MockClient.
 type MockClient struct {
 	// textMetrics stores the current text formatted metrics.

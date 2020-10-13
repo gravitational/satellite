@@ -59,7 +59,7 @@ func (r *LatencySuite) TestLatency(c *C) {
 			quantile: 0.90,
 		},
 		{
-			comment: "Latency at 80th percentile is at below threshold",
+			comment: "Latency at 80th percentile is below the threshold",
 			expected: health.Probes{
 				successProbe(node1, latencyThreshold),
 			},

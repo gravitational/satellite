@@ -79,11 +79,6 @@ func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeCon
 		return trace.Wrap(err)
 	}
 
-	pingHealth, err := monitoring.PingHealth(config.serfRPCAddr, config.serfMemberName)
-	if err != nil {
-		return trace.Wrap(err)
-	}
-
 	serfClient, err := agent.NewSerfClient(serf.Config{
 		Addr: config.serfRPCAddr,
 	})
@@ -111,7 +106,6 @@ func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeCon
 	node.AddChecker(monitoring.DockerHealth(config.dockerAddr))
 	node.AddChecker(etcdChecker)
 	node.AddChecker(monitoring.SystemdHealth())
-	node.AddChecker(pingHealth)
 	node.AddChecker(timeDriftHealth)
 
 	if !config.disableInterPodCheck {
