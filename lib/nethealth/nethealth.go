@@ -171,7 +171,7 @@ func (c Config) New() (*Server, error) {
 		promPeerRequest: promPeerRequest,
 		selector:        labelSelector,
 		triggerResync:   make(chan bool, 1),
-		rxMessage:       make(chan messageWrapper, 100),
+		rxMessage:       make(chan messageWrapper, RxQueueSize),
 		peers:           make(map[string]*peer),
 		addrToPeer:      make(map[string]string),
 	}, nil
