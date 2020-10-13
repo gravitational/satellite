@@ -69,6 +69,11 @@ const (
 
 	// DefaultNethealthSocket is the default location of a unix domain socket that contains the prometheus metrics
 	DefaultNethealthSocket = "/run/nethealth/nethealth.sock"
+
+	// LabelNodeName specifies metrics label mapped to node name
+	LabelNodeName = "node_name"
+	// LabelPeerName specifies metrics label mapped to peer node name
+	LabelPeerName = "peer_name"
 )
 
 const (
@@ -102,7 +107,6 @@ type Config struct {
 
 // New creates a new server to ping each peer.
 func (c Config) New() (*Server, error) {
-
 	promPeerRTT := prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "nethealth",
 		Subsystem: "echo",
@@ -129,22 +133,43 @@ func (c Config) New() (*Server, error) {
 			0.04,   // 40ms
 			0.08,   // 80ms
 		},
-	}, []string{"node_name", "peer_name"})
+	}, []string{LabelNodeName, LabelPeerName})
+	promPeerRTTSummary := prometheus.NewSummaryVec(prometheus.SummaryOpts{
+		Namespace: "nethealth",
+		Subsystem: "echo",
+		Name:      "latency_summary_milli",
+		Help:      "The round trip time between peers in milliseconds",
+		MaxAge:    5 * time.Minute,
+		Objectives: map[float64]float64{
+			0.1:  0.09, // 10th percentile
+			0.2:  0.08, // ...
+			0.3:  0.07,
+			0.4:  0.06,
+			0.5:  0.05,
+			0.6:  0.04,
+			0.7:  0.03,
+			0.8:  0.02,
+			0.9:  0.01,
+			0.95: 0.005,
+			0.99: 0.001, // 99th percentile
+		},
+	}, []string{LabelNodeName, LabelPeerName})
 	promPeerTimeout := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "nethealth",
 		Subsystem: "echo",
 		Name:      "timeout_total",
 		Help:      "The number of echo requests that have timed out",
-	}, []string{"node_name", "peer_name"})
+	}, []string{LabelNodeName, LabelPeerName})
 	promPeerRequest := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "nethealth",
 		Subsystem: "echo",
 		Name:      "request_total",
 		Help:      "The number of echo requests that have been sent",
-	}, []string{"node_name", "peer_name"})
+	}, []string{LabelNodeName, LabelPeerName})
 
 	prometheus.MustRegister(
 		promPeerRTT,
+		promPeerRTTSummary,
 		promPeerTimeout,
 		promPeerRequest,
 	)
@@ -196,9 +221,10 @@ type Server struct {
 
 	client kubernetes.Interface
 
-	promPeerRTT     *prometheus.HistogramVec
-	promPeerTimeout *prometheus.CounterVec
-	promPeerRequest *prometheus.CounterVec
+	promPeerRTT        *prometheus.HistogramVec
+	promPeerRTTSummary *prometheus.SummaryVec
+	promPeerTimeout    *prometheus.CounterVec
+	promPeerRequest    *prometheus.CounterVec
 }
 
 type peer struct {
@@ -404,6 +430,7 @@ func (s *Server) resyncPeerList() error {
 			s.WithField("peer", key).Info("Deleting peer.")
 			delete(s.peers, key)
 			s.promPeerRTT.DeleteLabelValues(s.config.NodeName, key)
+			s.promPeerRTTSummary.DeleteLabelValues(s.config.NodeName, key)
 			s.promPeerRequest.DeleteLabelValues(s.config.NodeName, key)
 			s.promPeerTimeout.DeleteLabelValues(s.config.NodeName, key)
 		}
@@ -537,6 +564,7 @@ func (s *Server) processAck(e messageWrapper) error {
 
 		rtt := e.rxTime.Sub(peer.echoTime)
 		s.promPeerRTT.WithLabelValues(s.config.NodeName, peer.name).Observe(rtt.Seconds())
+		s.promPeerRTTSummary.WithLabelValues(s.config.NodeName, peer.name).Observe(float64(rtt.Milliseconds()))
 		s.updatePeerStatus(peer, Up)
 		peer.echoTimeout = false
 
