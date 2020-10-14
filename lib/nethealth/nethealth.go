@@ -135,11 +135,10 @@ func (c Config) New() (*Server, error) {
 		},
 	}, []string{LabelNodeName, LabelPeerName})
 	promPeerRTTSummary := prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Namespace: "nethealth",
-		Subsystem: "echo",
-		Name:      "latency_summary_milli",
-		Help:      "The round trip time between peers in milliseconds",
-		// Oldest 1/5 of observations will be discarded every 30 seconds.
+		Namespace:  "nethealth",
+		Subsystem:  "echo",
+		Name:       "latency_summary_milli",
+		Help:       "The round trip time between peers in milliseconds",
 		MaxAge:     30 * time.Second,
 		AgeBuckets: 5,
 		Objectives: map[float64]float64{
