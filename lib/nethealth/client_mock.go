@@ -43,7 +43,12 @@ func NewMockClient(metrics string) *MockClient {
 func (r *MockClient) LatencySummariesMilli(_ context.Context) (map[string]*dto.Summary, error) {
 	const labelLatencySummary = "nethealth_echo_latency_summary_milli"
 
-	summaries, err := parseSummaries([]byte(r.textMetrics), labelLatencySummary)
+	metricFamilies, err := parseMetrics([]byte(r.textMetrics))
+	if err != nil {
+		return nil, trace.Wrap(err, "failed to parse metrics")
+	}
+
+	summaries, err := parseSummaries(metricFamilies, labelLatencySummary)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to parse prometheus summaries")
 	}

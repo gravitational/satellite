@@ -189,16 +189,17 @@ func (c Config) New() (*Server, error) {
 	}
 
 	return &Server{
-		config:          c,
-		FieldLogger:     logrus.WithField(trace.Component, "nethealth"),
-		promPeerRTT:     promPeerRTT,
-		promPeerTimeout: promPeerTimeout,
-		promPeerRequest: promPeerRequest,
-		selector:        labelSelector,
-		triggerResync:   make(chan bool, 1),
-		rxMessage:       make(chan messageWrapper, RxQueueSize),
-		peers:           make(map[string]*peer),
-		addrToPeer:      make(map[string]string),
+		config:             c,
+		FieldLogger:        logrus.WithField(trace.Component, "nethealth"),
+		promPeerRTT:        promPeerRTT,
+		promPeerRTTSummary: promPeerRTTSummary,
+		promPeerTimeout:    promPeerTimeout,
+		promPeerRequest:    promPeerRequest,
+		selector:           labelSelector,
+		triggerResync:      make(chan bool, 1),
+		rxMessage:          make(chan messageWrapper, RxQueueSize),
+		peers:              make(map[string]*peer),
+		addrToPeer:         make(map[string]string),
 	}, nil
 }
 

@@ -32,16 +32,16 @@ import (
 // Client provides nethealth client interface. Client can be used to query
 // exposed nethealth metrics.
 type Client struct {
-	// socket specifies nethealth socket path.
-	socket string
+	// socketPath specifies nethealth socket path.
+	socketPath string
 	// FieldLogger is used for logging.
 	logrus.FieldLogger
 }
 
-// NewClient constructs a new Client with the provided socket.
-func NewClient(socket string) *Client {
+// NewClient constructs a new Client with the provided socket path.
+func NewClient(socketPath string) *Client {
 	return &Client{
-		socket:      socket,
+		socketPath:  socketPath,
 		FieldLogger: logrus.WithField(trace.Component, "nethealth-client"),
 	}
 }
@@ -51,14 +51,13 @@ func NewClient(socket string) *Client {
 func (r *Client) LatencySummariesMilli(ctx context.Context) (map[string]*dto.Summary, error) {
 	const labelLatencySummary = "nethealth_echo_latency_summary_milli"
 
-	resp, err := r.metrics(ctx)
+	metrics, err := r.metrics(ctx)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to retrieve metrics")
 	}
 
-	summaries, err := parseSummaries(resp, labelLatencySummary)
+	summaries, err := parseSummaries(metrics, labelLatencySummary)
 	if err != nil {
-		r.WithField("nethealth-metrics", string(resp)).Debug("Failed to parse latency summaries.")
 		return nil, trace.Wrap(err, "failed to parse latency summaries")
 	}
 
@@ -67,12 +66,7 @@ func (r *Client) LatencySummariesMilli(ctx context.Context) (map[string]*dto.Sum
 
 // parseSummaries parses the metrics and returns the summaries for the specified
 // label. Returns NotFound if the label does not exist.
-func parseSummaries(metrics []byte, label string) (map[string]*dto.Summary, error) {
-	metricFamilies, err := parseMetrics(metrics)
-	if err != nil {
-		return nil, trace.Wrap(err, "failed to parse metrics")
-	}
-
+func parseSummaries(metricFamilies map[string]*dto.MetricFamily, label string) (map[string]*dto.Summary, error) {
 	metricFamily, ok := metricFamilies[label]
 	if !ok {
 		return nil, trace.NotFound("%s metrics not found", label)
@@ -82,7 +76,7 @@ func parseSummaries(metrics []byte, label string) (map[string]*dto.Summary, erro
 	for _, m := range metricFamily.GetMetric() {
 		peerName, err := getPeerName(m.GetLabel())
 		if err != nil {
-			logrus.WithError(err).Warn("failed to get peer name")
+			logrus.WithError(err).Warn("Failed to get peer name.")
 			continue
 		}
 		summaries[peerName] = m.GetSummary()
@@ -91,12 +85,13 @@ func parseSummaries(metrics []byte, label string) (map[string]*dto.Summary, erro
 	return summaries, nil
 }
 
-// metrics returns the metrics as an array of bytes.
-func (r *Client) metrics(ctx context.Context) (res []byte, err error) {
+// metrics fetches the nethealth metrics and returns the metric families.
+func (r *Client) metrics(ctx context.Context) (res map[string]*dto.MetricFamily, err error) {
+	var dialer net.Dialer
 	client := http.Client{
 		Transport: &http.Transport{
-			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", r.socket)
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				return dialer.DialContext(ctx, "unix", r.socketPath)
 			},
 		},
 	}
@@ -112,16 +107,22 @@ func (r *Client) metrics(ctx context.Context) (res []byte, err error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusOK {
-		buffer, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return nil, trace.ConvertSystemError(err)
-		}
-
-		return buffer, nil
+	if resp.StatusCode != http.StatusOK {
+		return nil, trace.BadParameter("unexpected response from %s: %v", r.socketPath, resp.Status)
 	}
 
-	return nil, trace.BadParameter("unexpected response from %s: %v", r.socket, resp.Status)
+	buffer, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, trace.ConvertSystemError(err)
+	}
+
+	metricFamilies, err := parseMetrics(buffer)
+	if err != nil {
+		r.WithField("nethealth-metrics", string(buffer)).Debug("Failed to parse nethealth metrics.")
+		return nil, trace.Wrap(err, "failed to parse nethealth metrics")
+	}
+
+	return metricFamilies, nil
 }
 
 // parseMetrics parses the metrics and returns the metric families.
