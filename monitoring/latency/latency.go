@@ -45,7 +45,7 @@ const (
 	latencyThreshold = 15 * time.Millisecond
 
 	// LabelSelectorNethealth specifies the nethealth k8s label selector.
-	LabelSelectorNethealth = "app=nethealth"
+	LabelSelectorNethealth = "k8s-app=nethealth"
 	// NamespaceMonitoring specifies the monitoring namespace.
 	NamespaceMonitoring = "monitoring"
 )

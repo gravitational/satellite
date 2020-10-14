@@ -93,7 +93,7 @@ var mockKubeClientset = fake.NewSimpleClientset(
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: NamespaceMonitoring,
 					Name:      "nethealth-1",
-					Labels:    map[string]string{"app": "nethealth"},
+					Labels:    map[string]string{"k8s-app": "nethealth"},
 				},
 				Spec: v1.PodSpec{
 					NodeName: node1,
@@ -103,7 +103,7 @@ var mockKubeClientset = fake.NewSimpleClientset(
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: NamespaceMonitoring,
 					Name:      "nethealth-2",
-					Labels:    map[string]string{"app": "nethealth"},
+					Labels:    map[string]string{"k8s-app": "nethealth"},
 				},
 				Spec: v1.PodSpec{
 					NodeName: node2,
