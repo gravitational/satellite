@@ -139,7 +139,9 @@ func (c Config) New() (*Server, error) {
 		Subsystem: "echo",
 		Name:      "latency_summary_milli",
 		Help:      "The round trip time between peers in milliseconds",
-		MaxAge:    5 * time.Minute,
+		// Oldest 1/5 of observations will be discarded every 30 seconds.
+		MaxAge:     30 * time.Second,
+		AgeBuckets: 5,
 		Objectives: map[float64]float64{
 			0.1:  0.09, // 10th percentile
 			0.2:  0.08, // ...
