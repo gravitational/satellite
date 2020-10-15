@@ -19,7 +19,9 @@ package main
 import (
 	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/cmd"
+	"github.com/gravitational/satellite/lib/nethealth"
 	"github.com/gravitational/satellite/monitoring"
+	"github.com/gravitational/satellite/monitoring/latency"
 
 	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
@@ -79,11 +81,6 @@ func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeCon
 		return trace.Wrap(err)
 	}
 
-	pingHealth, err := monitoring.PingHealth(config.serfRPCAddr, config.serfMemberName)
-	if err != nil {
-		return trace.Wrap(err)
-	}
-
 	serfClient, err := agent.NewSerfClient(serf.Config{
 		Addr: config.serfRPCAddr,
 	})
@@ -107,12 +104,21 @@ func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeCon
 		return trace.Wrap(err)
 	}
 
+	latencyChecker, err := latency.NewChecker(&latency.Config{
+		NodeName:      node.GetConfig().NodeName,
+		KubeClient:    kubeConfig.Client,
+		LatencyClient: nethealth.NewClient(nethealth.DefaultNethealthSocket),
+	})
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
 	node.AddChecker(monitoring.KubeAPIServerHealth(kubeConfig))
 	node.AddChecker(monitoring.DockerHealth(config.dockerAddr))
 	node.AddChecker(etcdChecker)
 	node.AddChecker(monitoring.SystemdHealth())
-	node.AddChecker(pingHealth)
 	node.AddChecker(timeDriftHealth)
+	node.AddChecker(latencyChecker)
 
 	if !config.disableInterPodCheck {
 		node.AddChecker(monitoring.InterPodCommunication(kubeConfig, config.nettestContainerImage))
