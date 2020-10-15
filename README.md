@@ -12,10 +12,7 @@ The original design goals are:
  - no single point of failure
  - history of health data as a time series
 
-The agents communicate over a [Gossip] protocol implemented by [serf].
-
 ## Dependencies
- - [serf], v0.7.0 or later
  - [godep]
 
 ## Installation
@@ -44,25 +41,30 @@ usage: satellite [<flags>] <command> [<args> ...]
 Cluster health monitoring agent
 
 Flags:
-  --help   Show help (also see --help-long and --help-man).
+  --help   Show context-sensitive help (also try --help-long and --help-man).
   --debug  Enable verbose mode
 
 Commands:
   help [<command>...]
     Show help.
 
-  agent [<flags>]
+  agent --kubeconfig=KUBECONFIG [<flags>]
     Start monitoring agent
 
   status [<flags>]
     Query cluster status
 
+  history [<flags>]
+    Query cluster status history
+
+  checks
+    Run local compatibility checks
+
   version
     Display version
 
-
 $ satellite agent help
-usage: satellite agent [<flags>]
+usage: satellite agent --kubeconfig=KUBECONFIG [<flags>]
 
 Start monitoring agent
 
@@ -70,32 +72,36 @@ Flags:
   --help                         Show context-sensitive help (also try --help-long and --help-man).
   --debug                        Enable verbose mode
   --rpc-addr=127.0.0.1:7575      List of addresses to bind the RPC listener to (host:port), comma-separated
-  --kube-addr="http://127.0.0.1:8080"  
-                                 Address of the kubernetes API server
-  --kubelet-addr="http://127.0.0.1:10248"  
+  --kubeconfig=KUBECONFIG        Absolute path to the kubeconfig file
+  --kubelet-addr="http://127.0.0.1:10248"
                                  Address of the kubelet
-  --docker-addr="/var/run/docker.sock"  
+  --docker-addr="/var/run/docker.sock"
                                  Path to the docker daemon socket
-  --nettest-image="gcr.io/google_containers/nettest:1.8"  
+  --nettest-image="gcr.io/google_containers/nettest:1.8"
                                  Name of the image to use for networking test
-  --name=NAME                    Agent name. Must be the same as the name of the local serf node
-  --serf-rpc-addr="127.0.0.1:7373"  
-                                 RPC address of the local serf node
-  --initial-cluster=INITIAL-CLUSTER  
+  --name=NAME                    Agent name that is used to identify this node in the cluster membership service
+  --metrics-addr="127.0.0.1:7580"
+                                 Address to listen on for web interface and telemetry for Prometheus metrics
+  --initial-cluster=INITIAL-CLUSTER
                                  Initial cluster configuration as a comma-separated list of peers
-  --state-dir=STATE-DIR          Directory to store agent-specific state
   --tags=TAGS                    Define a tags as comma-separated list of key:value pairs
-  --etcd-servers=http://127.0.0.1:2379  
+  --disable-interpod-check       Disable inter-pod check for single node cluster
+  --etcd-servers=http://127.0.0.1:2379
                                  List of etcd endpoints (http://host:port), comma separated
   --etcd-cafile=ETCD-CAFILE      SSL Certificate Authority file used to secure etcd communication
   --etcd-certfile=ETCD-CERTFILE  SSL certificate file used to secure etcd communication
   --etcd-keyfile=ETCD-KEYFILE    SSL key file used to secure etcd communication
-  --influxdb-database=INFLUXDB-DATABASE  
+  --influxdb-database=INFLUXDB-DATABASE
                                  Database to connect to
   --influxdb-user=INFLUXDB-USER  Username to use for connection
-  --influxdb-password=INFLUXDB-PASSWORD  
+  --influxdb-password=INFLUXDB-PASSWORD
                                  Password to use for connection
   --influxdb-url=INFLUXDB-URL    URL of the InfluxDB endpoint
+  --ca-file=CA-FILE              SSL CA certificate for verifying server certificates
+  --cert-file=CERT-FILE          SSL certificate for server RPC
+  --key-file=KEY-FILE            SSL certificate key for server RPC
+  --timeline="/tmp/timeline"     Directory to be used for timeline storage
+  --retention=RETENTION          Window to retain timeline as a Go duration
 
 $ satellite agent --name=my-host --tags=role:master
 
