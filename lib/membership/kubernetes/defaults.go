@@ -14,19 +14,4 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package membership
-
-// MemberStatus describes the state of a serf node.
-type MemberStatus string
-
-// Possible membership statuses.
-const (
-	// MemberAlive indicates serf member is active.
-	MemberAlive MemberStatus = "alive"
-	// MemberLeaving indicates serf member is in the process of leaving the cluster.
-	MemberLeaving MemberStatus = "leaving"
-	// MemberLeft indicates serf member has left the cluster.
-	MemberLeft MemberStatus = "left"
-	// MemberFailed indicates failure has been detected on serf member.
-	MemberFailed MemberStatus = "failed"
-)
+package kubernetes

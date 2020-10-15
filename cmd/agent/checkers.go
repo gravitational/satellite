@@ -19,12 +19,14 @@ package main
 import (
 	"github.com/gravitational/satellite/agent"
 	"github.com/gravitational/satellite/cmd"
+	"github.com/gravitational/satellite/lib/membership/kubernetes"
 	"github.com/gravitational/satellite/lib/nethealth"
+	"github.com/gravitational/satellite/lib/rpc/client"
 	"github.com/gravitational/satellite/monitoring"
 	"github.com/gravitational/satellite/monitoring/latency"
+	"github.com/gravitational/satellite/monitoring/timedrift"
 
 	"github.com/gravitational/trace"
-	serf "github.com/hashicorp/serf/client"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -40,10 +42,6 @@ type config struct {
 	agentCertFile string
 	// agentKeyFile sets the file location for the Agent cert key
 	agentKeyFile string
-	// serfRPCAddr is the Serf RPC endpoint address
-	serfRPCAddr string
-	// serfMemberName is used as the Node name in the Serf cluster
-	serfMemberName string
 	// kubeconfigPath is the path to the kubeconfig file
 	kubeconfigPath string
 	// kubeletAddr is the address of the kubelet
@@ -81,31 +79,21 @@ func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeCon
 		return trace.Wrap(err)
 	}
 
-	serfClient, err := agent.NewSerfClient(serf.Config{
-		Addr: config.serfRPCAddr,
+	cluster, err := kubernetes.NewClusterNodes(&kubernetes.NodesConfig{
+		KubeClient: kubeConfig.Client,
 	})
 	if err != nil {
-		return trace.Wrap(err)
+		return trace.Wrap(err, "failed to initialize Kubernetes cluster membership")
 	}
 
-	serfMember, err := serfClient.FindMember(config.serfMemberName)
-	if err != nil {
-		return trace.Wrap(err)
-	}
-
-	timeDriftHealth, err := monitoring.TimeDriftHealth(monitoring.TimeDriftCheckerConfig{
-		CAFile:     node.GetConfig().CAFile,
-		CertFile:   node.GetConfig().CertFile,
-		KeyFile:    node.GetConfig().KeyFile,
-		SerfClient: serfClient,
-		SerfMember: serfMember,
+	timeDriftChecker, err := timedrift.NewChecker(&timedrift.Config{
+		NodeName: node.GetConfig().Name,
+		Cluster:  cluster,
+		DialRPC:  client.DefaultDialRPC(node.GetConfig().CAFile, node.GetConfig().CertFile, node.GetConfig().KeyFile),
 	})
-	if err != nil {
-		return trace.Wrap(err)
-	}
 
 	latencyChecker, err := latency.NewChecker(&latency.Config{
-		NodeName:      node.GetConfig().NodeName,
+		NodeName:      node.GetConfig().Name,
 		KubeClient:    kubeConfig.Client,
 		LatencyClient: nethealth.NewClient(nethealth.DefaultNethealthSocket),
 	})
@@ -117,7 +105,7 @@ func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeCon
 	node.AddChecker(monitoring.DockerHealth(config.dockerAddr))
 	node.AddChecker(etcdChecker)
 	node.AddChecker(monitoring.SystemdHealth())
-	node.AddChecker(timeDriftHealth)
+	node.AddChecker(timeDriftChecker)
 	node.AddChecker(latencyChecker)
 
 	if !config.disableInterPodCheck {

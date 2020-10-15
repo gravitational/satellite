@@ -30,7 +30,6 @@ import (
 	"github.com/gravitational/trace"
 	"github.com/gravitational/version"
 
-	serf "github.com/hashicorp/serf/client"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
@@ -57,8 +56,7 @@ func run() error {
 		cagentKubeletAddr           = cagent.Flag("kubelet-addr", "Address of the kubelet").Default("http://127.0.0.1:10248").String()
 		cagentDockerAddr            = cagent.Flag("docker-addr", "Path to the docker daemon socket").Default("/var/run/docker.sock").String()
 		cagentNettestContainerImage = cagent.Flag("nettest-image", "Name of the image to use for networking test").Default("gcr.io/google_containers/nettest:1.8").String()
-		cagentName                  = cagent.Flag("name", "Agent name.  Must be the same as the name of the local serf node").OverrideDefaultFromEnvar(EnvAgentName).String()
-		cagentSerfRPCAddr           = cagent.Flag("serf-rpc-addr", "RPC address of the local serf node").Default("127.0.0.1:7373").String()
+		cagentName                  = cagent.Flag("name", "Agent name that is used to identify this node in the cluster membership service.").OverrideDefaultFromEnvar(EnvAgentName).String()
 		cagentMetricsAddr           = cagent.Flag("metrics-addr", "Address to listen on for web interface and telemetry for Prometheus metrics").Default("127.0.0.1:7580").String()
 		cagentInitialCluster        = KeyValueListFlag(cagent.Flag("initial-cluster", "Initial cluster configuration as a comma-separated list of peers").OverrideDefaultFromEnvar(EnvInitialCluster))
 		cagentTags                  = KeyValueListFlag(cagent.Flag("tags", "Define a tags as comma-separated list of key:value pairs").OverrideDefaultFromEnvar(EnvTags))
@@ -152,15 +150,11 @@ func run() error {
 			Name:        *cagentName,
 			RPCAddrs:    *cagentRPCAddrs,
 			MetricsAddr: *cagentMetricsAddr,
-			Tags:        *cagentTags,
 			Cache:       multiplex.New(cache, backends...),
 			CAFile:      *cagentCAFile,
 			CertFile:    *cagentCertFile,
 			KeyFile:     *cagentKeyFile,
 
-			SerfConfig: serf.Config{
-				Addr: *cagentSerfRPCAddr,
-			},
 			TimelineConfig: sqlite.Config{
 				DBPath:            *cagentTimelineDir,
 				RetentionDuration: *cagentRetention,
@@ -168,8 +162,6 @@ func run() error {
 		}
 		monitoringConfig := &config{
 			role:                 agent.Role(agentRole),
-			serfRPCAddr:          *cagentSerfRPCAddr,
-			serfMemberName:       agentConfig.Name,
 			kubeconfigPath:       *cagentKubeconfig,
 			kubeletAddr:          *cagentKubeletAddr,
 			dockerAddr:           *cagentDockerAddr,

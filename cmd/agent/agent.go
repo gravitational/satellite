@@ -45,11 +45,6 @@ func runAgent(config *agent.Config, monitoringConfig *config, peers []string) er
 	if err = monitoringAgent.Start(); err != nil {
 		return trace.Wrap(err)
 	}
-	if len(peers) > 0 {
-		if err = monitoringAgent.Join(peers); err != nil {
-			return trace.Wrap(err, "failed to join serf cluster")
-		}
-	}
 
 	signalc := make(chan os.Signal, 2)
 	signal.Notify(signalc, os.Interrupt, syscall.SIGTERM)

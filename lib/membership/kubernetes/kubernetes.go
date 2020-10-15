@@ -14,17 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package membership provides an interface for polling cluster membership.
-package membership
-
-import (
-	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-)
-
-// Cluster interface is used to list cluster members.
-type Cluster interface {
-	// Members returns the list of cluster members.
-	Members() ([]*pb.MemberStatus, error)
-	// Member returns the member with the specified name.
-	Member(name string) (*pb.MemberStatus, error)
-}
+// Package kubernetes provides implementations of membership.Cluster that
+// rely on a Kubernetes cluster.
+package kubernetes

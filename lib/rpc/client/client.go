@@ -30,7 +30,6 @@ import (
 	"github.com/gravitational/satellite/lib/rpc"
 
 	"github.com/gravitational/trace"
-	serf "github.com/hashicorp/serf/client"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -67,14 +66,13 @@ func (c *Config) CheckAndSetDefaults() error {
 	return trace.NewAggregate(errors...)
 }
 
-// Client is an interface to communicate with the serf cluster via agent RPC.
+// Client is an interface to communicate with the cluster via agent RPC.
 type Client interface {
-	// Status reports the health status of a serf cluster.
+	// Status reports the health status of the cluster.
 	Status(context.Context) (*pb.SystemStatus, error)
-	// LocalStatus reports the health status of the local serf cluster node.
+	// LocalStatus reports the health status of the local cluster node.
 	LocalStatus(context.Context) (*pb.NodeStatus, error)
-	// LastSeen requests the last seen timestamp for a member specified by
-	// their serf name.
+	// LastSeen requests the last seen timestamp for the specified member.
 	LastSeen(context.Context, *pb.LastSeenRequest) (*pb.LastSeenResponse, error)
 	// Time returns the current time on the target node.
 	Time(context.Context, *pb.TimeRequest) (*pb.TimeResponse, error)
@@ -146,7 +144,7 @@ func NewClientWithCreds(ctx context.Context, addr string, creds credentials.Tran
 	}, nil
 }
 
-// Status reports the health status of the serf cluster.
+// Status reports the health status of the cluster.
 func (r *client) Status(ctx context.Context) (*pb.SystemStatus, error) {
 	resp, err := r.AgentClient.Status(ctx, &pb.StatusRequest{}, r.callOptions...)
 	if err != nil {
@@ -155,7 +153,7 @@ func (r *client) Status(ctx context.Context) (*pb.SystemStatus, error) {
 	return resp.Status, nil
 }
 
-// LocalStatus reports the health status of the local serf node.
+// LocalStatus reports the health status of the local node.
 func (r *client) LocalStatus(ctx context.Context) (*pb.NodeStatus, error) {
 	resp, err := r.AgentClient.LocalStatus(ctx, &pb.LocalStatusRequest{}, r.callOptions...)
 	if err != nil {
@@ -164,8 +162,7 @@ func (r *client) LocalStatus(ctx context.Context) (*pb.NodeStatus, error) {
 	return resp.Status, nil
 }
 
-// LastSeen requests the last seen timestamp for member specified by their serf
-// name.
+// LastSeen requests the last seen timestamp for the specified member.
 func (r *client) LastSeen(ctx context.Context, req *pb.LastSeenRequest) (*pb.LastSeenResponse, error) {
 	resp, err := r.AgentClient.LastSeen(ctx, req, r.callOptions...)
 	if err != nil {
@@ -224,15 +221,15 @@ func (r *client) Close() error {
 	return r.conn.Close()
 }
 
-// DialRPC returns RPC client for the provided Serf member.
-type DialRPC func(context.Context, *serf.Member) (Client, error)
+// DialRPC returns RPC client for the provided addr.
+type DialRPC func(ctx context.Context, addr string) (Client, error)
 
-// DefaultDialRPC is a default RPC client factory function.
-// It creates a new client based on address details from the specific serf member.
+// DefaultDialRPC is the default RPC client factory function.
+// It creates a new client based on address details.
 func DefaultDialRPC(caFile, certFile, keyFile string) DialRPC {
-	return func(ctx context.Context, member *serf.Member) (Client, error) {
+	return func(ctx context.Context, addr string) (Client, error) {
 		config := Config{
-			Address:  fmt.Sprintf("%s:%d", member.Addr.String(), rpc.Port),
+			Address:  fmt.Sprintf("%s:%d", addr, rpc.Port),
 			CAFile:   caFile,
 			CertFile: certFile,
 			KeyFile:  keyFile,
