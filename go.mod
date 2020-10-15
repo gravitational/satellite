@@ -3,7 +3,6 @@ module github.com/gravitational/satellite
 go 1.13
 
 require (
-	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878 // indirect
 	github.com/aws/aws-sdk-go v1.25.41
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/cloudfoundry/gosigar v1.1.1-0.20180406153506-1375283248c3
@@ -19,13 +18,6 @@ require (
 	github.com/gravitational/trace v1.1.11
 	github.com/gravitational/ttlmap/v2 v2.0.0-20200702161230-1bbfd908876d
 	github.com/gravitational/version v0.0.2-0.20170324200323-95d33ece5ce1
-	github.com/hashicorp/go-immutable-radix v1.1.0 // indirect
-	github.com/hashicorp/go-msgpack v0.5.5 // indirect
-	github.com/hashicorp/go-multierror v1.1.0 // indirect
-	github.com/hashicorp/go-sockaddr v1.0.2 // indirect
-	github.com/hashicorp/go-uuid v1.0.2 // indirect
-	github.com/hashicorp/memberlist v0.2.2 // indirect
-	github.com/hashicorp/serf v0.8.3
 	github.com/imdario/mergo v0.3.6 // indirect
 	github.com/influxdata/influxdb v1.5.1
 	github.com/jmoiron/sqlx v1.2.0
