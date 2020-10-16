@@ -19,10 +19,4 @@ package kubernetes
 const (
 	// AllNamespaces can be used to query pods in all namespaces.
 	AllNamespaces = ""
-
-	// NamespaceKubeSystem specifies kube-system namespace.
-	NamespaceKubeSystem = "kube-system"
-
-	// NamespaceMonitoring specifies monitoring namespace.
-	NamespaceMonitoring = "monitoring"
 )
