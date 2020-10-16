@@ -19,6 +19,7 @@ package monitoring
 import (
 	"context"
 	"net"
+	"sort"
 	"time"
 
 	"github.com/gravitational/satellite/agent"
@@ -145,12 +146,12 @@ func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 		var probes health.Probes
 
 		ctx, cancel := context.WithCancel(context.Background())
-
 		if test.slow {
 			cancel()
 		}
 
 		checker.Check(ctx, &probes)
+		sort.Sort(health.ByDetail(probes))
 		c.Assert(probes.GetProbes(), check.DeepEquals, test.result,
 			check.Commentf(test.comment))
 	}
