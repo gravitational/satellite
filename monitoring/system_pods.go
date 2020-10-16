@@ -98,16 +98,26 @@ func (r *systemPodsChecker) check(ctx context.Context, reporter health.Reporter)
 
 // getPods returns a list of the local pods that have the
 // `gravitational.io/critical-pod` label.
-func (r *systemPodsChecker) getPods() ([]corev1.Pod, error) {
+func (r *systemPodsChecker) getPods() (pods []corev1.Pod, err error) {
+	// namespaces lists the namespaces where critical pods may be running.
+	namespaces := []string{
+		kubernetes.NamespaceKubeSystem,
+		kubernetes.NamespaceMonitoring,
+	}
+
 	opts := metav1.ListOptions{
 		LabelSelector: systemPodsSelector.String(),
 	}
-	pods, err := r.Client.CoreV1().Pods(kubernetes.AllNamespaces).List(opts)
-	if err != nil {
-		return nil, utils.ConvertError(err)
+
+	for _, namespace := range namespaces {
+		podList, err := r.Client.CoreV1().Pods(namespace).List(opts)
+		if err != nil {
+			return pods, utils.ConvertError(err)
+		}
+		pods = append(pods, podList.Items...)
 	}
 
-	return pods.Items, nil
+	return pods, nil
 }
 
 // verifyPods verifies the pods are in a valid state. Reports a failed probe for

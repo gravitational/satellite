@@ -16,5 +16,13 @@ limitations under the License.
 
 package kubernetes
 
-// AllNamespaces can be used to query pods in all namespaces.
-const AllNamespaces = ""
+const (
+	// AllNamespaces can be used to query pods in all namespaces.
+	AllNamespaces = ""
+
+	// NamespaceKubeSystem specifies kube-system namespace.
+	NamespaceKubeSystem = "kube-system"
+
+	// NamespaceMonitoring specifies monitoring namespace.
+	NamespaceMonitoring = "monitoring"
+)
