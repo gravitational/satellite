@@ -66,7 +66,8 @@ func (c iscsiChecker) Check(ctx context.Context, reporter health.Reporter) {
 
 	probeFailed := false
 	for _, unit := range units {
-		if unit.Name == "iscsid.service" || unit.Name == "iscsid.socket" {
+		switch unit.Name {
+		case "iscisid.service", "iscsid.socket":
 			if unit.ActiveState == "active" || unit.LoadState != loadStateMasked {
 				reporter.Add(&pb.Probe{
 					Checker: iscsiCheckerID,
