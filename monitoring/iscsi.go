@@ -71,7 +71,9 @@ func (c iscsiChecker) Check(ctx context.Context, reporter health.Reporter) {
 				reporter.Add(&pb.Probe{
 					Checker: iscsiCheckerID,
 					Detail: fmt.Sprintf("Found conflicting systemd service: %v. "+
-						"Please stop, disable and mask this service and try again.", unit.Name),
+						"If this service is present on the host it will interfere "+
+						"with OpenEBS enabled applications running in Gravity."+
+						"Please stop and mask this service and try again.", unit.Name),
 					Status: pb.Probe_Failed,
 				})
 				probeFailed = true
