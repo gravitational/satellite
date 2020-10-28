@@ -68,7 +68,7 @@ func (c iscsiChecker) Check(ctx context.Context, reporter health.Reporter) {
 	for _, unit := range units {
 		switch unit.Name {
 		case "iscisid.service", "iscsid.socket":
-			if unit.ActiveState == "active" || unit.LoadState != loadStateMasked {
+			if unit.ActiveState == activeStateActive || unit.LoadState != loadStateMasked {
 				reporter.Add(&pb.Probe{
 					Checker: iscsiCheckerID,
 					Detail: fmt.Sprintf("Found conflicting systemd service: %v. "+

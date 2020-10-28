@@ -159,13 +159,11 @@ const (
 	loadStateNotFound           = "not-found"
 )
 
-type activeState string
-
 const (
-	activeStateActive       activeState = "active"
-	activeStateReloading                = "reloading"
-	activeStateInactive                 = "inactive"
-	activeStateFailed                   = "failed"
-	activeStateActivating               = "activating"
-	activeStateDeactivating             = "deactivating"
+	activeStateActive       = "active"
+	activeStateReloading    = "reloading"
+	activeStateInactive     = "inactive"
+	activeStateFailed       = "failed"
+	activeStateActivating   = "activating"
+	activeStateDeactivating = "deactivating"
 )
