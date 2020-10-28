@@ -53,13 +53,15 @@ func (c iscsiChecker) Check(ctx context.Context, reporter health.Reporter) {
 	if err != nil {
 		reason := "failed to connect to dbus"
 		reporter.Add(NewProbeFromErr(c.Name(), reason, trace.Wrap(err)))
+		return
 	}
 	defer conn.Close()
 
 	units, err := conn.ListUnits()
 	if err != nil {
-		reason := "failed to query systemd units"
+		reason := "failed to list systemd units via dbus"
 		reporter.Add(NewProbeFromErr(c.Name(), reason, trace.Wrap(err)))
+		return
 	}
 
 	probeFailed := false
