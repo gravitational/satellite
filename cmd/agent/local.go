@@ -24,7 +24,7 @@ import (
 )
 
 func localChecks() error {
-	ch := monitoring.BasicCheckers()
+	ch := monitoring.BasicCheckers(monitoring.DefaultProcessesToCheck)
 	var r health.Probes
 
 	ch.Check(context.TODO(), &r)
