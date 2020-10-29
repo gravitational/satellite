@@ -29,6 +29,14 @@ import (
 
 const (
 	iscsiCheckerID = "iscsi"
+
+	ISCSIDService = "iscsid.service"
+	ISCSIDSocket  = "iscsid.socket"
+
+	FailedProbeMessage = "Found conflicting systemd service: %v. " +
+		"If this service is present on the host it will interfere " +
+		"with OpenEBS enabled applications running in Gravity." +
+		"Please stop and mask this service and try again."
 )
 
 // NewISCSIChecker returns a new checker, that checks that the iscsid is not running on the host when
@@ -64,18 +72,19 @@ func (c iscsiChecker) Check(ctx context.Context, reporter health.Reporter) {
 		return
 	}
 
+	c.CheckISCSIUnits(units, reporter)
+}
+
+func (c iscsiChecker) CheckISCSIUnits(units []dbus.UnitStatus, reporter health.Reporter) {
 	probeFailed := false
 	for _, unit := range units {
 		switch unit.Name {
-		case "iscisid.service", "iscsid.socket":
+		case ISCSIDService, ISCSIDSocket:
 			if unit.ActiveState == activeStateActive || unit.LoadState != loadStateMasked {
 				reporter.Add(&pb.Probe{
 					Checker: iscsiCheckerID,
-					Detail: fmt.Sprintf("Found conflicting systemd service: %v. "+
-						"If this service is present on the host it will interfere "+
-						"with OpenEBS enabled applications running in Gravity."+
-						"Please stop and mask this service and try again.", unit.Name),
-					Status: pb.Probe_Failed,
+					Detail:  fmt.Sprintf(FailedProbeMessage, unit.Name),
+					Status:  pb.Probe_Failed,
 				})
 				probeFailed = true
 			}
