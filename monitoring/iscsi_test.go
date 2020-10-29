@@ -28,9 +28,9 @@ import (
 )
 
 const (
-	ActiveAndMasked   = "ActiveState is inactive and LoadState is masked."
-	ActiveAndLoaded   = "ActiveState is active and LoadState is loaded."
-	InactiveAndLoaded = "ActiveState is inactive and LoadState is loaded."
+	inactiveAndMasked = "ActiveState is inactive and LoadState is masked."
+	activeAndLoaded   = "ActiveState is active and LoadState is loaded."
+	inactiveAndLoaded = "ActiveState is inactive and LoadState is loaded."
 )
 
 type ISCSISuite struct{}
@@ -46,7 +46,7 @@ func (s *ISCSISuite) TestISCSI(c *C) {
 		probe      *pb.Probe
 	}{
 		{
-			comment:    Commentf(ActiveAndLoaded),
+			comment:    Commentf(activeAndLoaded),
 			unitStatus: []dbus.UnitStatus{{Name: ISCSIDService, ActiveState: activeStateActive, LoadState: loadStateLoaded}},
 			probe: &pb.Probe{
 				Checker: iscsiCheckerID,
@@ -55,7 +55,7 @@ func (s *ISCSISuite) TestISCSI(c *C) {
 			},
 		},
 		{
-			comment:    Commentf(InactiveAndLoaded),
+			comment:    Commentf(inactiveAndLoaded),
 			unitStatus: []dbus.UnitStatus{{Name: ISCSIDService, ActiveState: activeStateInactive, LoadState: loadStateLoaded}},
 			probe: &pb.Probe{
 				Checker: iscsiCheckerID,
@@ -64,7 +64,7 @@ func (s *ISCSISuite) TestISCSI(c *C) {
 			},
 		},
 		{
-			comment:    Commentf(ActiveAndLoaded),
+			comment:    Commentf(activeAndLoaded),
 			unitStatus: []dbus.UnitStatus{{Name: ISCSIDSocket, ActiveState: activeStateActive, LoadState: loadStateLoaded}},
 			probe: &pb.Probe{
 				Checker: iscsiCheckerID,
@@ -73,7 +73,7 @@ func (s *ISCSISuite) TestISCSI(c *C) {
 			},
 		},
 		{
-			comment:    Commentf(InactiveAndLoaded),
+			comment:    Commentf(inactiveAndLoaded),
 			unitStatus: []dbus.UnitStatus{{Name: ISCSIDSocket, ActiveState: activeStateInactive, LoadState: loadStateLoaded}},
 			probe: &pb.Probe{
 				Checker: iscsiCheckerID,
@@ -82,7 +82,7 @@ func (s *ISCSISuite) TestISCSI(c *C) {
 			},
 		},
 		{
-			comment:    Commentf(ActiveAndMasked),
+			comment:    Commentf(inactiveAndMasked),
 			unitStatus: []dbus.UnitStatus{{Name: ISCSIDService, ActiveState: activeStateInactive, LoadState: loadStateMasked}},
 			probe: &pb.Probe{
 				Checker: iscsiCheckerID,
@@ -91,7 +91,7 @@ func (s *ISCSISuite) TestISCSI(c *C) {
 			},
 		},
 		{
-			comment:    Commentf(ActiveAndMasked),
+			comment:    Commentf(inactiveAndMasked),
 			unitStatus: []dbus.UnitStatus{{Name: ISCSIDSocket, ActiveState: activeStateInactive, LoadState: loadStateMasked}},
 			probe: &pb.Probe{
 				Checker: iscsiCheckerID,
