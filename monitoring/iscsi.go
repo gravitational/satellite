@@ -79,6 +79,7 @@ func (c iscsiChecker) Check(ctx context.Context, reporter health.Reporter) {
 	c.CheckISCSIUnits(units, reporter)
 }
 
+// CheckISCSIUnits verifies that the systemd units are in the expected state.
 func (c iscsiChecker) CheckISCSIUnits(units []dbus.UnitStatus, reporter health.Reporter) {
 	for _, unit := range units {
 		switch unit.Name {
