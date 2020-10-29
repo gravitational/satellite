@@ -18,12 +18,12 @@ package monitoring
 
 import (
 	"fmt"
-	"github.com/coreos/go-systemd/v22/dbus"
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	"github.com/gravitational/satellite/lib/test"
 
+	"github.com/coreos/go-systemd/v22/dbus"
 	. "gopkg.in/check.v1"
 )
 
