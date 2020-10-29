@@ -30,9 +30,13 @@ import (
 const (
 	iscsiCheckerID = "iscsi"
 
+	// ISCSIDService is the name of the iscsid systemd service unit.
 	ISCSIDService = "iscsid.service"
-	ISCSIDSocket  = "iscsid.socket"
+	// ISCSIDSocket is the name of the iscsid systemd socket unit.
+	ISCSIDSocket = "iscsid.socket"
 
+	// FailedProbeMessage is the error message that gets displayed to the user
+	// when the validation fails.
 	FailedProbeMessage = "Found conflicting systemd service: %v. " +
 		"If this service is present on the host it will interfere " +
 		"with OpenEBS enabled applications running in Gravity." +
@@ -76,7 +80,6 @@ func (c iscsiChecker) Check(ctx context.Context, reporter health.Reporter) {
 }
 
 func (c iscsiChecker) CheckISCSIUnits(units []dbus.UnitStatus, reporter health.Reporter) {
-	probeFailed := false
 	for _, unit := range units {
 		switch unit.Name {
 		case ISCSIDService, ISCSIDSocket:
@@ -86,12 +89,11 @@ func (c iscsiChecker) CheckISCSIUnits(units []dbus.UnitStatus, reporter health.R
 					Detail:  fmt.Sprintf(FailedProbeMessage, unit.Name),
 					Status:  pb.Probe_Failed,
 				})
-				probeFailed = true
 			}
 		}
 	}
 
-	if !probeFailed {
+	if reporter.NumProbes() == 0 {
 		reporter.Add(NewSuccessProbe(c.Name()))
 	}
 }
