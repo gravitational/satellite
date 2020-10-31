@@ -31,6 +31,9 @@ const (
 	inactiveAndMasked = "ActiveState is inactive and LoadState is masked."
 	activeAndLoaded   = "ActiveState is active and LoadState is loaded."
 	inactiveAndLoaded = "ActiveState is inactive and LoadState is loaded."
+
+	failedProbeMessage = "Found conflicting systemd service: %v. " +
+		"Please stop and mask this service and try again."
 )
 
 type ISCSISuite struct{}
@@ -50,7 +53,7 @@ func (s *ISCSISuite) TestISCSI(c *C) {
 			unitStatus: []dbus.UnitStatus{{Name: ISCSIDService, ActiveState: activeStateActive, LoadState: loadStateLoaded}},
 			probe: &pb.Probe{
 				Checker: iscsiCheckerID,
-				Detail:  fmt.Sprintf(FailedProbeMessage, ISCSIDService),
+				Detail:  fmt.Sprintf(failedProbeMessage, ISCSIDService),
 				Status:  pb.Probe_Failed,
 			},
 		},
@@ -59,7 +62,7 @@ func (s *ISCSISuite) TestISCSI(c *C) {
 			unitStatus: []dbus.UnitStatus{{Name: ISCSIDService, ActiveState: activeStateInactive, LoadState: loadStateLoaded}},
 			probe: &pb.Probe{
 				Checker: iscsiCheckerID,
-				Detail:  fmt.Sprintf(FailedProbeMessage, ISCSIDService),
+				Detail:  fmt.Sprintf(failedProbeMessage, ISCSIDService),
 				Status:  pb.Probe_Failed,
 			},
 		},
@@ -68,7 +71,7 @@ func (s *ISCSISuite) TestISCSI(c *C) {
 			unitStatus: []dbus.UnitStatus{{Name: ISCSIDSocket, ActiveState: activeStateActive, LoadState: loadStateLoaded}},
 			probe: &pb.Probe{
 				Checker: iscsiCheckerID,
-				Detail:  fmt.Sprintf(FailedProbeMessage, ISCSIDSocket),
+				Detail:  fmt.Sprintf(failedProbeMessage, ISCSIDSocket),
 				Status:  pb.Probe_Failed,
 			},
 		},
@@ -77,7 +80,7 @@ func (s *ISCSISuite) TestISCSI(c *C) {
 			unitStatus: []dbus.UnitStatus{{Name: ISCSIDSocket, ActiveState: activeStateInactive, LoadState: loadStateLoaded}},
 			probe: &pb.Probe{
 				Checker: iscsiCheckerID,
-				Detail:  fmt.Sprintf(FailedProbeMessage, ISCSIDSocket),
+				Detail:  fmt.Sprintf(failedProbeMessage, ISCSIDSocket),
 				Status:  pb.Probe_Failed,
 			},
 		},
@@ -102,7 +105,7 @@ func (s *ISCSISuite) TestISCSI(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		checker := iscsiChecker{}
+		checker := iscsiChecker{FailedProbeMessage: failedProbeMessage}
 		var reporter health.Probes
 		checker.CheckISCSIUnits(testCase.unitStatus, &reporter)
 		c.Assert(reporter.GetProbes(), test.DeepCompare, []*pb.Probe{testCase.probe}, testCase.comment)

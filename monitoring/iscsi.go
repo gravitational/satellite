@@ -34,23 +34,20 @@ const (
 	ISCSIDService = "iscsid.service"
 	// ISCSIDSocket is the name of the iscsid systemd socket unit.
 	ISCSIDSocket = "iscsid.socket"
-
-	// FailedProbeMessage is the error message that gets displayed to the user
-	// when the validation fails.
-	FailedProbeMessage = "Found conflicting systemd service: %v. " +
-		"If this service is present on the host it will interfere " +
-		"with OpenEBS enabled applications running in Gravity." +
-		"Please stop and mask this service and try again."
 )
 
-// NewISCSIChecker returns a new checker, that checks that the iscsid is not running on the host when
-// OpenEBS is enabled in the deployment manifest. This is needed because if iscsid is running on the host it
-// makes the iscsid in planet to fail.
-func NewISCSIChecker() health.Checker {
-	return &iscsiChecker{}
+// NewISCSIChecker verifies that the iscsid service
+// is not running on the host.
+// The failedProbeMessage gets displayed to the user when
+// the probe fails. The message takes a single parameter:
+// systemd unit name.
+func NewISCSIChecker(failedProbeMessage string) health.Checker {
+	return &iscsiChecker{FailedProbeMessage: failedProbeMessage}
 }
 
-type iscsiChecker struct{}
+type iscsiChecker struct {
+	FailedProbeMessage string
+}
 
 // Name returns the name of this checker
 // Implements health.Checker
@@ -87,7 +84,7 @@ func (c iscsiChecker) CheckISCSIUnits(units []dbus.UnitStatus, reporter health.R
 			if unit.ActiveState == activeStateActive || unit.LoadState != loadStateMasked {
 				reporter.Add(&pb.Probe{
 					Checker: iscsiCheckerID,
-					Detail:  fmt.Sprintf(FailedProbeMessage, unit.Name),
+					Detail:  fmt.Sprintf(c.FailedProbeMessage, unit.Name),
 					Status:  pb.Probe_Failed,
 				})
 			}
