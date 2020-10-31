@@ -31,8 +31,6 @@ var (
 		"kube-controller-manager",
 		"kube-proxy",
 		"kubelet",
-		"planet",
-		"teleport",
 	}
 )
 
