@@ -18,7 +18,6 @@ package monitoring
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
@@ -36,17 +35,16 @@ const (
 	ISCSIDSocket = "iscsid.socket"
 )
 
-// NewISCSIChecker verifies that the iscsid service
-// is not running on the host.
-// The failedProbeMessage gets displayed to the user when
-// the probe fails. The message takes a single parameter:
-// systemd unit name.
-func NewISCSIChecker(failedProbeMessage string) health.Checker {
-	return &iscsiChecker{FailedProbeMessage: failedProbeMessage}
+type FormatISCSIError func(unitName string) string
+
+// NewISCSIChecker verifies that the iscsid service is not running on the host.
+// The fmt parameter formats the message shown to the user when the probe fails.
+func NewISCSIChecker(fmt FormatISCSIError) health.Checker {
+	return &iscsiChecker{FailedProbeMsgFmt: fmt}
 }
 
 type iscsiChecker struct {
-	FailedProbeMessage string
+	FailedProbeMsgFmt FormatISCSIError
 }
 
 // Name returns the name of this checker
@@ -84,7 +82,7 @@ func (c iscsiChecker) CheckISCSIUnits(units []dbus.UnitStatus, reporter health.R
 			if unit.ActiveState == activeStateActive || unit.LoadState != loadStateMasked {
 				reporter.Add(&pb.Probe{
 					Checker: iscsiCheckerID,
-					Detail:  fmt.Sprintf(c.FailedProbeMessage, unit.Name),
+					Detail:  c.FailedProbeMsgFmt(unit.Name),
 					Status:  pb.Probe_Failed,
 				})
 			}

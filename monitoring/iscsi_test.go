@@ -36,6 +36,12 @@ const (
 		"Please stop and mask this service and try again."
 )
 
+var (
+	fmtISCSICheckFailedMsg = func(unitName string) string {
+		return fmt.Sprintf(failedProbeMessage, unitName)
+	}
+)
+
 type ISCSISuite struct{}
 
 var _ = Suite(&ISCSISuite{})
@@ -105,7 +111,7 @@ func (s *ISCSISuite) TestISCSI(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		checker := iscsiChecker{FailedProbeMessage: failedProbeMessage}
+		checker := iscsiChecker{FailedProbeMsgFmt: fmtISCSICheckFailedMsg}
 		var reporter health.Probes
 		checker.CheckISCSIUnits(testCase.unitStatus, &reporter)
 		c.Assert(reporter.GetProbes(), test.DeepCompare, []*pb.Probe{testCase.probe}, testCase.comment)
