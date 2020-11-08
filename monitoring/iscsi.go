@@ -35,6 +35,8 @@ const (
 	ISCSIDSocket = "iscsid.socket"
 )
 
+// FormatISCSIError is used to format the error messages
+// that is shown to the user when the iscsi probe fails.
 type FormatISCSIError func(unitName string) string
 
 // NewISCSIChecker verifies that the iscsid service is not running on the host.
