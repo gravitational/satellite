@@ -28,9 +28,12 @@ import (
 )
 
 const (
-	inactiveAndMasked = "ActiveState is inactive and LoadState is masked."
-	activeAndLoaded   = "ActiveState is active and LoadState is loaded."
-	inactiveAndLoaded = "ActiveState is inactive and LoadState is loaded."
+	inactiveAndMaskedService = "Service unit ActiveState is inactive and LoadState is masked."
+	inactiveAndMaskedSocket  = "Socket activate unit ActiveState is inactive and LoadState is masked."
+	activeAndLoadedService   = "Service unit ActiveState is active and LoadState is loaded."
+	activeAndLoadedSocket    = "Socket activated unit ActiveState is active and LoadState is loaded."
+	inactiveAndLoadedService = "Service unit ActiveState is inactive and LoadState is loaded."
+	inactiveAndLoadedSocket  = "Socket activated unit ActiveState is inactive and LoadState is loaded."
 
 	failedProbeMessage = "Found conflicting systemd service: %v. " +
 		"Please stop and mask this service and try again."
@@ -55,7 +58,7 @@ func (s *ISCSISuite) TestISCSI(c *C) {
 		probe      *pb.Probe
 	}{
 		{
-			comment:    Commentf(activeAndLoaded),
+			comment:    Commentf(activeAndLoadedService),
 			unitStatus: []dbus.UnitStatus{{Name: ISCSIDService, ActiveState: activeStateActive, LoadState: loadStateLoaded}},
 			probe: &pb.Probe{
 				Checker: iscsiCheckerID,
@@ -64,7 +67,7 @@ func (s *ISCSISuite) TestISCSI(c *C) {
 			},
 		},
 		{
-			comment:    Commentf(inactiveAndLoaded),
+			comment:    Commentf(inactiveAndLoadedService),
 			unitStatus: []dbus.UnitStatus{{Name: ISCSIDService, ActiveState: activeStateInactive, LoadState: loadStateLoaded}},
 			probe: &pb.Probe{
 				Checker: iscsiCheckerID,
@@ -73,7 +76,7 @@ func (s *ISCSISuite) TestISCSI(c *C) {
 			},
 		},
 		{
-			comment:    Commentf(activeAndLoaded),
+			comment:    Commentf(activeAndLoadedSocket),
 			unitStatus: []dbus.UnitStatus{{Name: ISCSIDSocket, ActiveState: activeStateActive, LoadState: loadStateLoaded}},
 			probe: &pb.Probe{
 				Checker: iscsiCheckerID,
@@ -82,7 +85,7 @@ func (s *ISCSISuite) TestISCSI(c *C) {
 			},
 		},
 		{
-			comment:    Commentf(inactiveAndLoaded),
+			comment:    Commentf(inactiveAndLoadedSocket),
 			unitStatus: []dbus.UnitStatus{{Name: ISCSIDSocket, ActiveState: activeStateInactive, LoadState: loadStateLoaded}},
 			probe: &pb.Probe{
 				Checker: iscsiCheckerID,
@@ -91,7 +94,7 @@ func (s *ISCSISuite) TestISCSI(c *C) {
 			},
 		},
 		{
-			comment:    Commentf(inactiveAndMasked),
+			comment:    Commentf(inactiveAndMaskedService),
 			unitStatus: []dbus.UnitStatus{{Name: ISCSIDService, ActiveState: activeStateInactive, LoadState: loadStateMasked}},
 			probe: &pb.Probe{
 				Checker: iscsiCheckerID,
@@ -100,7 +103,7 @@ func (s *ISCSISuite) TestISCSI(c *C) {
 			},
 		},
 		{
-			comment:    Commentf(inactiveAndMasked),
+			comment:    Commentf(inactiveAndMaskedSocket),
 			unitStatus: []dbus.UnitStatus{{Name: ISCSIDSocket, ActiveState: activeStateInactive, LoadState: loadStateMasked}},
 			probe: &pb.Probe{
 				Checker: iscsiCheckerID,
