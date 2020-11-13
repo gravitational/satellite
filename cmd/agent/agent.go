@@ -22,8 +22,10 @@ import (
 	"syscall"
 
 	"github.com/gravitational/satellite/agent"
+	"github.com/gravitational/satellite/lib/membership"
 
 	"github.com/gravitational/trace"
+	serf "github.com/hashicorp/serf/client"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -32,6 +34,14 @@ func runAgent(config *agent.Config, monitoringConfig *config, peers []string) er
 	if len(peers) > 0 {
 		log.Infof("initial cluster=%v", peers)
 	}
+
+	cluster, err := membership.NewSerfCluster(&serf.Config{
+		Addr: monitoringConfig.serfRPCAddr,
+	})
+	if err != nil {
+		return trace.Wrap(err, "failed to initialize serf cluster membership service")
+	}
+	config.Cluster = cluster
 
 	monitoringAgent, err := agent.New(config)
 	if err != nil {

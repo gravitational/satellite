@@ -14,29 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package membership provides interface for cluster membership management.
+// Package membership provides an interface for querying cluster membership
+// status.
 package membership
 
 import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-
-	"github.com/hashicorp/serf/coordinate"
 )
 
-// ClusterMembership is interface to interact with a cluster membership service.
-type ClusterMembership interface {
+// Cluster interface is used to query cluster members.
+type Cluster interface {
 	// Members returns the list of cluster members.
 	Members() ([]*pb.MemberStatus, error)
-	// FindMember finds the member with the specified name.
-	FindMember(name string) (*pb.MemberStatus, error)
-	// Close closes the client.
-	Close() error
-	// Join attempts to join an existing cluster identified by peers.
-	// Replay controls if previous user events are replayed once this node has joined the cluster.
-	// Returns the number of nodes joined.
-	Join(peers []string, replay bool) (int, error)
-	// UpdateTags will modify the tags on a running member.
-	UpdateTags(tags map[string]string, delTags []string) error
-	// GetCoordinate returns the Serf Coordinate for a specific node
-	GetCoordinate(node string) (*coordinate.Coordinate, error)
+	// Member returns the member with the specified name.
+	Member(name string) (*pb.MemberStatus, error)
 }

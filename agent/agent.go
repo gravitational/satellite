@@ -38,7 +38,6 @@ import (
 
 	"github.com/gravitational/trace"
 	"github.com/gravitational/ttlmap/v2"
-	serf "github.com/hashicorp/serf/client"
 	"github.com/jonboulle/clockwork"
 	log "github.com/sirupsen/logrus"
 )
@@ -72,9 +71,6 @@ type Config struct {
 	// KeyFile specifies the path to TLS certificate key file
 	KeyFile string
 
-	// SerfConfig specifies serf client configuration.
-	SerfConfig serf.Config
-
 	// MetricsAddr specifies the address to listen on for web interface and telemetry for Prometheus metrics.
 	MetricsAddr string
 
@@ -101,6 +97,9 @@ type Config struct {
 
 	// DialRPC is a factory function to create clients to other agents.
 	client.DialRPC
+
+	// Cluster is used to query cluster members.
+	membership.Cluster
 }
 
 // CheckAndSetDefaults validates this configuration object.
@@ -119,6 +118,9 @@ func (r *Config) CheckAndSetDefaults() error {
 	}
 	if r.Name == "" {
 		errors = append(errors, trace.BadParameter("agent name cannot be empty"))
+	}
+	if r.Cluster == nil {
+		errors = append(errors, trace.BadParameter("cluster membership must be provided"))
 	}
 	if len(r.RPCAddrs) == 0 {
 		errors = append(errors, trace.BadParameter("at least one RPC address must be provided"))
@@ -183,9 +185,6 @@ type agent struct {
 	cancel context.CancelFunc
 	// g manages the internal agent's processes
 	g ctxgroup.Group
-
-	// newSerfClientFunc is used to create a serf client on demand.
-	newSerfClientFunc func() (membership.ClusterMembership, error)
 }
 
 // New creates an instance of an agent based on configuration options given in config.
@@ -244,7 +243,6 @@ func New(config *Config) (*agent, error) {
 		cancel:                  cancel,
 		g:                       g,
 	}
-	agent.newSerfClientFunc = agent.newSerfClient
 
 	agent.rpc, err = newRPCServer(agent, config.CAFile, config.CertFile, config.KeyFile, config.RPCAddrs)
 	if err != nil {
@@ -530,19 +528,7 @@ func (r *agent) collectStatus(ctx context.Context) *pb.SystemStatus {
 	ctx, cancel := context.WithTimeout(ctx, StatusUpdateTimeout)
 	defer cancel()
 
-	client, err := r.newSerfClientFunc()
-	if err != nil {
-		log.WithError(err).Error("Failed to create serf client.")
-		r.setLocalStatus(r.defaultUnknownStatus())
-		return &pb.SystemStatus{
-			Status:    pb.SystemStatus_Degraded,
-			Timestamp: pb.NewTimeToProto(r.Clock.Now()),
-			Summary:   fmt.Sprintf("failed to create serf client: %v", err),
-		}
-	}
-	defer client.Close()
-
-	members, err := client.Members()
+	members, err := r.Cluster.Members()
 	if err != nil {
 		log.WithError(err).Error("Failed to query serf members.")
 		r.setLocalStatus(r.defaultUnknownStatus())
@@ -566,7 +552,7 @@ func (r *agent) collectStatus(ctx context.Context) *pb.SystemStatus {
 	statusCh := make(chan *statusResponse, len(members))
 	for _, member := range members {
 		if r.Name == member.Name {
-			go r.getLocalStatus(ctxNode, statusCh, client)
+			go r.getLocalStatus(ctxNode, statusCh)
 		} else {
 			go r.getStatusFrom(ctxNode, member, statusCh)
 		}
@@ -598,8 +584,8 @@ L:
 }
 
 // collectLocalStatus executes monitoring tests on the local node.
-func (r *agent) collectLocalStatus(ctx context.Context, client membership.ClusterMembership) (status *pb.NodeStatus, err error) {
-	local, err := client.FindMember(r.Name)
+func (r *agent) collectLocalStatus(ctx context.Context) (status *pb.NodeStatus, err error) {
+	local, err := r.Cluster.Member(r.Name)
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to query local serf member")
 	}
@@ -617,7 +603,7 @@ func (r *agent) collectLocalStatus(ctx context.Context, client membership.Cluste
 		return status, trace.Wrap(err, "failed to record local timeline events")
 	}
 
-	if err := r.notifyMasters(ctx, client); err != nil {
+	if err := r.notifyMasters(ctx); err != nil {
 		return status, trace.Wrap(err, "failed to notify master nodes of local timeline events")
 	}
 
@@ -625,14 +611,14 @@ func (r *agent) collectLocalStatus(ctx context.Context, client membership.Cluste
 }
 
 // getLocalStatus obtains local node status.
-func (r *agent) getLocalStatus(ctx context.Context, respc chan<- *statusResponse, client membership.ClusterMembership) {
+func (r *agent) getLocalStatus(ctx context.Context, respc chan<- *statusResponse) {
 	// TODO: restructure code so that local member is not needed here.
-	local, err := client.FindMember(r.Name)
+	local, err := r.Cluster.Member(r.Name)
 	if err != nil {
 		respc <- &statusResponse{err: err}
 		return
 	}
-	status, err := r.collectLocalStatus(ctx, client)
+	status, err := r.collectLocalStatus(ctx)
 	resp := &statusResponse{
 		NodeStatus: status,
 		member:     local,
@@ -645,8 +631,8 @@ func (r *agent) getLocalStatus(ctx context.Context, respc chan<- *statusResponse
 }
 
 // notifyMasters pushes new timeline events to all master nodes in the cluster.
-func (r *agent) notifyMasters(ctx context.Context, client membership.ClusterMembership) error {
-	members, err := client.Members()
+func (r *agent) notifyMasters(ctx context.Context) error {
+	members, err := r.Cluster.Members()
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -736,18 +722,6 @@ func (r *agent) setLocalStatus(status *pb.NodeStatus) {
 	r.Lock()
 	defer r.Unlock()
 	r.localStatus = status
-}
-
-// newSerfClient creates a new instance of the serf client.
-//
-// It is responsibility of the caller to close the returned client.
-func (r *agent) newSerfClient() (membership.ClusterMembership, error) {
-	client, err := membership.NewSerfClient(r.Config.SerfConfig)
-	if err != nil {
-		return nil, trace.Wrap(err, "failed to connect to serf agent: %#v",
-			r.Config.SerfConfig)
-	}
-	return client, nil
 }
 
 // filterByTimestamp filters out events that occurred before the provided

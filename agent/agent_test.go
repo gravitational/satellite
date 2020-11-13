@@ -30,14 +30,12 @@ import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	debugpb "github.com/gravitational/satellite/agent/proto/debug"
 	"github.com/gravitational/satellite/lib/history/memory"
-	"github.com/gravitational/satellite/lib/membership"
 	"github.com/gravitational/satellite/lib/rpc/client"
 	"github.com/gravitational/satellite/lib/test"
 	"github.com/gravitational/satellite/utils"
 
 	"github.com/gravitational/trace"
 	"github.com/gravitational/ttlmap/v2"
-	"github.com/hashicorp/serf/coordinate"
 	"github.com/jonboulle/clockwork"
 	log "github.com/sirupsen/logrus"
 	. "gopkg.in/check.v1"
@@ -246,7 +244,7 @@ func (r *AgentSuite) TestRecordLocalTimeline(c *C) {
 		c.Assert(err, IsNil, testCase.comment)
 
 		test.WithTimeout(func(ctx context.Context) {
-			_, err := agent.collectLocalStatus(ctx, testCase.membership)
+			_, err := agent.collectLocalStatus(ctx)
 			c.Assert(err, IsNil, testCase.comment)
 
 			events, err := agent.LocalTimeline.GetEvents(ctx, nil)
@@ -428,12 +426,12 @@ func (r *AgentSuite) TestProvidesTimeline(c *C) {
 
 		test.WithTimeout(func(ctx context.Context) {
 			for _, master := range masters {
-				_, err := master.collectLocalStatus(ctx, testCase.membership)
+				_, err := master.collectLocalStatus(ctx)
 				c.Assert(err, IsNil, testCase.comment)
 			}
 
 			for _, node := range nodes {
-				_, err := node.collectLocalStatus(ctx, testCase.membership)
+				_, err := node.collectLocalStatus(ctx)
 				c.Assert(err, IsNil, testCase.comment)
 			}
 
@@ -484,6 +482,7 @@ func (r *AgentSuite) newAgent(config testAgentConfig, client *mockClusterMembers
 		Clock:   config.clock,
 		Tags:    tags{"role": string(config.role)},
 		DialRPC: client.dial,
+		Cluster: client,
 	}
 
 	var lastSeen *ttlmap.TTLMap
@@ -499,7 +498,6 @@ func (r *AgentSuite) newAgent(config testAgentConfig, client *mockClusterMembers
 		localStatus:             config.localStatus,
 		lastSeen:                lastSeen,
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
-		newSerfClientFunc:       newClusterMembershipFrom(client),
 	}
 
 	client.addAgent(agent)
@@ -578,14 +576,9 @@ func (r byName) Len() int           { return len(r) }
 func (r byName) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
 func (r byName) Less(i, j int) bool { return r[i].Name < r[j].Name }
 
+// implements membership.Cluster
 type mockClusterMembership struct {
 	agents map[string]*agent
-}
-
-func newClusterMembershipFrom(client *mockClusterMembership) func() (membership.ClusterMembership, error) {
-	return func() (membership.ClusterMembership, error) {
-		return client, nil
-	}
 }
 
 func newMockClusterMembership() *mockClusterMembership {
@@ -603,8 +596,8 @@ func (r mockClusterMembership) Members() ([]*pb.MemberStatus, error) {
 	return members, nil
 }
 
-// FindMember finds the member with the specified name.
-func (r mockClusterMembership) FindMember(name string) (*pb.MemberStatus, error) {
+// Member returns the member with the specified name.
+func (r mockClusterMembership) Member(name string) (*pb.MemberStatus, error) {
 	if agent, ok := r.agents[name]; ok {
 		return memberFromAgent(agent), nil
 	}
@@ -631,28 +624,6 @@ func memberFromAgent(agent *agent) *pb.MemberStatus {
 		agent.Name, // mock dial function will use name to dial node
 		agent.Tags,
 	)
-}
-
-// Close closes the client.
-func (r mockClusterMembership) Close() error {
-	return trace.NotImplemented("not implemented")
-}
-
-// Join attempts to join an existing cluster identified by peers.
-// Replay controls if previous user events are replayed once this node has joined the cluster.
-// Returns the number of nodes joined.
-func (r mockClusterMembership) Join(peers []string, replay bool) (int, error) {
-	return 0, trace.NotImplemented("not implemented")
-}
-
-// UpdateTags will modify the tags on a running member.
-func (r mockClusterMembership) UpdateTags(tags map[string]string, delTags []string) error {
-	return trace.NotImplemented("not implemented")
-}
-
-// GetCoordinate returns the Serf Coordinate for a specific node
-func (r mockClusterMembership) GetCoordinate(node string) (*coordinate.Coordinate, error) {
-	return nil, trace.NotImplemented("not implemented")
 }
 
 type mockClient struct {

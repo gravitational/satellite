@@ -21,97 +21,100 @@ import (
 
 	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
-	"github.com/hashicorp/serf/coordinate"
+	"github.com/sirupsen/logrus"
 )
 
-// Client is an rpc client used to make requests to a serf agent.
-type Client struct {
-	client *serf.RPCClient
+// SerfCluster can query members of the Serf cluster.
+//
+// Implements Cluster
+type SerfCluster struct {
+	// config specifies the information needed to create a client connection
+	// to the local serf agent.
+	config *serf.Config
 }
 
-// NewSerfClient returns a new serf client for the specified configuration.
-func NewSerfClient(config serf.Config) (*Client, error) {
-	client, err := serf.ClientFromConfig(&config)
-	if err != nil {
-		return nil, trace.Wrap(err)
+// NewSerfCluster returns a new Serf cluster.
+func NewSerfCluster(config *serf.Config) (*SerfCluster, error) {
+	if config == nil {
+		return nil, trace.BadParameter("serf config must be provided")
 	}
-	return &Client{
-		client: client,
+	if config.Addr == "" {
+		return nil, trace.BadParameter("serf addr must be provided")
+	}
+	return &SerfCluster{
+		config: config,
 	}, nil
 }
 
-// Members lists members of the serf cluster.
-func (r *Client) Members() ([]*pb.MemberStatus, error) {
-	members, err := r.client.Members()
+// Members lists the members of the Serf cluster.
+// Inactive members will be filtered out.
+func (r *SerfCluster) Members() ([]*pb.MemberStatus, error) {
+	return r.members()
+}
+
+// members lists the members of the Serf Cluster.
+// Inactive members will be filtered out.
+func (r *SerfCluster) members() (clusterMembers []*pb.MemberStatus, err error) {
+	client, err := serf.ClientFromConfig(r.config)
 	if err != nil {
-		return nil, trace.Wrap(err)
+		return clusterMembers, trace.Wrap(err, "failed to create Serf client")
 	}
+	defer client.Close()
 
-	// NOTE: is it okay to filter out inactive nodes in this function?
-	// When do we want to use a list of members including inactive nodes?
-	members = filterLeft(members)
+	serfMembers, err := client.Members()
+	if err != nil {
+		return nil, trace.Wrap(err, "failed to fetch Serf members")
+	}
+	serfMembers = filterInactive(serfMembers)
 
-	clusterMembers := make([]*pb.MemberStatus, 0, len(members))
-	for _, member := range members {
-		status := pb.NewMemberStatus(member.Name, member.Addr.String(), member.Tags)
+	for _, serfMember := range serfMembers {
+		status := pb.NewMemberStatus(serfMember.Name, serfMember.Addr.String(), serfMember.Tags)
 		clusterMembers = append(clusterMembers, status)
 	}
+
 	return clusterMembers, nil
 }
 
-// FindMember finds serf member with the specified name.
-func (r *Client) FindMember(name string) (member *pb.MemberStatus, err error) {
-	members, err := r.Members()
+// Member returns the member with the specified name.
+// Returns NotFound if the specified member is not an active member of the
+// Serf cluster.
+func (r *SerfCluster) Member(name string) (member *pb.MemberStatus, err error) {
+	members, err := r.members()
 	if err != nil {
-		return member, trace.Wrap(err)
+		return member, trace.Wrap(err, "failed to get cluster members")
 	}
+
 	for _, member := range members {
 		if member.Name == name {
 			return member, nil
 		}
 	}
-	return member, trace.NotFound("serf member %q not found", name)
+
+	return member, trace.NotFound("member %s is not an active member of the cluster", name)
 }
 
-// Stop cancels the serf event delivery and removes the subscription.
-func (r *Client) Stop(handle serf.StreamHandle) error {
-	return r.client.Stop(handle)
-}
-
-// Join attempts to join an existing serf cluster identified by peers.
-// Replay controls if previous user events are replayed once this node has joined the cluster.
-// Returns the number of nodes joined
-func (r *Client) Join(peers []string, replay bool) (int, error) {
-	return r.client.Join(peers, replay)
-}
-
-// UpdateTags will modify the tags on a running serf agent
-func (r *Client) UpdateTags(tags map[string]string, delTags []string) error {
-	return r.client.UpdateTags(tags, delTags)
-}
-
-// Close closes the client
-func (r *Client) Close() error {
-	if r.client.IsClosed() {
-		return nil
-	}
-	return r.client.Close()
-}
-
-// GetCoordinate returns the Serf Coordinate for a specific node
-func (r *Client) GetCoordinate(node string) (*coordinate.Coordinate, error) {
-	return r.client.GetCoordinate(node)
-}
-
-// filterLeft filters out members that have left the serf cluster
-func filterLeft(members []serf.Member) (result []serf.Member) {
-	result = make([]serf.Member, 0, len(members))
+// filterInactive filters out Serf members that are not "alive".
+func filterInactive(members []serf.Member) (result []serf.Member) {
 	for _, member := range members {
-		if MemberStatus(member.Status) == MemberLeft {
-			// Skip
+		if memberStatus(member.Status) != memberAlive {
+			logrus.WithField("member", member.Name).Debug("Inactive member has been filtered.")
 			continue
 		}
 		result = append(result, member)
 	}
 	return result
 }
+
+// memberStatus describes the state of a Serf node.
+type memberStatus string
+
+const (
+	// memberAlive indicates serf member is active.
+	memberAlive memberStatus = "alive"
+	// memberLeaving indicates serf member is in the process of leaving the cluster.
+	memberLeaving memberStatus = "leaving"
+	// memberLeft indicates serf member has left the cluster.
+	memberLeft memberStatus = "left"
+	// memberFailed indicates failure has been detected on serf member.
+	memberFailed memberStatus = "failed"
+)

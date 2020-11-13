@@ -1,5 +1,5 @@
 /*
-Copyright 2016 Gravitational, Inc.
+Copyright 2016-2020 Gravitational, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@ import (
 	"github.com/gravitational/trace"
 	"github.com/gravitational/version"
 
-	serf "github.com/hashicorp/serf/client"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
@@ -157,10 +156,6 @@ func run() error {
 			CAFile:      *cagentCAFile,
 			CertFile:    *cagentCertFile,
 			KeyFile:     *cagentKeyFile,
-
-			SerfConfig: serf.Config{
-				Addr: *cagentSerfRPCAddr,
-			},
 			TimelineConfig: sqlite.Config{
 				DBPath:            *cagentTimelineDir,
 				RetentionDuration: *cagentRetention,
