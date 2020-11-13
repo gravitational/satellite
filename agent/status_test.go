@@ -18,10 +18,8 @@ package agent
 
 import (
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-	"github.com/gravitational/satellite/lib/membership"
 	"github.com/gravitational/satellite/lib/test"
 
-	serf "github.com/hashicorp/serf/client"
 	. "gopkg.in/check.v1"
 )
 
@@ -51,9 +49,9 @@ func (*StatusSuite) TestSetsSystemStatusFromMemberStatuses(c *C) {
 		},
 	}
 	actual := status
-	members := []membership.ClusterMember{
-		membership.SerfMember{Member: &serf.Member{Name: "foo"}},
-		membership.SerfMember{Member: &serf.Member{Name: "bar"}},
+	members := []*pb.MemberStatus{
+		{Name: "foo"},
+		{Name: "bar"},
 	}
 	setSystemStatus(&actual, members)
 
@@ -96,9 +94,9 @@ func (*StatusSuite) TestSetsSystemStatusFromNodeStatuses(c *C) {
 	}
 
 	actual := status
-	members := []membership.ClusterMember{
-		membership.SerfMember{Member: &serf.Member{Name: "foo"}},
-		membership.SerfMember{Member: &serf.Member{Name: "bar"}},
+	members := []*pb.MemberStatus{
+		{Name: "foo"},
+		{Name: "bar"},
 	}
 	setSystemStatus(&actual, members)
 
@@ -131,9 +129,9 @@ func (*StatusSuite) TestDetectsNoMaster(c *C) {
 	}
 
 	actual := status
-	members := []membership.ClusterMember{
-		membership.SerfMember{Member: &serf.Member{Name: "foo"}},
-		membership.SerfMember{Member: &serf.Member{Name: "bar"}},
+	members := []*pb.MemberStatus{
+		{Name: "foo"},
+		{Name: "bar"},
 	}
 	setSystemStatus(&actual, members)
 
@@ -168,9 +166,9 @@ func (*StatusSuite) TestSetsOkSystemStatus(c *C) {
 		},
 	}
 	actual := status
-	members := []membership.ClusterMember{
-		membership.SerfMember{Member: &serf.Member{Name: "foo"}},
-		membership.SerfMember{Member: &serf.Member{Name: "bar"}},
+	members := []*pb.MemberStatus{
+		{Name: "foo"},
+		{Name: "bar"},
 	}
 	setSystemStatus(&actual, members)
 

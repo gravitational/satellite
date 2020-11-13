@@ -326,7 +326,7 @@ func (c *timeDriftChecker) getAgentClient(ctx context.Context, node serf.Member)
 	}
 	c.mu.Unlock()
 
-	newConn, err := c.DialRPC(ctx, &node)
+	newConn, err := c.DialRPC(ctx, node.Addr.String())
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}

@@ -1,5 +1,5 @@
 /*
-Copyright 2016 Gravitational, Inc.
+Copyright 2016-2020 Gravitational, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package agent
 import (
 	"context"
 	"errors"
-	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -83,14 +82,14 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 					{
 						Name:   "node-1",
 						Status: pb.NodeStatus_Running,
-						MemberStatus: &pb.MemberStatus{Name: "node-1", Addr: "<nil>:0",
+						MemberStatus: &pb.MemberStatus{Name: "node-1", Addr: "node-1",
 							Tags: tags{"role": string(RoleNode)}, Status: pb.MemberStatus_Alive},
 						Probes: []*pb.Probe{healthyProbe},
 					},
 					{
 						Name:   "node-2",
 						Status: pb.NodeStatus_Running,
-						MemberStatus: &pb.MemberStatus{Name: "node-2", Addr: "<nil>:0",
+						MemberStatus: &pb.MemberStatus{Name: "node-2", Addr: "node-2",
 							Tags: tags{"role": string(RoleNode)}, Status: pb.MemberStatus_Alive},
 						Probes: []*pb.Probe{healthyProbe},
 					},
@@ -122,14 +121,14 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 					{
 						Name:   "master-1",
 						Status: pb.NodeStatus_Running,
-						MemberStatus: &pb.MemberStatus{Name: "master-1", Addr: "<nil>:0",
+						MemberStatus: &pb.MemberStatus{Name: "master-1", Addr: "master-1",
 							Tags: tags{"role": string(RoleMaster)}, Status: pb.MemberStatus_Alive},
 						Probes: []*pb.Probe{healthyProbe},
 					},
 					{
 						Name:   "node-1",
 						Status: pb.NodeStatus_Degraded,
-						MemberStatus: &pb.MemberStatus{Name: "node-1", Addr: "<nil>:0",
+						MemberStatus: &pb.MemberStatus{Name: "node-1", Addr: "node-1",
 							Tags: tags{"role": string(RoleNode)}, Status: pb.MemberStatus_Alive},
 						Probes: []*pb.Probe{failedProbe},
 					},
@@ -152,37 +151,6 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 			},
 		},
 		{
-			comment: Commentf("Expected to ignore inactive members."),
-			expected: &pb.SystemStatus{
-				Timestamp: pb.NewTimeToProto(r.clock.Now()),
-				Status:    pb.SystemStatus_Running,
-				Nodes: []*pb.NodeStatus{
-					{
-						Name:   "master-1",
-						Status: pb.NodeStatus_Running,
-						MemberStatus: &pb.MemberStatus{Name: "master-1", Addr: "<nil>:0",
-							Tags: tags{"role": string(RoleMaster)}, Status: pb.MemberStatus_Alive},
-						Probes: []*pb.Probe{healthyProbe},
-					},
-				},
-			},
-			membership: newMockClusterMembership(),
-			agentConfigs: []testAgentConfig{
-				{
-					node:         "master-1",
-					role:         RoleMaster,
-					memberStatus: MemberAlive,
-					checkers:     []health.Checker{healthyTest},
-				},
-				{
-					node:         "node-1",
-					role:         RoleNode,
-					memberStatus: MemberLeft,
-					checkers:     []health.Checker{failedTest},
-				},
-			},
-		},
-		{
 			comment: Commentf("Expected all systems running."),
 			expected: &pb.SystemStatus{
 				Timestamp: pb.NewTimeToProto(r.clock.Now()),
@@ -191,14 +159,14 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 					{
 						Name:   "master-1",
 						Status: pb.NodeStatus_Running,
-						MemberStatus: &pb.MemberStatus{Name: "master-1", Addr: "<nil>:0",
+						MemberStatus: &pb.MemberStatus{Name: "master-1", Addr: "master-1",
 							Tags: tags{"role": string(RoleMaster)}, Status: pb.MemberStatus_Alive},
 						Probes: []*pb.Probe{healthyProbe},
 					},
 					{
 						Name:   "node-1",
 						Status: pb.NodeStatus_Running,
-						MemberStatus: &pb.MemberStatus{Name: "node-1", Addr: "<nil>:0",
+						MemberStatus: &pb.MemberStatus{Name: "node-1", Addr: "node-1",
 							Tags: tags{"role": string(RoleNode)}, Status: pb.MemberStatus_Alive},
 						Probes: []*pb.Probe{healthyProbe},
 					},
@@ -227,7 +195,6 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 		for _, agentConfig := range testCase.agentConfigs {
 			agent, err := r.newAgent(agentConfig, testCase.membership)
 			c.Assert(err, IsNil, testCase.comment)
-			c.Assert(r.becomeMember(testCase.membership, agent, agentConfig.memberStatus), IsNil, testCase.comment)
 			agents = append(agents, agent)
 		}
 
@@ -277,7 +244,6 @@ func (r *AgentSuite) TestIsMember(c *C) {
 		for _, agentConfig := range testCase.agentConfigs {
 			agent, err := r.newAgent(agentConfig, testCase.membership)
 			c.Assert(err, IsNil, testCase.comment)
-			c.Assert(r.becomeActiveMember(testCase.membership, agent), IsNil, testCase.comment)
 			agents = append(agents, agent)
 		}
 
@@ -324,7 +290,6 @@ func (r *AgentSuite) TestRecordLocalTimeline(c *C) {
 	for _, testCase := range testCases {
 		agent, err := r.newAgent(testCase.agentConfig, testCase.membership)
 		c.Assert(err, IsNil, testCase.comment)
-		c.Assert(r.becomeActiveMember(testCase.membership, agent), IsNil, testCase.comment)
 
 		test.WithTimeout(func(ctx context.Context) {
 			_, err := agent.collectLocalStatus(ctx, testCase.membership)
@@ -362,7 +327,6 @@ func (r *AgentSuite) TestRecordTimeline(c *C) {
 	for _, testCase := range testCases {
 		agent, err := r.newAgent(testCase.agentConfig, testCase.membership)
 		c.Assert(err, IsNil, testCase.comment)
-		c.Assert(r.becomeActiveMember(testCase.membership, agent), IsNil, testCase.comment)
 
 		test.WithTimeout(func(ctx context.Context) {
 			c.Assert(agent.RecordClusterEvents(ctx, testCase.events), IsNil, testCase.comment)
@@ -498,7 +462,6 @@ func (r *AgentSuite) TestProvidesTimeline(c *C) {
 		for _, masterConfig := range testCase.masterConfigs {
 			master, err := r.newAgent(masterConfig, testCase.membership)
 			c.Assert(err, IsNil, testCase.comment)
-			c.Assert(r.becomeActiveMember(testCase.membership, master), IsNil, testCase.comment)
 			masters = append(masters, master)
 		}
 
@@ -506,7 +469,6 @@ func (r *AgentSuite) TestProvidesTimeline(c *C) {
 		for _, nodeConfig := range testCase.nodeConfigs {
 			node, err := r.newAgent(nodeConfig, testCase.membership)
 			c.Assert(err, IsNil, testCase.comment)
-			c.Assert(r.becomeActiveMember(testCase.membership, node), IsNil, testCase.comment)
 			nodes = append(nodes, node)
 		}
 
@@ -563,10 +525,11 @@ func (r *AgentSuite) newAgent(config testAgentConfig, client *mockClusterMembers
 	config.setDefaults()
 
 	agentConfig := Config{
-		Cache: inmemory.New(),
-		Name:  config.node,
-		Clock: config.clock,
-		Tags:  tags{"role": string(config.role)},
+		Cache:   inmemory.New(),
+		Name:    config.node,
+		Clock:   config.clock,
+		Tags:    tags{"role": string(config.role)},
+		DialRPC: client.dial,
 	}
 
 	var lastSeen *ttlmap.TTLMap
@@ -585,9 +548,7 @@ func (r *AgentSuite) newAgent(config testAgentConfig, client *mockClusterMembers
 		newSerfClientFunc:       newClusterMembershipFrom(client),
 	}
 
-	if err := r.becomeActiveMember(client, agent); err != nil {
-		return nil, trace.Wrap(err)
-	}
+	client.addAgent(agent)
 
 	return agent, nil
 }
@@ -664,7 +625,7 @@ func (r byName) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
 func (r byName) Less(i, j int) bool { return r[i].Name < r[j].Name }
 
 type mockClusterMembership struct {
-	members map[string]membership.ClusterMember
+	agents map[string]*agent
 }
 
 func newClusterMembershipFrom(client *mockClusterMembership) func() (membership.ClusterMembership, error) {
@@ -675,27 +636,47 @@ func newClusterMembershipFrom(client *mockClusterMembership) func() (membership.
 
 func newMockClusterMembership() *mockClusterMembership {
 	return &mockClusterMembership{
-		members: make(map[string]membership.ClusterMember),
+		agents: make(map[string]*agent),
 	}
 }
 
 // Members returns the list of cluster members.
-func (r mockClusterMembership) Members() ([]membership.ClusterMember, error) {
-	members := make([]membership.ClusterMember, 0, len(r.members))
-	for _, member := range r.members {
-		if MemberStatus(member.Status()) == MemberAlive {
-			members = append(members, member)
-		}
+func (r mockClusterMembership) Members() ([]*pb.MemberStatus, error) {
+	members := make([]*pb.MemberStatus, 0, len(r.agents))
+	for _, agent := range r.agents {
+		members = append(members, memberFromAgent(agent))
 	}
 	return members, nil
 }
 
 // FindMember finds the member with the specified name.
-func (r mockClusterMembership) FindMember(name string) (membership.ClusterMember, error) {
-	if member, ok := r.members[name]; ok {
-		return member, nil
+func (r mockClusterMembership) FindMember(name string) (*pb.MemberStatus, error) {
+	if agent, ok := r.agents[name]; ok {
+		return memberFromAgent(agent), nil
 	}
 	return nil, trace.BadParameter("node does not have membership")
+}
+
+// addAgent adds the agent as a member to the mock cluster.
+func (r *mockClusterMembership) addAgent(agent *agent) {
+	r.agents[agent.Name] = agent
+}
+
+// dial returns a new mockClient for the member specified by name.
+func (r *mockClusterMembership) dial(_ context.Context, name string) (client.Client, error) {
+	if agent, exists := r.agents[name]; exists {
+		return newMockClient(agent)
+	}
+	return nil, trace.NotFound("%s does not exist in this cluster", name)
+}
+
+// memberFromAgent constructs a new member from the provided agent.
+func memberFromAgent(agent *agent) *pb.MemberStatus {
+	return pb.NewMemberStatus(
+		agent.Name,
+		agent.Name, // mock dial function will use name to dial node
+		agent.Tags,
+	)
 }
 
 // Close closes the client.
@@ -718,61 +699,6 @@ func (r mockClusterMembership) UpdateTags(tags map[string]string, delTags []stri
 // GetCoordinate returns the Serf Coordinate for a specific node
 func (r mockClusterMembership) GetCoordinate(node string) (*coordinate.Coordinate, error) {
 	return nil, trace.NotImplemented("not implemented")
-}
-
-func (r *AgentSuite) becomeActiveMember(membership *mockClusterMembership, agent *agent) error {
-	return r.becomeMember(membership, agent, MemberAlive)
-}
-
-func (r *AgentSuite) becomeMember(membership *mockClusterMembership, agent *agent, status MemberStatus) error {
-	// Add agent to cluster membership.
-	membership.members[agent.Name] = newMockClusterMember(agent, status)
-
-	return nil
-}
-
-type mockClusterMember struct {
-	agent  *agent
-	status MemberStatus
-}
-
-// newMockClusterMember initializes a new cluster member and adds the agent
-// to the cluster membership.
-func newMockClusterMember(agent *agent, status MemberStatus) *mockClusterMember {
-	return &mockClusterMember{
-		agent:  agent,
-		status: status,
-	}
-}
-
-// Dial attempts to create client connect to member.
-func (r mockClusterMember) Dial(ctx context.Context, caFile, certFile, keyFile string) (client.Client, error) {
-	return newMockClient(r.agent)
-}
-
-// Name gets the member's name.
-func (r mockClusterMember) Name() string {
-	return r.agent.Name
-}
-
-// Addr gets the member's address.
-func (r mockClusterMember) Addr() net.IP {
-	return nil
-}
-
-// Port gets the member's gossip port.
-func (r mockClusterMember) Port() uint16 {
-	return 0
-}
-
-// Tags gets the member's tags.
-func (r mockClusterMember) Tags() map[string]string {
-	return r.agent.Tags
-}
-
-// Status gets the member's status.
-func (r mockClusterMember) Status() string {
-	return string(r.status)
 }
 
 type mockClient struct {

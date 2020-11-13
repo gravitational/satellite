@@ -1,5 +1,5 @@
 /*
-Copyright 2016 Gravitational, Inc.
+Copyright 2016-2020 Gravitational, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -98,6 +98,9 @@ type Config struct {
 
 	// Cache is a short-lived storage used by the agent to persist latest health stats.
 	cache.Cache
+
+	// DialRPC is a factory function to create clients to other agents.
+	client.DialRPC
 }
 
 // CheckAndSetDefaults validates this configuration object.
@@ -128,6 +131,9 @@ func (r *Config) CheckAndSetDefaults() error {
 	}
 	if r.Clock == nil {
 		r.Clock = clockwork.NewRealClock()
+	}
+	if r.DialRPC == nil {
+		r.DialRPC = client.DefaultDialRPC(r.CAFile, r.CertFile, r.KeyFile)
 	}
 	return nil
 }
@@ -288,11 +294,11 @@ func (r *agent) IsMember() (ok bool, err error) {
 	}
 	// if we're the only one, consider that we're not in the cluster yet
 	// (cause more often than not there are more than 1 member)
-	if len(members) == 1 && members[0].Name() == r.Name {
+	if len(members) == 1 && members[0].Name == r.Name {
 		return false, nil
 	}
 	for _, member := range members {
-		if member.Name() == r.Name {
+		if member.Name == r.Name {
 			return true, nil
 		}
 	}
@@ -599,7 +605,7 @@ func (r *agent) collectStatus(ctx context.Context) *pb.SystemStatus {
 
 	statusCh := make(chan *statusResponse, len(members))
 	for _, member := range members {
-		if r.Name == member.Name() {
+		if r.Name == member.Name {
 			go r.getLocalStatus(ctxNode, statusCh, client)
 		} else {
 			go r.getStatusFrom(ctxNode, member, statusCh)
@@ -614,7 +620,7 @@ L:
 			nodeStatus := status.NodeStatus
 			if status.err != nil {
 				log.Debugf("Failed to query node %s(%v) status: %v.",
-					status.member.Name(), status.member.Addr(), status.err)
+					status.member.Name, status.member.Addr, status.err)
 				nodeStatus = unknownNodeStatus(status.member)
 			}
 			systemStatus.Nodes = append(systemStatus.Nodes, nodeStatus)
@@ -639,7 +645,7 @@ func (r *agent) collectLocalStatus(ctx context.Context, client membership.Cluste
 	}
 
 	status = r.runChecks(ctx)
-	status.MemberStatus = statusFromMember(local)
+	status.MemberStatus = local
 
 	r.Lock()
 	changes := history.DiffNode(r.Clock, r.localStatus, status)
@@ -692,11 +698,11 @@ func (r *agent) notifyMasters(ctx context.Context, client membership.ClusterMemb
 
 	// TODO: async
 	for _, member := range members {
-		if !hasRoleMaster(member.Tags()) {
+		if !hasRoleMaster(member.Tags) {
 			continue
 		}
 		if err := r.notifyMaster(ctx, member, events); err != nil {
-			log.WithError(err).Debugf("Failed to notify %s of new timeline events.", member.Name())
+			log.WithError(err).Debugf("Failed to notify %s of new timeline events.", member.Name)
 		}
 	}
 
@@ -704,8 +710,8 @@ func (r *agent) notifyMasters(ctx context.Context, client membership.ClusterMemb
 }
 
 // notifyMaster push new timeline events to the specified member.
-func (r *agent) notifyMaster(ctx context.Context, member membership.ClusterMember, events []*pb.TimelineEvent) error {
-	client, err := member.Dial(ctx, r.CAFile, r.CertFile, r.KeyFile)
+func (r *agent) notifyMaster(ctx context.Context, member *pb.MemberStatus, events []*pb.TimelineEvent) error {
+	client, err := r.DialRPC(ctx, member.Addr)
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -729,8 +735,8 @@ func (r *agent) notifyMaster(ctx context.Context, member membership.ClusterMembe
 }
 
 // getStatusFrom obtains node status from the node identified by member.
-func (r *agent) getStatusFrom(ctx context.Context, member membership.ClusterMember, respc chan<- *statusResponse) {
-	client, err := member.Dial(ctx, r.CAFile, r.CertFile, r.KeyFile)
+func (r *agent) getStatusFrom(ctx context.Context, member *pb.MemberStatus, respc chan<- *statusResponse) {
+	client, err := r.DialRPC(ctx, member.Addr)
 	resp := &statusResponse{member: member}
 	if err != nil {
 		resp.err = trace.Wrap(err)
@@ -806,6 +812,6 @@ func hasRoleMaster(tags map[string]string) bool {
 // health status on the specified serf node.
 type statusResponse struct {
 	*pb.NodeStatus
-	member membership.ClusterMember
+	member *pb.MemberStatus
 	err    error
 }

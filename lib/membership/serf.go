@@ -17,12 +17,7 @@ limitations under the License.
 package membership
 
 import (
-	"context"
-	"fmt"
-	"net"
-
-	"github.com/gravitational/satellite/lib/rpc"
-	"github.com/gravitational/satellite/lib/rpc/client"
+	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
 	"github.com/gravitational/trace"
 	serf "github.com/hashicorp/serf/client"
@@ -46,7 +41,7 @@ func NewSerfClient(config serf.Config) (*Client, error) {
 }
 
 // Members lists members of the serf cluster.
-func (r *Client) Members() ([]ClusterMember, error) {
+func (r *Client) Members() ([]*pb.MemberStatus, error) {
 	members, err := r.client.Members()
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -56,22 +51,22 @@ func (r *Client) Members() ([]ClusterMember, error) {
 	// When do we want to use a list of members including inactive nodes?
 	members = filterLeft(members)
 
-	clusterMembers := make([]ClusterMember, 0, len(members))
+	clusterMembers := make([]*pb.MemberStatus, 0, len(members))
 	for _, member := range members {
-		member := member
-		clusterMembers = append(clusterMembers, SerfMember{&member})
+		status := pb.NewMemberStatus(member.Name, member.Addr.String(), member.Tags)
+		clusterMembers = append(clusterMembers, status)
 	}
 	return clusterMembers, nil
 }
 
 // FindMember finds serf member with the specified name.
-func (r *Client) FindMember(name string) (member ClusterMember, err error) {
+func (r *Client) FindMember(name string) (member *pb.MemberStatus, err error) {
 	members, err := r.Members()
 	if err != nil {
 		return member, trace.Wrap(err)
 	}
 	for _, member := range members {
-		if member.Name() == name {
+		if member.Name == name {
 			return member, nil
 		}
 	}
@@ -119,45 +114,4 @@ func filterLeft(members []serf.Member) (result []serf.Member) {
 		result = append(result, member)
 	}
 	return result
-}
-
-// SerfMember embeds serf.Member and implements ClusterMember.
-type SerfMember struct {
-	*serf.Member
-}
-
-// Dial attempts to create client connection to the serf member.
-func (r SerfMember) Dial(ctx context.Context, caFile, certFile, keyFile string) (client.Client, error) {
-	config := client.Config{
-		Address:  fmt.Sprintf("%s:%d", r.Member.Addr.String(), rpc.Port),
-		CAFile:   caFile,
-		CertFile: certFile,
-		KeyFile:  keyFile,
-	}
-	return client.NewClient(ctx, config)
-}
-
-// Name returns name.
-func (r SerfMember) Name() string {
-	return r.Member.Name
-}
-
-// Addr returns address.
-func (r SerfMember) Addr() net.IP {
-	return r.Member.Addr
-}
-
-// Port returns serf gossip port.
-func (r SerfMember) Port() uint16 {
-	return r.Member.Port
-}
-
-// Tags returns tags.
-func (r SerfMember) Tags() map[string]string {
-	return r.Member.Tags
-}
-
-// Status returns status.
-func (r SerfMember) Status() string {
-	return r.Member.Status
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2016 Gravitational, Inc.
+Copyright 2016-2020 Gravitational, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@ import (
 	"github.com/gravitational/satellite/lib/rpc"
 
 	"github.com/gravitational/trace"
-	serf "github.com/hashicorp/serf/client"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -224,15 +223,15 @@ func (r *client) Close() error {
 	return r.conn.Close()
 }
 
-// DialRPC returns RPC client for the provided Serf member.
-type DialRPC func(context.Context, *serf.Member) (Client, error)
+// DialRPC returns RPC client for the provided addr.
+type DialRPC func(ctx context.Context, addr string) (Client, error)
 
-// DefaultDialRPC is a default RPC client factory function.
-// It creates a new client based on address details from the specific serf member.
+// DefaultDialRPC is the default RPC client factory function.
+// It creates a new client based on address details.
 func DefaultDialRPC(caFile, certFile, keyFile string) DialRPC {
-	return func(ctx context.Context, member *serf.Member) (Client, error) {
+	return func(ctx context.Context, addr string) (Client, error) {
 		config := Config{
-			Address:  fmt.Sprintf("%s:%d", member.Addr.String(), rpc.Port),
+			Address:  fmt.Sprintf("%s:%d", addr, rpc.Port),
 			CAFile:   caFile,
 			CertFile: certFile,
 			KeyFile:  keyFile,

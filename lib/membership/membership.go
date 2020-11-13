@@ -18,10 +18,7 @@ limitations under the License.
 package membership
 
 import (
-	"context"
-	"net"
-
-	"github.com/gravitational/satellite/lib/rpc/client"
+	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 
 	"github.com/hashicorp/serf/coordinate"
 )
@@ -29,9 +26,9 @@ import (
 // ClusterMembership is interface to interact with a cluster membership service.
 type ClusterMembership interface {
 	// Members returns the list of cluster members.
-	Members() ([]ClusterMember, error)
+	Members() ([]*pb.MemberStatus, error)
 	// FindMember finds the member with the specified name.
-	FindMember(name string) (ClusterMember, error)
+	FindMember(name string) (*pb.MemberStatus, error)
 	// Close closes the client.
 	Close() error
 	// Join attempts to join an existing cluster identified by peers.
@@ -42,20 +39,4 @@ type ClusterMembership interface {
 	UpdateTags(tags map[string]string, delTags []string) error
 	// GetCoordinate returns the Serf Coordinate for a specific node
 	GetCoordinate(node string) (*coordinate.Coordinate, error)
-}
-
-// ClusterMember is interface to interact with a cluster member.
-type ClusterMember interface {
-	// Dial attempts to create client connect to member.
-	Dial(ctx context.Context, caFile, certFile, keyFile string) (client.Client, error)
-	// Name gets the member's name.
-	Name() string
-	// Addr gets the member's address.
-	Addr() net.IP
-	// Port gets the member's gossip port.
-	Port() uint16
-	// Tags gets the member's tags.
-	Tags() map[string]string
-	// Status gets the member's status.
-	Status() string
 }

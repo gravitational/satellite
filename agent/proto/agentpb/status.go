@@ -1,5 +1,5 @@
 /*
-Copyright 2016 Gravitational, Inc.
+Copyright 2016-2020 Gravitational, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,6 +22,16 @@ import "github.com/gravitational/trace"
 // EmptyStatus returns an empty system status
 func EmptyStatus() *SystemStatus {
 	return &SystemStatus{Status: SystemStatus_Unknown}
+}
+
+// NewMemberStatus constructs a new MemberStatus.
+func NewMemberStatus(name, addr string, tags map[string]string) *MemberStatus {
+	return &MemberStatus{
+		Name:   name,
+		Addr:   addr,
+		Status: MemberStatus_Alive,
+		Tags:   tags,
+	}
 }
 
 // encoding.TextMarshaler
