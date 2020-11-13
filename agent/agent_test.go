@@ -211,52 +211,6 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 	}
 }
 
-// TestIsMember validates that an agent can correctly identify if it is a
-// cluster member.
-func (r *AgentSuite) TestIsMember(c *C) {
-	var testCases = []struct {
-		comment      CommentInterface
-		expected     bool
-		membership   *mockClusterMembership
-		agentConfigs []testAgentConfig
-	}{
-		{
-			comment:    Commentf("Expected node unable to be member of a single node cluster."),
-			expected:   false,
-			membership: newMockClusterMembership(),
-			agentConfigs: []testAgentConfig{
-				{node: "node-1"},
-			},
-		},
-		{
-			comment:    Commentf("Expected node to be member of a cluster."),
-			expected:   true,
-			membership: newMockClusterMembership(),
-			agentConfigs: []testAgentConfig{
-				{node: "node-1"},
-				{node: "node-2"},
-			},
-		},
-	}
-
-	for _, testCase := range testCases {
-		agents := make([]*agent, 0, len(testCase.agentConfigs))
-		for _, agentConfig := range testCase.agentConfigs {
-			agent, err := r.newAgent(agentConfig, testCase.membership)
-			c.Assert(err, IsNil, testCase.comment)
-			agents = append(agents, agent)
-		}
-
-		test.WithTimeout(func(ctx context.Context) {
-			for _, agent := range agents {
-				ok, err := agent.IsMember()
-				c.Assert(err, IsNil, testCase.comment)
-				c.Assert(ok, Equals, testCase.expected, testCase.comment)
-			}
-		})
-	}
-}
-
 // TestRecordLocalTimeline validates that an agent correctly records events
 // in to it's local timeline.
 func (r *AgentSuite) TestRecordLocalTimeline(c *C) {

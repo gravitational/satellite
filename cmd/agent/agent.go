@@ -1,5 +1,5 @@
 /*
-Copyright 2016 Gravitational, Inc.
+Copyright 2016-2020 Gravitational, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -44,11 +44,6 @@ func runAgent(config *agent.Config, monitoringConfig *config, peers []string) er
 	}
 	if err = monitoringAgent.Start(); err != nil {
 		return trace.Wrap(err)
-	}
-	if len(peers) > 0 {
-		if err = monitoringAgent.Join(peers); err != nil {
-			return trace.Wrap(err, "failed to join serf cluster")
-		}
 	}
 
 	signalc := make(chan os.Signal, 2)

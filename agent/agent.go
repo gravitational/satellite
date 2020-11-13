@@ -281,46 +281,6 @@ func (r *agent) Start() error {
 	return nil
 }
 
-// IsMember returns true if this agent is a member of the serf cluster
-func (r *agent) IsMember() (ok bool, err error) {
-	client, err := r.newSerfClientFunc()
-	if err != nil {
-		return false, trace.Wrap(err)
-	}
-	defer client.Close()
-	members, err := client.Members()
-	if err != nil {
-		return false, trace.Wrap(err, "failed to retrieve members")
-	}
-	// if we're the only one, consider that we're not in the cluster yet
-	// (cause more often than not there are more than 1 member)
-	if len(members) == 1 && members[0].Name == r.Name {
-		return false, nil
-	}
-	for _, member := range members {
-		if member.Name == r.Name {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-// Join attempts to join a serf cluster identified by peers.
-func (r *agent) Join(peers []string) error {
-	client, err := r.newSerfClientFunc()
-	if err != nil {
-		return trace.Wrap(err)
-	}
-	defer client.Close()
-	noReplay := false
-	numJoined, err := client.Join(peers, noReplay)
-	if err != nil {
-		return trace.Wrap(err)
-	}
-	log.Infof("Joined %d nodes.", numJoined)
-	return nil
-}
-
 // Close stops all background activity and releases the agent's resources.
 func (r *agent) Close() (err error) {
 	r.rpc.Stop()
