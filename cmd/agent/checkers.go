@@ -83,7 +83,7 @@ func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeCon
 
 	latencyChecker, err := latency.NewChecker(&latency.Config{
 		NodeName:      node.GetConfig().NodeName,
-		KubeClient:    kubeConfig.Client,
+		Cluster:       node.GetConfig().Cluster,
 		LatencyClient: nethealth.NewClient(nethealth.DefaultNethealthSocket),
 	})
 	if err != nil {
