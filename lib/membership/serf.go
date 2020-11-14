@@ -29,7 +29,7 @@ import (
 // Implements Cluster
 type SerfCluster struct {
 	// config specifies the information needed to create a client connection
-	// to the local serf agent.
+	// to the local Serf agent.
 	config *serf.Config
 }
 
@@ -52,7 +52,7 @@ func (r *SerfCluster) Members() ([]*pb.MemberStatus, error) {
 	return r.members()
 }
 
-// members lists the members of the Serf Cluster.
+// members lists the members of the Serf cluster.
 // Inactive members will be filtered out.
 func (r *SerfCluster) members() (clusterMembers []*pb.MemberStatus, err error) {
 	client, err := serf.ClientFromConfig(r.config)

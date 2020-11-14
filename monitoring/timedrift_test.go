@@ -47,7 +47,7 @@ func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 	tests := []struct {
 		// comment is the test case description.
 		comment string
-		// cluster is the Satellite cluster.
+		// cluster is a mock cluster interface.
 		cluster mockCluster
 		// result is the time drift check result.
 		result []*agentpb.Probe
