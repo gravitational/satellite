@@ -22,11 +22,12 @@ import (
 	"syscall"
 
 	"github.com/gravitational/satellite/agent"
-	"github.com/gravitational/satellite/lib/membership"
+	"github.com/gravitational/satellite/cmd"
+	k8smembership "github.com/gravitational/satellite/lib/membership/kubernetes"
 
 	"github.com/gravitational/trace"
-	serf "github.com/hashicorp/serf/client"
 	log "github.com/sirupsen/logrus"
+	"k8s.io/client-go/informers"
 )
 
 // runAgent starts the monitoring process and blocks waiting for a signal.
@@ -35,11 +36,22 @@ func runAgent(config *agent.Config, monitoringConfig *config, peers []string) er
 		log.Infof("initial cluster=%v", peers)
 	}
 
-	cluster, err := membership.NewSerfCluster(&serf.Config{
-		Addr: monitoringConfig.serfRPCAddr,
+	clientset, err := cmd.GetKubeClientFromPath(monitoringConfig.kubeconfigPath)
+	if err != nil {
+		return trace.Wrap(err, "failed to get Kubernetes clientset")
+	}
+
+	informer := informers.NewSharedInformerFactory(clientset, 0).Core().V1().Nodes().Informer()
+	stop := make(chan struct{})
+	defer close(stop)
+	go informer.Run(stop)
+
+	cluster, err := k8smembership.NewCluster(&k8smembership.Config{
+		Informer: informer,
+		Stop:     stop,
 	})
 	if err != nil {
-		return trace.Wrap(err, "failed to initialize serf cluster membership service")
+		return trace.Wrap(err, "failed to initialize cluster membership")
 	}
 	config.Cluster = cluster
 
