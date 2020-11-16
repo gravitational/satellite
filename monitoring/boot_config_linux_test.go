@@ -72,9 +72,11 @@ func (*MonitoringSuite) TestValidatesBootConfig(c *C) {
 		},
 		{
 			params: []BootConfigParam{
-				BootConfigParam{
-					Name:             "CONFIG_PARAM4",
-					KernelConstraint: KernelVersionLessThan(KernelVersion{Release: 4, Major: 4}),
+				{
+					Name: "CONFIG_PARAM4",
+					KernelConstraints: []KernelConstraintFunc{
+						KernelVersionLessThan(KernelVersion{Release: 4, Major: 4}),
+					},
 				}},
 			kernelVersionReader: staticKernelVersion("4.5.0-0"),
 			bootConfigReader:    testBootConfigReader(testBootConfig),
@@ -83,9 +85,25 @@ func (*MonitoringSuite) TestValidatesBootConfig(c *C) {
 		},
 		{
 			params: []BootConfigParam{
-				BootConfigParam{
-					Name:             "CONFIG_PARAM4",
-					KernelConstraint: KernelVersionLessThan(KernelVersion{Release: 4, Major: 4}),
+				{
+					Name: "CONFIG_PARAM4",
+					KernelConstraints: []KernelConstraintFunc{
+						KernelVersionLessThan(KernelVersion{Release: 4, Major: 4}),
+					},
+				}},
+			kernelVersionReader: staticKernelVersion("4.5.0-0"),
+			bootConfigReader:    testBootConfigReader(testBootConfig),
+			probes:              health.Probes{prober.newSuccess()},
+			comment:             "parameter should be skipped due to kernel version",
+		},
+		{
+			params: []BootConfigParam{
+				{
+					Name: "CONFIG_PARAM4",
+					KernelConstraints: []KernelConstraintFunc{
+						KernelVersionLessThan(KernelVersion{Release: 5, Major: 1}),
+						KernelVersionNotEquals(KernelVersion{Release: 4, Major: 5, Minor: 0, Patch: 0}),
+					},
 				}},
 			kernelVersionReader: staticKernelVersion("4.5.0-0"),
 			bootConfigReader:    testBootConfigReader(testBootConfig),

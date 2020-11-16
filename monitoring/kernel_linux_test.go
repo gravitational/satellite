@@ -60,6 +60,45 @@ func (*KernelSuite) TestParsesKernelVersion(c *C) {
 	}
 }
 
+func (*KernelSuite) TestKernelVersionNotEquals(c *C) {
+	var testCases = []struct {
+		comment  CommentInterface
+		expected bool
+		version  KernelVersion
+	}{
+		{
+			comment:  Commentf("Exactly matches test version."),
+			expected: false,
+			version:  KernelVersion{Release: 3, Major: 10, Minor: 1, Patch: 1127},
+		},
+		{
+			comment:  Commentf("Different release version"),
+			expected: true,
+			version:  KernelVersion{Release: 2, Major: 10, Minor: 1, Patch: 1127},
+		},
+		{
+			comment:  Commentf("Different major version"),
+			expected: true,
+			version:  KernelVersion{Release: 3, Major: 11, Minor: 1, Patch: 1127},
+		},
+		{
+			comment:  Commentf("Different minor version"),
+			expected: true,
+			version:  KernelVersion{Release: 3, Major: 10, Minor: 0, Patch: 1127},
+		},
+		{
+			comment:  Commentf("Different patch number"),
+			expected: true,
+			version:  KernelVersion{Release: 3, Major: 10, Minor: 1, Patch: 1128},
+		},
+	}
+
+	for _, testCase := range testCases {
+		result := KernelVersionNotEquals(testKernelVersion)(testCase.version)
+		c.Assert(result, Equals, testCase.expected, testCase.comment)
+	}
+}
+
 // TestKernelVersionLessThan verifies that KernelVersionLessThan correctly
 // compares the the specified kernel versions.
 func (*KernelSuite) TestKernelVersionLessThan(c *C) {
