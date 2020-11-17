@@ -113,12 +113,10 @@ func DefaultBootConfigParams() health.Checker {
 		BootConfigParam{Name: "CONFIG_VETH"},
 		BootConfigParam{Name: "CONFIG_BRIDGE"},
 		BootConfigParam{Name: "CONFIG_BRIDGE_NETFILTER"},
-		BootConfigParam{
-			// https://cateee.net/lkddb/web-lkddb/NF_NAT_IPV4.html
-			// CONFIG_NF_NAT_IPV4 has been removed as of kernel 5.1
-			Name:             "CONFIG_NF_NAT_IPV4",
-			KernelConstraint: KernelVersionLessThan(KernelVersion{Release: 5, Major: 1}),
-		},
+		// Note: CONFIG_NF_NAT_IPV4 is being removed from newer kernel versions.
+		// In order to avoid additional code maintenance, This check has been
+		// removed. Gravity running on older kernel versions may fail silently
+		// if this config is not found.
 		BootConfigParam{Name: "CONFIG_IP_NF_FILTER"},
 		BootConfigParam{Name: "CONFIG_IP_NF_TARGET_MASQUERADE"},
 		BootConfigParam{Name: "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE"},
