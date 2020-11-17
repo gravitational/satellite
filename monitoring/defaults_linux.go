@@ -113,10 +113,6 @@ func DefaultBootConfigParams() health.Checker {
 		BootConfigParam{Name: "CONFIG_VETH"},
 		BootConfigParam{Name: "CONFIG_BRIDGE"},
 		BootConfigParam{Name: "CONFIG_BRIDGE_NETFILTER"},
-		// Note: CONFIG_NF_NAT_IPV4 is being removed from newer kernel versions.
-		// In order to avoid additional code maintenance, This check has been
-		// removed. Gravity running on older kernel versions may fail silently
-		// if this config is not found.
 		BootConfigParam{Name: "CONFIG_IP_NF_FILTER"},
 		BootConfigParam{Name: "CONFIG_IP_NF_TARGET_MASQUERADE"},
 		BootConfigParam{Name: "CONFIG_NETFILTER_XT_MATCH_ADDRTYPE"},
