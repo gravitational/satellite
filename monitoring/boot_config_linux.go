@@ -53,8 +53,8 @@ type bootConfigParamChecker struct {
 type BootConfigParam struct {
 	// Param is boot config parameter to check
 	Name string
-	// KernelConstraints specifies optional kernel version constraints
-	KernelConstraints []KernelConstraintFunc
+	// KernelConstraint specifies an optional kernel version constraint
+	KernelConstraint KernelConstraintFunc
 }
 
 // Name returns name of the checker
@@ -122,7 +122,8 @@ func (c *bootConfigParamChecker) check(ctx context.Context, reporter health.Repo
 	}
 
 	for _, param := range c.Params {
-		if !kernelConstraints(param.KernelConstraints, kernelVersion) {
+		if param.KernelConstraint != nil &&
+			!param.KernelConstraint(*kernelVersion) {
 			// Skip if the kernel condition is not satisfied
 			continue
 		}
@@ -138,16 +139,6 @@ func (c *bootConfigParamChecker) check(ctx context.Context, reporter health.Repo
 		})
 	}
 	return nil
-}
-
-// kernelConstraints returns true if kernelVersion satisfies all the constraints.
-func kernelConstraints(constraints []KernelConstraintFunc, kernelVersion *KernelVersion) bool {
-	for _, constraint := range constraints {
-		if !constraint(*kernelVersion) {
-			return false
-		}
-	}
-	return true
 }
 
 func realBootConfigReader(release string) (io.ReadCloser, error) {

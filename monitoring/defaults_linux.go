@@ -116,11 +116,8 @@ func DefaultBootConfigParams() health.Checker {
 		BootConfigParam{
 			// https://cateee.net/lkddb/web-lkddb/NF_NAT_IPV4.html
 			// CONFIG_NF_NAT_IPV4 has been removed as of kernel 5.1
-			Name: "CONFIG_NF_NAT_IPV4",
-			KernelConstraints: []KernelConstraintFunc{
-				KernelVersionLessThan(KernelVersion{Release: 5, Major: 1}),
-				KernelVersionNotEquals(KernelVersion{Release: 4, Major: 18, Minor: 0, Patch: 240}),
-			},
+			Name:             "CONFIG_NF_NAT_IPV4",
+			KernelConstraint: KernelVersionLessThan(KernelVersion{Release: 5, Major: 1}),
 		},
 		BootConfigParam{Name: "CONFIG_IP_NF_FILTER"},
 		BootConfigParam{Name: "CONFIG_IP_NF_TARGET_MASQUERADE"},
@@ -132,20 +129,16 @@ func DefaultBootConfigParams() health.Checker {
 		BootConfigParam{
 			// https://cateee.net/lkddb/web-lkddb/NF_NAT_NEEDED.html
 			// CONFIG_NF_NAT_NEEDED has been removed as of kernel 5.2
-			Name: "CONFIG_NF_NAT_NEEDED",
-			KernelConstraints: []KernelConstraintFunc{
-				KernelVersionLessThan(KernelVersion{Release: 5, Major: 2}),
-			},
+			Name:             "CONFIG_NF_NAT_NEEDED",
+			KernelConstraint: KernelVersionLessThan(KernelVersion{Release: 5, Major: 2}),
 		},
 		BootConfigParam{Name: "CONFIG_POSIX_MQUEUE"},
 		BootConfigParam{
 			// See: https://lists.gt.net/linux/kernel/2465684#2465684
 			//  and https://github.com/lxc/lxc/pull/1217
 			// CONFIG_DEVPTS_MULTIPLE_INSTANCES has been removed as of kernel 4.7
-			Name: "CONFIG_DEVPTS_MULTIPLE_INSTANCES",
-			KernelConstraints: []KernelConstraintFunc{
-				KernelVersionLessThan(KernelVersion{Release: 4, Major: 7}),
-			},
+			Name:             "CONFIG_DEVPTS_MULTIPLE_INSTANCES",
+			KernelConstraint: KernelVersionLessThan(KernelVersion{Release: 4, Major: 7}),
 		},
 	)
 }

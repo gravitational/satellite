@@ -49,18 +49,6 @@ func KernelVersionLessThan(version KernelVersion) KernelConstraintFunc {
 	}
 }
 
-// KernelVersionNotEquals is a kernel constraint checker
-// that determines if the specified testVersion is not equal
-// to the actual version.
-func KernelVersionNotEquals(version KernelVersion) KernelConstraintFunc {
-	return func(testVersion KernelVersion) bool {
-		return testVersion.Release != version.Release ||
-			testVersion.Major != version.Major ||
-			testVersion.Minor != version.Minor ||
-			testVersion.Patch != version.Patch
-	}
-}
-
 // kernelVersionReader returns the textual kernel version.
 type kernelVersionReader func() (version string, err error)
 
