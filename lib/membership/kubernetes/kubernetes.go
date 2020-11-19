@@ -97,7 +97,10 @@ func (r *Cluster) Members() (members []*pb.MemberStatus, err error) {
 		members = append(members, pb.NewMemberStatus(
 			node.Name,
 			advertiseIP,
-			map[string]string{"role": node.Labels[RoleKey]},
+			map[string]string{
+				"role":     node.Labels[RoleKey],
+				"publicip": advertiseIP, // Read by Gravity
+			},
 		))
 	}
 	return members, nil
@@ -130,6 +133,9 @@ func (r *Cluster) Member(name string) (member *pb.MemberStatus, err error) {
 
 	return pb.NewMemberStatus(node.Name,
 		advertiseIP,
-		map[string]string{"role": node.Labels[RoleKey]},
+		map[string]string{
+			"role":     node.Labels[RoleKey],
+			"publicip": advertiseIP, // Read by Gravity
+		},
 	), nil
 }
