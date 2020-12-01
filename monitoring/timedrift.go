@@ -118,7 +118,7 @@ func (c *timeDriftChecker) Check(ctx context.Context, r health.Reporter) {
 		return
 	}
 	if r.NumProbes() == 0 {
-		r.Add(successProbe(c.NodeName))
+		r.Add(successProbeTimeDrift(c.NodeName))
 	}
 }
 
@@ -152,7 +152,7 @@ func (c *timeDriftChecker) check(ctx context.Context, r health.Reporter) (err er
 
 				if isDriftHigh(drift) {
 					mutex.Lock()
-					r.Add(failureProbe(c.NodeName, node.Name, drift))
+					r.Add(failureProbeTimeDrift(c.NodeName, node.Name, drift))
 					mutex.Unlock()
 				}
 			}
@@ -318,8 +318,8 @@ func isDriftHigh(drift time.Duration) bool {
 	return drift < 0 && -drift > timeDriftThreshold || drift > timeDriftThreshold
 }
 
-// successProbe constructs a probe that represents successful time drift check.
-func successProbe(node string) *pb.Probe {
+// successProbeTimeDrift constructs a probe that represents successful time drift check.
+func successProbeTimeDrift(node string) *pb.Probe {
 	return &pb.Probe{
 		Checker: timeDriftCheckerID,
 		Detail: fmt.Sprintf("time drift between %s and other nodes is within the allowed threshold of %s",
@@ -328,9 +328,9 @@ func successProbe(node string) *pb.Probe {
 	}
 }
 
-// failureProbe constructs a probe that represents failed time drift check
+// failureProbeTimeDrift constructs a probe that represents failed time drift check
 // between the specified nodes.
-func failureProbe(node1, node2 string, drift time.Duration) *pb.Probe {
+func failureProbeTimeDrift(node1, node2 string, drift time.Duration) *pb.Probe {
 	return &pb.Probe{
 		Checker: timeDriftCheckerID,
 		Detail:  fmt.Sprintf("time drift between %s and %s is %s", node1, node2, drift),

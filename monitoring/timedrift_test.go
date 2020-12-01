@@ -63,7 +63,7 @@ func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 				},
 			},
 			result: []*agentpb.Probe{
-				successProbe(node1),
+				successProbeTimeDrift(node1),
 			},
 		},
 		{
@@ -75,7 +75,7 @@ func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 				},
 			},
 			result: []*agentpb.Probe{
-				successProbe(node1),
+				successProbeTimeDrift(node1),
 			},
 		},
 		{
@@ -89,7 +89,7 @@ func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 			// Since we're using frozen time, latency will be 0 so
 			// time drift will be exactly the amount we specified.
 			result: []*agentpb.Probe{
-				failureProbe(node1, node3, driftOverThreshold),
+				failureProbeTimeDrift(node1, node3, driftOverThreshold),
 			},
 		},
 		{
@@ -101,7 +101,7 @@ func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 				},
 			},
 			result: []*agentpb.Probe{
-				failureProbe(node1, node2, -driftOverThreshold),
+				failureProbeTimeDrift(node1, node2, -driftOverThreshold),
 			},
 		},
 		{
@@ -113,8 +113,8 @@ func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 				},
 			},
 			result: []*agentpb.Probe{
-				failureProbe(node1, node2, -driftOverThreshold),
-				failureProbe(node1, node3, driftOverThreshold),
+				failureProbeTimeDrift(node1, node2, -driftOverThreshold),
+				failureProbeTimeDrift(node1, node3, driftOverThreshold),
 			},
 		},
 		{
@@ -127,7 +127,7 @@ func (s *TimeDriftSuite) TestTimeDriftChecker(c *check.C) {
 			},
 			slow: true,
 			result: []*agentpb.Probe{
-				successProbe(node1),
+				successProbeTimeDrift(node1),
 			},
 		},
 	}

@@ -151,7 +151,6 @@ func (r *checker) check(ctx context.Context, reporter health.Reporter) error {
 	for _, member := range members {
 		r.verifyLatency(summaries, member.Name, reporter)
 	}
-	// r.verifyLatency(filterByK8s(summaries, peers), r.LatencyQuantile, reporter)
 
 	return nil
 }
