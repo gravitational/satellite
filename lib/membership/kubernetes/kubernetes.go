@@ -41,9 +41,6 @@ const (
 type Config struct {
 	// Informer specifies a Node Infomer.
 	Informer cache.SharedIndexInformer
-	// Stop specifies a stop channel that indicates that the informer has been
-	// stopped when it is closed.
-	Stop <-chan struct{}
 }
 
 // checkAndSetDefaults validates configuration and sets default values.
@@ -51,9 +48,6 @@ func (r *Config) checkAndSetDefaults() error {
 	var errs []error
 	if r.Informer == nil {
 		errs = append(errs, trace.BadParameter("Informer must be provided"))
-	}
-	if r.Stop == nil {
-		errs = append(errs, trace.BadParameter("Stop channel must be provided"))
 	}
 	if len(errs) > 0 {
 		return trace.NewAggregate(errs...)

@@ -39,88 +39,63 @@ var _ = Suite(&KubernetesSuite{})
 
 // TestMembers verfies members can be queried.
 func (r *KubernetesSuite) TestMembers(c *C) {
-	tests := []struct {
-		comment  string
-		nodes    []v1.Node
-		expected []*pb.MemberStatus
-	}{
-		{
-			comment: "List all nodes",
-			nodes: []v1.Node{
-				r.newNode("satellite-1", "192.168.1.101", "master"),
-				r.newNode("satellite-2", "192.168.1.102", "master"),
-			},
-			expected: []*pb.MemberStatus{
-				pb.NewMemberStatus("satellite-1", "192.168.1.101", map[string]string{"role": "master"}),
-				pb.NewMemberStatus("satellite-2", "192.168.1.102", map[string]string{"role": "master"}),
-			},
-		},
+
+	comment := Commentf("List all nodes")
+	nodes := []v1.Node{
+		r.newNode("satellite-1", "192.168.1.101", "master"),
+		r.newNode("satellite-2", "192.168.1.102", "master"),
+	}
+	expected := []*pb.MemberStatus{
+		pb.NewMemberStatus("satellite-1", "192.168.1.101", map[string]string{"role": "master"}),
+		pb.NewMemberStatus("satellite-2", "192.168.1.102", map[string]string{"role": "master"}),
 	}
 
-	for _, tc := range tests {
-		comment := Commentf(tc.comment)
+	factory := informers.NewSharedInformerFactory(fake.NewSimpleClientset(&v1.NodeList{Items: nodes}), 0)
+	informer := factory.Core().V1().Nodes().Informer()
 
-		factory := informers.NewSharedInformerFactory(fake.NewSimpleClientset(&v1.NodeList{Items: tc.nodes}), 0)
-		informer := factory.Core().V1().Nodes().Informer()
+	stop := make(chan struct{})
+	defer close(stop)
+	go informer.Run(stop)
 
-		stop := make(chan struct{})
-		defer close(stop)
-		go informer.Run(stop)
+	c.Assert(cache.WaitForCacheSync(stop, informer.HasSynced), Equals, true, comment)
 
-		c.Assert(cache.WaitForCacheSync(stop, informer.HasSynced), Equals, true, comment)
+	cluster, err := NewCluster(&Config{
+		Informer: informer,
+	})
+	c.Assert(err, IsNil, comment)
 
-		cluster, err := NewCluster(&Config{
-			Informer: informer,
-			Stop:     stop,
-		})
-		c.Assert(err, IsNil, comment)
+	members, err := cluster.Members()
+	c.Assert(err, IsNil, comment)
 
-		members, err := cluster.Members()
-		sort.Sort(pb.ByName(members))
-		c.Assert(err, IsNil, comment)
-		c.Assert(members, test.DeepCompare, tc.expected, comment)
-	}
+	sort.Sort(pb.ByName(members))
+	c.Assert(members, test.DeepCompare, expected, comment)
 }
 
 // TestMember verifies single member can be queried.
 func (r *KubernetesSuite) TestMember(c *C) {
-	tests := []struct {
-		comment  string
-		name     string
-		nodes    []v1.Node
-		expected *pb.MemberStatus
-	}{
-		{
-			comment: "Query satellite-1",
-			name:    "satellite-1",
-			nodes: []v1.Node{
-				r.newNode("satellite-1", "192.168.1.101", "master"),
-			},
-			expected: pb.NewMemberStatus("satellite-1", "192.168.1.101", map[string]string{"role": "master"}),
-		},
+	comment := Commentf("Query satellite-1")
+	nodes := []v1.Node{
+		r.newNode("satellite-1", "192.168.1.101", "master"),
 	}
-	for _, tc := range tests {
-		comment := Commentf(tc.comment)
+	expected := pb.NewMemberStatus("satellite-1", "192.168.1.101", map[string]string{"role": "master"})
 
-		factory := informers.NewSharedInformerFactory(fake.NewSimpleClientset(&v1.NodeList{Items: tc.nodes}), 0)
-		informer := factory.Core().V1().Nodes().Informer()
+	factory := informers.NewSharedInformerFactory(fake.NewSimpleClientset(&v1.NodeList{Items: nodes}), 0)
+	informer := factory.Core().V1().Nodes().Informer()
 
-		stop := make(chan struct{})
-		defer close(stop)
-		go informer.Run(stop)
+	stop := make(chan struct{})
+	defer close(stop)
+	go informer.Run(stop)
 
-		c.Assert(cache.WaitForCacheSync(stop, informer.HasSynced), Equals, true, comment)
+	c.Assert(cache.WaitForCacheSync(stop, informer.HasSynced), Equals, true, comment)
 
-		cluster, err := NewCluster(&Config{
-			Informer: informer,
-			Stop:     stop,
-		})
-		c.Assert(err, IsNil, comment)
+	cluster, err := NewCluster(&Config{
+		Informer: informer,
+	})
+	c.Assert(err, IsNil, comment)
 
-		member, err := cluster.Member(tc.name)
-		c.Assert(err, IsNil, comment)
-		c.Assert(member, test.DeepCompare, tc.expected, comment)
-	}
+	member, err := cluster.Member("satellite-1")
+	c.Assert(err, IsNil, comment)
+	c.Assert(member, test.DeepCompare, expected, comment)
 }
 
 // newNode constructs a new pod.
