@@ -25,14 +25,11 @@ import (
 
 	"github.com/gravitational/satellite/agent/health"
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
-	"github.com/gravitational/satellite/utils"
+	"github.com/gravitational/satellite/lib/membership"
 
 	"github.com/gravitational/trace"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/sirupsen/logrus"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/client-go/kubernetes"
 )
 
 const (
@@ -50,8 +47,8 @@ const (
 	NamespaceMonitoring = "monitoring"
 )
 
-// LatencyClient interface provides latency summaries.
-type LatencyClient interface {
+// latencyClient interface provides latency summaries.
+type latencyClient interface {
 	// LatencySummariesMilli returns the latency summaries for each peer. The
 	// latency values represent milliseconds.
 	LatencySummariesMilli(ctx context.Context) (map[string]*dto.Summary, error)
@@ -65,10 +62,10 @@ type Config struct {
 	LatencyQuantile float64
 	// LatencyThreshold specifies the latency threshold.
 	LatencyThreshold time.Duration
-	// KubeClient specifies kubernetes clientset.
-	KubeClient kubernetes.Interface
 	// LatencyClient specifies nethealth client that provides latency metrics.
-	LatencyClient LatencyClient
+	LatencyClient latencyClient
+	// Cluster specifies cluster membership interface.
+	membership.Cluster
 }
 
 // checkAndSetDefaults validates the config and sets default values.
@@ -77,8 +74,8 @@ func (r *Config) checkAndSetDefaults() error {
 	if r.NodeName == "" {
 		errors = append(errors, trace.BadParameter("NodeName must be provided"))
 	}
-	if r.KubeClient == nil {
-		errors = append(errors, trace.BadParameter("KubeClient must be provided"))
+	if r.Cluster == nil {
+		errors = append(errors, trace.BadParameter("Cluster must be provided"))
 	}
 	if r.LatencyClient == nil {
 		errors = append(errors, trace.BadParameter("LatencyClient must be provided"))
@@ -136,12 +133,13 @@ func (r *checker) Check(ctx context.Context, reporter health.Reporter) {
 
 // check checks the latency between this and other nodes in the cluster.
 func (r *checker) check(ctx context.Context, reporter health.Reporter) error {
-	peers, err := r.getPeers()
+	members, err := r.Cluster.Members()
 	if err != nil {
-		return trace.Wrap(err, "failed to discover nethealth peers")
+		return trace.Wrap(err, "failed to query cluster members")
 	}
 
-	if len(peers) == 0 {
+	// Ignore checks if this node is the only member of the cluster.
+	if len(members) <= 1 {
 		return nil
 	}
 
@@ -150,59 +148,40 @@ func (r *checker) check(ctx context.Context, reporter health.Reporter) error {
 		return trace.Wrap(err, "failed to get latency summaries")
 	}
 
-	r.verifyLatency(filterByK8s(summaries, peers), r.LatencyQuantile, reporter)
+	for _, member := range members {
+		r.verifyLatency(summaries, member.Name, reporter)
+	}
 
 	return nil
 }
 
-// verifyLatency verifies the latency for each peer. Reports a failed probe if
-// the latency at the specified percentile is higher than the configured
+// verifyLatency verifies the latency for the specified node. Reports a failed
+// probe if the latency at the configured quantile is higher than the configured
 // threshold.
-func (r *checker) verifyLatency(summaries map[string]*dto.Summary, percentile float64, reporter health.Reporter) {
-	for peer, summary := range summaries {
-		latency, err := latencyAtQuantile(summary, percentile)
-		if err != nil {
-			r.WithError(err).
-				WithField("peer", peer).
-				WithField("summary", summary).
-				Warn("Failed to verify latency.")
-			continue
-		}
-
-		if latency > r.LatencyThreshold {
-			reporter.Add(failureProbe(r.NodeName, peer, latency, r.LatencyThreshold))
-		}
+func (r *checker) verifyLatency(summaries map[string]*dto.Summary, node string, reporter health.Reporter) {
+	// Skip self
+	if r.NodeName == node {
+		return
 	}
-}
 
-// getPeers returns all nethealth peers as a list of strings.
-func (r *checker) getPeers() (peers []string, err error) {
-	opts := metav1.ListOptions{
-		LabelSelector: LabelSelectorNethealth,
-		FieldSelector: fields.OneTermNotEqualSelector("spec.nodeName", r.NodeName).String(),
+	summary, exists := summaries[node]
+	if !exists {
+		r.WithField("node", node).Warn("Missing latency metrics for node.")
+		return
 	}
-	pods, err := r.KubeClient.CoreV1().Pods(NamespaceMonitoring).List(opts)
+
+	latency, err := latencyAtQuantile(summary, r.LatencyQuantile)
 	if err != nil {
-		return peers, utils.ConvertError(err)
+		r.WithError(err).
+			WithField("node", node).
+			WithField("summary", summary).
+			Warn("Failed to verify latency.")
+		return
 	}
-	for _, pod := range pods.Items {
-		peers = append(peers, pod.Spec.NodeName)
-	}
-	return peers, nil
-}
 
-// filterByK8s removes entires for nodes that are not specified in the provided
-// list of nodes.
-func filterByK8s(summaries map[string]*dto.Summary, nodes []string) (filtered map[string]*dto.Summary) {
-	filtered = make(map[string]*dto.Summary)
-	for _, node := range nodes {
-		if summary, exists := summaries[node]; exists {
-			filtered[node] = summary
-			continue
-		}
-		logrus.WithField("node", node).Warn("Missing nethealth metrics for node.")
+	if latency > r.LatencyThreshold {
+		reporter.Add(failureProbe(r.NodeName, node, latency, r.LatencyThreshold))
 	}
-	return filtered
 }
 
 // latencyAtQuantile returns the latency at the specified quantile. Latency

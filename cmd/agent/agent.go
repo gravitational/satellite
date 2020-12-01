@@ -1,5 +1,5 @@
 /*
-Copyright 2016 Gravitational, Inc.
+Copyright 2016-2020 Gravitational, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,8 +22,10 @@ import (
 	"syscall"
 
 	"github.com/gravitational/satellite/agent"
+	"github.com/gravitational/satellite/lib/membership"
 
 	"github.com/gravitational/trace"
+	serf "github.com/hashicorp/serf/client"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -32,6 +34,14 @@ func runAgent(config *agent.Config, monitoringConfig *config, peers []string) er
 	if len(peers) > 0 {
 		log.Infof("initial cluster=%v", peers)
 	}
+
+	cluster, err := membership.NewSerfCluster(&serf.Config{
+		Addr: monitoringConfig.serfRPCAddr,
+	})
+	if err != nil {
+		return trace.Wrap(err, "failed to initialize serf cluster membership service")
+	}
+	config.Cluster = cluster
 
 	monitoringAgent, err := agent.New(config)
 	if err != nil {
@@ -44,11 +54,6 @@ func runAgent(config *agent.Config, monitoringConfig *config, peers []string) er
 	}
 	if err = monitoringAgent.Start(); err != nil {
 		return trace.Wrap(err)
-	}
-	if len(peers) > 0 {
-		if err = monitoringAgent.Join(peers); err != nil {
-			return trace.Wrap(err, "failed to join serf cluster")
-		}
 	}
 
 	signalc := make(chan os.Signal, 2)

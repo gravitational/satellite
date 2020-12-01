@@ -23,13 +23,12 @@ import (
 	"time"
 
 	"github.com/gravitational/satellite/agent/health"
+	pb "github.com/gravitational/satellite/agent/proto/agentpb"
+	"github.com/gravitational/satellite/lib/membership"
 	"github.com/gravitational/satellite/lib/nethealth"
 	"github.com/gravitational/satellite/lib/test"
 
 	. "gopkg.in/check.v1"
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/fake"
 )
 
 func TestLatency(t *testing.T) { TestingT(t) }
@@ -71,7 +70,7 @@ func (r *LatencySuite) TestLatency(c *C) {
 		checker, err := NewChecker(&Config{
 			NodeName:        node1,
 			LatencyQuantile: tc.quantile,
-			KubeClient:      mockKubeClientset,
+			Cluster:         r.newMockCluster(node1, node2),
 			LatencyClient:   nethealth.NewMockClient(testMetrics),
 		})
 		c.Assert(err, IsNil, comment)
@@ -85,33 +84,26 @@ func (r *LatencySuite) TestLatency(c *C) {
 	}
 }
 
-// mockKubeClientset contains two nethealth pods used for test cases.
-var mockKubeClientset = fake.NewSimpleClientset(
-	&v1.PodList{
-		Items: []v1.Pod{
-			{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: NamespaceMonitoring,
-					Name:      "nethealth-1",
-					Labels:    map[string]string{"k8s-app": "nethealth"},
-				},
-				Spec: v1.PodSpec{
-					NodeName: node1,
-				},
-			},
-			{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: NamespaceMonitoring,
-					Name:      "nethealth-2",
-					Labels:    map[string]string{"k8s-app": "nethealth"},
-				},
-				Spec: v1.PodSpec{
-					NodeName: node2,
-				},
-			},
-		},
-	},
-)
+// mockCluster implements a mock cluster to be used for testing.
+type mockCluster struct {
+	membership.Cluster
+	members []string
+}
+
+// newMockCluster constructs a new mock cluster with the provided members.
+func (r *LatencySuite) newMockCluster(members ...string) *mockCluster {
+	return &mockCluster{
+		members: members,
+	}
+}
+
+// Members returns the list of members.
+func (r *mockCluster) Members() (members []*pb.MemberStatus, err error) {
+	for _, member := range r.members {
+		members = append(members, pb.NewMemberStatus(member, "", make(map[string]string)))
+	}
+	return members, nil
+}
 
 // testMetrics is an example output of Prometheus metrics containing latency
 // summaries.
