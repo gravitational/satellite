@@ -124,7 +124,7 @@ func NewClient(ctx context.Context, config Config) (*client, error) {
 	creds := credentials.NewTLS(&tls.Config{
 		RootCAs:      certPool,
 		Certificates: []tls.Certificate{cert},
-		MinVersion:   tls.VersionTLS12,
+		MinVersion:   tls.VersionTLS13,
 		CipherSuites: rpc.DefaultCipherSuites,
 	})
 	return NewClientWithCreds(ctx, config.Address, creds)
