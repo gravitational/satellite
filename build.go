@@ -44,9 +44,9 @@ var (
 	// buildVersion allows override of the version string from env variable
 	buildVersion = env("BUILD_VERSION", "")
 
-	grpcProtocVersion = env("GRPC_PROTOC_VER", "3.7.1")      // version of protoc
-	grpcGogoProtoTag  = env("GRPC_GOGO_PROTO_TAG", "v1.2.1") // gogo version tag
-	grpcGatewayTag    = env("GRPC_GATEWAY_TAG", "v1.8.5")    // grpc gateway version tag
+	grpcProtocVersion = env("GRPC_PROTOC_VER", "3.14.0")     // version of protoc
+	grpcGogoProtoTag  = env("GRPC_GOGO_PROTO_TAG", "v1.3.1") // gogo version tag
+	grpcGatewayTag    = env("GRPC_GATEWAY_TAG", "v1.16.0")   // grpc gateway version tag
 )
 
 type Build mg.Namespace
@@ -266,7 +266,7 @@ func (Internal) GrpcDebug() error {
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	args := []string{fmt.Sprint("-I=.:", os.Getenv("PROTO_INCLUDE")), "--gofast_out=plugins=grpc,Mgogo.proto=github.com/gogo/protobuf/gogoproto:."}
+	args := []string{fmt.Sprint("-I=.:", os.Getenv("PROTO_INCLUDE")), "--gofast_out=plugins=grpc:."}
 	return trace.Wrap(sh.RunV(
 		"protoc",
 		append(args, protoFiles...)...,

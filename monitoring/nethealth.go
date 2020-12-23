@@ -156,7 +156,7 @@ func (c *nethealthChecker) getPeers() (peers []string, err error) {
 		LabelSelector: nethealthLabelSelector.String(),
 		FieldSelector: fields.OneTermNotEqualSelector("spec.nodeName", c.NodeName).String(),
 	}
-	pods, err := c.Client.CoreV1().Pods(nethealthNamespace).List(opts)
+	pods, err := c.Client.CoreV1().Pods(nethealthNamespace).List(context.TODO(), opts)
 	if err != nil {
 		return peers, utils.ConvertError(err)
 	}
