@@ -40,6 +40,8 @@ const (
 	latencyQuantile = 0.95
 	// latencyThreshold is the default latency threshold value.
 	latencyThreshold = 15 * time.Millisecond
+	// latencyMinSampleThreshold is the minimum number of Sample the Probe needs to be triggered
+	latencyMinSampleThreshold = 10
 
 	// LabelSelectorNethealth specifies the nethealth k8s label selector.
 	LabelSelectorNethealth = "k8s-app=nethealth"
@@ -179,7 +181,7 @@ func (r *checker) verifyLatency(summaries map[string]*dto.Summary, node string, 
 		return
 	}
 
-	if latency > r.LatencyThreshold {
+	if latency > r.LatencyThreshold && summary.SampleCount > r.latencyMinSampleThreshold {
 		reporter.Add(failureProbe(r.NodeName, node, latency, r.LatencyThreshold))
 	}
 }
