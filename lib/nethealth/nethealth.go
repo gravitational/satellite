@@ -242,6 +242,11 @@ func (s *Server) Start() error {
 	mux := http.ServeMux{}
 	mux.Handle("/metrics", promhttp.Handler())
 	s.httpServer = &http.Server{Addr: fmt.Sprint(":", s.config.PrometheusPort), Handler: &mux}
+
+	// Workaround for https://github.com/gravitational/gravity/issues/2320
+	// Disable keep-alives to avoid the client/server hanging unix domain sockets that don't get cleaned up.
+	s.httpServer.SetKeepAlivesEnabled(false)
+
 	go func() {
 		if err := s.httpServer.ListenAndServe(); err != http.ErrServerClosed {
 			s.Fatalf("ListenAndServe(): %s", err)

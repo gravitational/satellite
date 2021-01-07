@@ -306,6 +306,7 @@ func (c *nethealthChecker) fetchNethealthMetrics(ctx context.Context) (res []byt
 		},
 		Timeout: time.Second,
 	}
+
 	// The two relevant metrics exposed by nethealth are 'nethealth_echo_request_total' and
 	// 'nethealth_echo_timeout_total'. We expect a pair of request/timeout metrics per peer.
 	// Example metrics received from nethealth may look something like the output below:
@@ -325,11 +326,16 @@ func (c *nethealthChecker) fetchNethealthMetrics(ctx context.Context) (res []byt
 
 	req = req.WithContext(ctx)
 
+	req.Close = true
+
 	resp, err := client.Do(req)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusOK {
 		buffer, err := ioutil.ReadAll(resp.Body)
