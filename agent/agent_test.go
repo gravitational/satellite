@@ -634,18 +634,17 @@ func newMockClient(agent *agent) (client.Client, error) {
 	return &mockClient{agent: agent}, nil
 }
 
-// Status reports the health status of a serf cluster.
+// Status reports the health status of the cluster.
 func (r *mockClient) Status(ctx context.Context) (*pb.SystemStatus, error) {
 	return r.agent.Status()
 }
 
-// LocalStatus reports the health status of the local serf cluster node.
+// LocalStatus reports the health status of the local cluster node.
 func (r *mockClient) LocalStatus(ctx context.Context) (*pb.NodeStatus, error) {
 	return r.agent.LocalStatus(), nil
 }
 
-// LastSeen requests the last seen timestamp for a member specified by
-// their serf name.
+// LastSeen requests the last seen timestamp for the specified member.
 func (r *mockClient) LastSeen(ctx context.Context, req *pb.LastSeenRequest) (*pb.LastSeenResponse, error) {
 	timestamp, err := r.agent.LastSeen(req.GetName())
 	if err != nil {

@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-// MemberStatus describes the state of a serf node.
+// MemberStatus describes the state of a cluster member.
 type MemberStatus string
 
 const (

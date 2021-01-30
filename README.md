@@ -51,10 +51,8 @@ Flags:
                                  Path to the docker daemon socket
   --nettest-image="gcr.io/google_containers/nettest:1.8"
                                  Name of the image to use for networking test
-  --name=NAME                    Agent name. Must be the same as the name of the local serf node
-  --serf-rpc-addr="127.0.0.1:7373"
-                                 RPC address of the local serf node
-  --initial-cluster=INITIAL-CLUSTER
+  --name=NAME                    Agent name. Must be the same as the name of the local node
+  --initial-cluster=INITIAL-CLUSTER  
                                  Initial cluster configuration as a comma-separated list of peers
   --state-dir=STATE-DIR          Directory to store agent-specific state
   --tags=TAGS                    Define a tags as comma-separated list of key:value pairs
@@ -153,8 +151,6 @@ Satellites design goals are:
  - high availability and resilience to network partitions
  - no single point of failure
  - history of health data as a time series
-
-The agents communicate over a gossip protocol implemented by [serf](https://www.serfdom.io/).
 
 The health status information is collected in the form of a time series and persisted to a [sqlite](https://www.sqlite.org/) backend.
 Additional backends are supported via an interface.
