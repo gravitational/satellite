@@ -20,16 +20,6 @@ import (
 	"time"
 )
 
-// MemberStatus describes the state of a cluster member.
-type MemberStatus string
-
-const (
-	MemberAlive   MemberStatus = "alive"
-	MemberLeaving              = "leaving"
-	MemberLeft                 = "left"
-	MemberFailed               = "failed"
-)
-
 // Role describes the agent's server role.
 type Role string
 

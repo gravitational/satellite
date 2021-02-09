@@ -97,16 +97,14 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 			membership: newMockClusterMembership(),
 			agentConfigs: []testAgentConfig{
 				{
-					node:         "node-1",
-					role:         RoleNode,
-					memberStatus: MemberAlive,
-					checkers:     []health.Checker{healthyTest},
+					node:     "node-1",
+					role:     RoleNode,
+					checkers: []health.Checker{healthyTest},
 				},
 				{
-					node:         "node-2",
-					role:         RoleNode,
-					memberStatus: MemberAlive,
-					checkers:     []health.Checker{healthyTest},
+					node:     "node-2",
+					role:     RoleNode,
+					checkers: []health.Checker{healthyTest},
 				},
 			},
 		},
@@ -135,16 +133,14 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 			membership: newMockClusterMembership(),
 			agentConfigs: []testAgentConfig{
 				{
-					node:         "master-1",
-					role:         RoleMaster,
-					memberStatus: MemberAlive,
-					checkers:     []health.Checker{healthyTest},
+					node:     "master-1",
+					role:     RoleMaster,
+					checkers: []health.Checker{healthyTest},
 				},
 				{
-					node:         "node-1",
-					role:         RoleNode,
-					memberStatus: MemberAlive,
-					checkers:     []health.Checker{failedTest},
+					node:     "node-1",
+					role:     RoleNode,
+					checkers: []health.Checker{failedTest},
 				},
 			},
 		},
@@ -173,16 +169,14 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 			membership: newMockClusterMembership(),
 			agentConfigs: []testAgentConfig{
 				{
-					node:         "master-1",
-					role:         RoleMaster,
-					memberStatus: MemberAlive,
-					checkers:     []health.Checker{healthyTest},
+					node:     "master-1",
+					role:     RoleMaster,
+					checkers: []health.Checker{healthyTest},
 				},
 				{
-					node:         "node-1",
-					role:         RoleNode,
-					memberStatus: MemberAlive,
-					checkers:     []health.Checker{healthyTest},
+					node:     "node-1",
+					role:     RoleNode,
+					checkers: []health.Checker{healthyTest},
 				},
 			},
 		},
@@ -446,12 +440,11 @@ func (r *AgentSuite) TestProvidesTimeline(c *C) {
 
 // testAgentConfig specifies config values for testAgent.
 type testAgentConfig struct {
-	node         string
-	role         Role
-	memberStatus MemberStatus
-	checkers     []health.Checker
-	localStatus  *pb.NodeStatus
-	clock        clockwork.Clock
+	node        string
+	role        Role
+	checkers    []health.Checker
+	localStatus *pb.NodeStatus
+	clock       clockwork.Clock
 }
 
 // setDefaults sets default config values if not previously defined.
