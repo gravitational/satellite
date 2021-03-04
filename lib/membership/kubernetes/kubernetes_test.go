@@ -46,8 +46,16 @@ func (r *KubernetesSuite) TestMembers(c *C) {
 		r.newNode("satellite-2", "192.168.1.102", "master"),
 	}
 	expected := []*pb.MemberStatus{
-		pb.NewMemberStatus("satellite-1", "192.168.1.101", map[string]string{"role": "master"}),
-		pb.NewMemberStatus("satellite-2", "192.168.1.102", map[string]string{"role": "master"}),
+		pb.NewMemberStatus("satellite-1", "192.168.1.101",
+			map[string]string{
+				"role":     "master",
+				"publicip": "192.168.1.101",
+			}),
+		pb.NewMemberStatus("satellite-2", "192.168.1.102",
+			map[string]string{
+				"role":     "master",
+				"publicip": "192.168.1.102",
+			}),
 	}
 
 	factory := informers.NewSharedInformerFactory(fake.NewSimpleClientset(&v1.NodeList{Items: nodes}), 0)
@@ -77,7 +85,11 @@ func (r *KubernetesSuite) TestMember(c *C) {
 	nodes := []v1.Node{
 		r.newNode("satellite-1", "192.168.1.101", "master"),
 	}
-	expected := pb.NewMemberStatus("satellite-1", "192.168.1.101", map[string]string{"role": "master"})
+	expected := pb.NewMemberStatus("satellite-1", "192.168.1.101",
+		map[string]string{
+			"role":     "master",
+			"publicip": "192.168.1.101",
+		})
 
 	factory := informers.NewSharedInformerFactory(fake.NewSimpleClientset(&v1.NodeList{Items: nodes}), 0)
 	informer := factory.Core().V1().Nodes().Informer()
