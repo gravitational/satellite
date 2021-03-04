@@ -24,6 +24,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
+	"sync"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	debugpb "github.com/gravitational/satellite/agent/proto/debug"
@@ -226,16 +227,53 @@ func (r *client) Close() error {
 // DialRPC returns RPC client for the provided addr.
 type DialRPC func(ctx context.Context, addr string) (Client, error)
 
+type ClientCache struct {
+	sync.RWMutex
+	clients map[string]Client
+}
+
 // DefaultDialRPC is the default RPC client factory function.
 // It creates a new client based on address details.
-func DefaultDialRPC(caFile, certFile, keyFile string) DialRPC {
+func (c *ClientCache) DefaultDialRPC(caFile, certFile, keyFile string) DialRPC {
 	return func(ctx context.Context, addr string) (Client, error) {
+		client := c.getClientFromCache(addr)
+		if client != nil {
+			return client, nil
+		}
+
 		config := Config{
 			Address:  fmt.Sprintf("%s:%d", addr, rpc.Port),
 			CAFile:   caFile,
 			CertFile: certFile,
 			KeyFile:  keyFile,
 		}
-		return NewClient(ctx, config)
+		client, err := NewClient(ctx, config)
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
+
+		c.Lock()
+		if c.clients == nil {
+			c.clients = make(map[string]Client)
+		}
+		c.clients[addr] = client
+		c.Unlock()
+
+		return client, nil
 	}
+}
+
+func (c *ClientCache) getClientFromCache(addr string) Client {
+	c.RLock()
+	defer c.RUnlock()
+
+	if c.clients == nil {
+		return nil
+	}
+
+	if client, ok := c.clients[addr]; ok {
+		return client
+	}
+
+	return nil
 }

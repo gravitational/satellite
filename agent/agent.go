@@ -135,7 +135,8 @@ func (r *Config) CheckAndSetDefaults() error {
 		r.Clock = clockwork.NewRealClock()
 	}
 	if r.DialRPC == nil {
-		r.DialRPC = client.DefaultDialRPC(r.CAFile, r.CertFile, r.KeyFile)
+		cache := &client.ClientCache{}
+		r.DialRPC = cache.DefaultDialRPC(r.CAFile, r.CertFile, r.KeyFile)
 	}
 	return nil
 }
@@ -230,11 +231,12 @@ func New(config *Config) (*agent, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	g := ctxgroup.WithContext(ctx)
+
 	agent := &agent{
 		Config:                  *config,
 		ClusterTimeline:         clusterTimeline,
 		LocalTimeline:           localTimeline,
-		dialRPC:                 client.DefaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
+		dialRPC:                 config.DialRPC,
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
 		localStatus:             emptyNodeStatus(config.Name),
 		metricsListener:         metricsListener,
@@ -442,9 +444,13 @@ func runChecker(ctx context.Context, checker health.Checker, probeCh chan<- heal
 
 	checkCh := make(chan health.Probes, 1)
 	go func() {
+		started := time.Now()
+
 		var probes health.Probes
 		checker.Check(ctxProbe, &probes)
 		checkCh <- probes
+
+		log.Debugf("Checker %q completed in %v", checker.Name(), time.Since(started))
 	}()
 
 	select {
@@ -487,6 +493,10 @@ func (r *agent) recycleLoop(ctx context.Context) error {
 func (r *agent) statusUpdateLoop(ctx context.Context) error {
 	ticker := r.Clock.NewTicker(StatusUpdateTimeout)
 	defer ticker.Stop()
+
+	if err := r.updateStatus(ctx); err != nil {
+		log.WithError(err).Warn("Failed to updates status.")
+	}
 
 	for {
 		select {
@@ -546,15 +556,22 @@ func (r *agent) collectStatus(ctx context.Context) *pb.SystemStatus {
 
 	log.Debugf("Started collecting statuses from members %v.", members)
 
-	ctxNode, cancelNode := context.WithTimeout(ctx, nodeStatusTimeout)
-	defer cancelNode()
-
 	statusCh := make(chan *statusResponse, len(members))
 	for _, member := range members {
 		if r.Name == member.Name {
-			go r.getLocalStatus(ctxNode, statusCh)
+			go func() {
+				ctxNode, cancelNode := context.WithTimeout(ctx, nodeStatusTimeoutLocal)
+				defer cancelNode()
+
+				r.getLocalStatus(ctxNode, statusCh)
+			}()
 		} else {
-			go r.getStatusFrom(ctxNode, member, statusCh)
+			go func(member *pb.MemberStatus) {
+				ctxNode, cancelNode := context.WithTimeout(ctx, nodeStatusTimeoutRemote)
+				defer cancelNode()
+
+				r.getStatusFrom(ctxNode, member, statusCh)
+			}(member)
 		}
 	}
 
