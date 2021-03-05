@@ -98,6 +98,9 @@ type Config struct {
 	// DialRPC is a factory function to create clients to other agents.
 	client.DialRPC
 
+	// clientCache is a cache of gRPC clients for repeated use.
+	clientCache *client.ClientCache
+
 	// Cluster is used to query cluster members.
 	membership.Cluster
 }
@@ -549,6 +552,8 @@ func (r *agent) collectStatus(ctx context.Context) *pb.SystemStatus {
 		}
 	}
 
+	go r.clientCache.CloseMissingMembers(members, StatusUpdateTimeout-time.Second)
+
 	systemStatus := &pb.SystemStatus{
 		Status:    pb.SystemStatus_Unknown,
 		Timestamp: pb.NewTimeToProto(r.Clock.Now()),
@@ -678,7 +683,6 @@ func (r *agent) notifyMaster(ctx context.Context, member *pb.MemberStatus, event
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	defer client.Close()
 
 	resp, err := client.LastSeen(ctx, &pb.LastSeenRequest{Name: r.Name})
 	if err != nil {
@@ -704,7 +708,6 @@ func (r *agent) getStatusFrom(ctx context.Context, member *pb.MemberStatus, resp
 	if err != nil {
 		resp.err = trace.Wrap(err)
 	} else {
-		defer client.Close()
 		var status *pb.NodeStatus
 		status, err = client.LocalStatus(ctx)
 		if err != nil {

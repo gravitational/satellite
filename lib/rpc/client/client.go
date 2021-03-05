@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"sync"
+	"time"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	debugpb "github.com/gravitational/satellite/agent/proto/debug"
@@ -276,4 +277,34 @@ func (c *ClientCache) getClientFromCache(addr string) Client {
 	}
 
 	return nil
+}
+
+// CloseMissingMembers will removed gRPC clients from the cache that don't appear to be part
+// of the cluster. It will do so after sleeping for the provided timeout.
+func (c *ClientCache) CloseMissingMembers(currentMembers []*pb.MemberStatus, sleep time.Duration) {
+	time.Sleep(sleep)
+
+	currentMap := make(map[string]interface{})
+
+	for _, member := range currentMembers {
+		currentMap[member.Addr] = nil
+	}
+
+	removed := make(map[string]Client)
+
+	c.Lock()
+	for addr, client := range c.clients {
+		if _, ok := currentMap[addr]; !ok {
+			removed[addr] = client
+		}
+	}
+
+	for addr := range removed {
+		delete(c.clients, addr)
+	}
+	c.Unlock()
+
+	for _, client := range removed {
+		client.Close()
+	}
 }
