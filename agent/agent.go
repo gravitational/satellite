@@ -137,9 +137,13 @@ func (r *Config) CheckAndSetDefaults() error {
 	if r.Clock == nil {
 		r.Clock = clockwork.NewRealClock()
 	}
+
+	if r.clientCache == nil {
+		r.clientCache = &client.ClientCache{}
+	}
+
 	if r.DialRPC == nil {
-		cache := &client.ClientCache{}
-		r.DialRPC = cache.DefaultDialRPC(r.CAFile, r.CertFile, r.KeyFile)
+		r.DialRPC = r.clientCache.DefaultDialRPC(r.CAFile, r.CertFile, r.KeyFile)
 	}
 	return nil
 }
