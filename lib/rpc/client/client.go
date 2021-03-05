@@ -248,7 +248,7 @@ func (c *ClientCache) DefaultDialRPC(caFile, certFile, keyFile string) DialRPC {
 			CertFile: certFile,
 			KeyFile:  keyFile,
 		}
-		client, err := NewClient(ctx, config)
+		client, err := NewClient(context.Background(), config)
 		if err != nil {
 			return nil, trace.Wrap(err)
 		}
