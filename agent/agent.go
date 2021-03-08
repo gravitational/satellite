@@ -556,8 +556,6 @@ func (r *agent) collectStatus(ctx context.Context) *pb.SystemStatus {
 		}
 	}
 
-	go r.clientCache.CloseMissingMembers(members, StatusUpdateTimeout-time.Second)
-
 	systemStatus := &pb.SystemStatus{
 		Status:    pb.SystemStatus_Unknown,
 		Timestamp: pb.NewTimeToProto(r.Clock.Now()),
@@ -605,6 +603,8 @@ L:
 	}
 
 	setSystemStatus(systemStatus, members)
+
+	go r.clientCache.CloseMissingMembers(members)
 
 	return systemStatus
 }
