@@ -501,10 +501,6 @@ func (r *agent) statusUpdateLoop(ctx context.Context) error {
 	ticker := r.Clock.NewTicker(StatusUpdateTimeout)
 	defer ticker.Stop()
 
-	if err := r.updateStatus(ctx); err != nil {
-		log.WithError(err).Warn("Failed to updates status.")
-	}
-
 	for {
 		select {
 		case <-ticker.Chan():
