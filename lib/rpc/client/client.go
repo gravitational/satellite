@@ -31,6 +31,7 @@ import (
 	"github.com/gravitational/satellite/lib/rpc"
 
 	"github.com/gravitational/trace"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -227,6 +228,8 @@ func (r *client) Close() error {
 // DialRPC returns RPC client for the provided addr.
 type DialRPC func(ctx context.Context, addr string) (Client, error)
 
+// ClientCache provides a caching mechanism to re-use Clients to peers without the expense of establishing new
+// transport connections every time a peer is dialed.
 type ClientCache struct {
 	sync.RWMutex
 	clients map[string]Client
@@ -234,6 +237,8 @@ type ClientCache struct {
 
 // DefaultDialRPC is the default RPC client factory function.
 // It creates a new client based on address details.
+// Note: the passed in context governs the context for the gRPC session, and as such should only be cancelled if we
+// want the underlying gRPC connection to shutdown.
 func (c *ClientCache) DefaultDialRPC(caFile, certFile, keyFile string) DialRPC {
 	return func(ctx context.Context, addr string) (Client, error) {
 		client := c.getClientFromCache(addr)
@@ -253,11 +258,24 @@ func (c *ClientCache) DefaultDialRPC(caFile, certFile, keyFile string) DialRPC {
 		}
 
 		c.Lock()
+		defer c.Unlock()
+
 		if c.clients == nil {
 			c.clients = make(map[string]Client)
 		}
+
+		// if another routine raced us, return the other routines client and shutdown ours
+		if c, ok := c.clients[addr]; ok {
+			err := client.Close()
+			if err != nil {
+				logrus.WithError(err).Debug("closing gRPC client error")
+				// fallthrough, we don't care if closing the client failed
+			}
+
+			return c, nil
+		}
+
 		c.clients[addr] = client
-		c.Unlock()
 
 		return client, nil
 	}
@@ -302,6 +320,10 @@ func (c *ClientCache) CloseMissingMembers(currentMembers []*pb.MemberStatus) {
 	c.Unlock()
 
 	for _, client := range removed {
-		client.Close()
+		err := client.Close()
+		if err != nil {
+			logrus.WithError(err).Debug("closing gRPC client error")
+			// fallthrough, we don't care if closing the client failed
+		}
 	}
 }
