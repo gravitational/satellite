@@ -229,28 +229,50 @@ func waitTimeoutForPodRunningInNamespace(client *kube.Clientset, podName string,
 
 // waitForPodCondition waits until a pod is in the given condition within the specified amount of time.
 func waitForPodCondition(client *kube.Clientset, ns, podName, desc string, timeout time.Duration, condition podCondition) error {
-	log.Infof("waiting up to %v for pod %s status to be %s", timeout, podName, desc)
-	for start := time.Now(); time.Since(start) < timeout; time.Sleep(pollInterval) {
-		pod, err := client.CoreV1().Pods(ns).Get(context.TODO(), podName, metav1.GetOptions{})
-		if err != nil {
-			log.Infof("get pod %s in namespace '%s' failed, ignoring for %v: %v",
-				podName, ns, pollInterval, err)
-			continue
-		}
-		done, err := condition(pod)
-		if done {
-			// TODO: update to latest trace to wrap nil
+	log := log.WithFields(log.Fields{
+		"pod":       podName,
+		"namespace": ns,
+	})
+
+	log.Infof("waiting up to %v for pod status to be %s", timeout, desc)
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+	start := time.Now()
+
+	for {
+		select {
+		case <-ticker.C:
+			pod, err := client.CoreV1().Pods(ns).Get(ctx, podName, metav1.GetOptions{})
 			if err != nil {
-				return trace.Wrap(err)
+				log.WithError(err).
+					Infof("failed to get pod, retrying after %v", pollInterval)
+				continue
 			}
-			log.Infof("waiting for pod succeeded")
+
+			done, err := condition(pod)
+			if !done {
+				log.Infof("waiting for pod status to be '%s' (found phase: %q, readiness: %t) (%v elapsed)",
+					desc, pod.Status.Phase, podReady(pod), time.Since(start))
+				continue
+			}
+
+			if err != nil {
+				return trace.Wrap(err, "failed to verify pod condition")
+			}
+
+			log.Info("sucessfully waited for pod")
+
 			return nil
+
+		case <-ctx.Done():
+			return trace.LimitExceeded("gave up waiting for pod '%s' to be '%s' after %v", podName, desc, timeout)
 		}
-		log.Infof("waiting for pod %s in namespace '%s' status to be '%s'"+
-			"(found phase: %q, readiness: %t) (%v elapsed)",
-			podName, ns, desc, pod.Status.Phase, podReady(pod), time.Since(start))
 	}
-	return trace.Errorf("gave up waiting for pod '%s' to be '%s' after %v", podName, desc, timeout)
 }
 
 // launchNetTestPodPerNode schedules a new test pod on each of specified nodes
