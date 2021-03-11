@@ -24,12 +24,14 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
+	"sync"
 
 	pb "github.com/gravitational/satellite/agent/proto/agentpb"
 	debugpb "github.com/gravitational/satellite/agent/proto/debug"
 	"github.com/gravitational/satellite/lib/rpc"
 
 	"github.com/gravitational/trace"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -226,16 +228,102 @@ func (r *client) Close() error {
 // DialRPC returns RPC client for the provided addr.
 type DialRPC func(ctx context.Context, addr string) (Client, error)
 
+// ClientCache provides a caching mechanism to re-use Clients to peers without the expense of establishing new
+// transport connections every time a peer is dialed.
+type ClientCache struct {
+	sync.RWMutex
+	clients map[string]Client
+}
+
 // DefaultDialRPC is the default RPC client factory function.
 // It creates a new client based on address details.
-func DefaultDialRPC(caFile, certFile, keyFile string) DialRPC {
+// Note: the passed in context governs the context for the gRPC session, and as such should only be cancelled if we
+// want the underlying gRPC connection to shutdown.
+func (c *ClientCache) DefaultDialRPC(caFile, certFile, keyFile string) DialRPC {
 	return func(ctx context.Context, addr string) (Client, error) {
+		client := c.getClientFromCache(addr)
+		if client != nil {
+			return client, nil
+		}
+
 		config := Config{
 			Address:  fmt.Sprintf("%s:%d", addr, rpc.Port),
 			CAFile:   caFile,
 			CertFile: certFile,
 			KeyFile:  keyFile,
 		}
-		return NewClient(ctx, config)
+		client, err := NewClient(context.Background(), config)
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
+
+		c.Lock()
+		defer c.Unlock()
+
+		if c.clients == nil {
+			c.clients = make(map[string]Client)
+		}
+
+		// if another routine raced us, return the other routines client and shutdown ours
+		if c, ok := c.clients[addr]; ok {
+			err := client.Close()
+			if err != nil {
+				logrus.WithError(err).Debug("closing gRPC client error")
+				// fallthrough, we don't care if closing the client failed
+			}
+
+			return c, nil
+		}
+
+		c.clients[addr] = client
+
+		return client, nil
+	}
+}
+
+func (c *ClientCache) getClientFromCache(addr string) Client {
+	c.RLock()
+	defer c.RUnlock()
+
+	if c.clients == nil {
+		return nil
+	}
+
+	if client, ok := c.clients[addr]; ok {
+		return client
+	}
+
+	return nil
+}
+
+// CloseMissingMembers will removed gRPC clients from the cache that don't appear to be part
+// of the cluster. It will do so after sleeping for the provided timeout.
+func (c *ClientCache) CloseMissingMembers(currentMembers []*pb.MemberStatus) {
+	currentMap := make(map[string]interface{})
+
+	for _, member := range currentMembers {
+		currentMap[member.Addr] = nil
+	}
+
+	removed := make(map[string]Client)
+
+	c.Lock()
+	for addr, client := range c.clients {
+		if _, ok := currentMap[addr]; !ok {
+			removed[addr] = client
+		}
+	}
+
+	for addr := range removed {
+		delete(c.clients, addr)
+	}
+	c.Unlock()
+
+	for _, client := range removed {
+		err := client.Close()
+		if err != nil {
+			logrus.WithError(err).Debug("closing gRPC client error")
+			// fallthrough, we don't care if closing the client failed
+		}
 	}
 }

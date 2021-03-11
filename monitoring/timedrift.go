@@ -57,8 +57,6 @@ type timeDriftChecker struct {
 	log.FieldLogger
 	// mu protects the clients map.
 	mu sync.Mutex
-	// clients contains RPC clients for other cluster nodes.
-	clients map[string]client.Client
 }
 
 // TimeDriftCheckerConfig stores configuration for the time drift check.
@@ -102,7 +100,6 @@ func NewTimeDriftChecker(conf TimeDriftCheckerConfig) (c health.Checker, err err
 	return &timeDriftChecker{
 		TimeDriftCheckerConfig: conf,
 		FieldLogger:            log.WithField(trace.Component, timeDriftCheckerID),
-		clients:                make(map[string]client.Client),
 	}, nil
 }
 
@@ -242,38 +239,12 @@ func (c *timeDriftChecker) nodesToCheck() (result []*pb.MemberStatus, err error)
 		return nil, trace.Wrap(err)
 	}
 
-	c.removeExpiredClients(nodes)
-
 	for _, node := range nodes {
 		if c.shouldCheckNode(node) {
 			result = append(result, node)
 		}
 	}
 	return result, nil
-}
-
-// removeExpiredClients closes client connections to nodes that have left the
-// cluster and deletes the entry from the cache.
-func (c *timeDriftChecker) removeExpiredClients(members []*pb.MemberStatus) {
-	currentMembers := make(map[string]struct{})
-	for _, member := range members {
-		currentMembers[member.Addr] = struct{}{}
-	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	for addr, conn := range c.clients {
-		if _, ok := currentMembers[addr]; ok {
-			continue
-		}
-		if err := conn.Close(); err != nil {
-			log.WithError(err).WithField("address", addr).Error("Failed to close client connection.")
-			continue
-		}
-		log.WithField("address", addr).Info("Closed client connection.")
-		delete(c.clients, addr)
-	}
 }
 
 // shouldCheckNode returns true if the check should be run against specified
@@ -284,33 +255,7 @@ func (c *timeDriftChecker) shouldCheckNode(node *pb.MemberStatus) bool {
 
 // getAgentClient returns Satellite agent client for the provided node.
 func (c *timeDriftChecker) getAgentClient(ctx context.Context, node *pb.MemberStatus) (client.Client, error) {
-	addr := node.Addr
-	c.mu.Lock()
-	if conn, exists := c.clients[addr]; exists {
-		c.mu.Unlock()
-		return conn, nil
-	}
-	c.mu.Unlock()
-
-	newConn, err := c.DialRPC(ctx, addr)
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Close newly created client connection if a new client was already cached while dialing.
-	if conn, exists := c.clients[addr]; exists {
-		if err := newConn.Close(); err != nil {
-			log.WithError(err).WithField("address", addr).Error("Failed to close client connection.")
-		}
-		return conn, nil
-	}
-
-	// Cache and return new client connection.
-	c.clients[addr] = newConn
-	return newConn, nil
+	return c.DialRPC(ctx, node.Addr)
 }
 
 // isDriftHigh returns true if the provided drift value is over the threshold.

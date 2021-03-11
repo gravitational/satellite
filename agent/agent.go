@@ -98,6 +98,9 @@ type Config struct {
 	// DialRPC is a factory function to create clients to other agents.
 	client.DialRPC
 
+	// clientCache is a cache of gRPC clients for repeated use.
+	clientCache *client.ClientCache
+
 	// Cluster is used to query cluster members.
 	membership.Cluster
 }
@@ -134,8 +137,13 @@ func (r *Config) CheckAndSetDefaults() error {
 	if r.Clock == nil {
 		r.Clock = clockwork.NewRealClock()
 	}
+
+	if r.clientCache == nil {
+		r.clientCache = &client.ClientCache{}
+	}
+
 	if r.DialRPC == nil {
-		r.DialRPC = client.DefaultDialRPC(r.CAFile, r.CertFile, r.KeyFile)
+		r.DialRPC = r.clientCache.DefaultDialRPC(r.CAFile, r.CertFile, r.KeyFile)
 	}
 	return nil
 }
@@ -230,11 +238,12 @@ func New(config *Config) (*agent, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	g := ctxgroup.WithContext(ctx)
+
 	agent := &agent{
 		Config:                  *config,
 		ClusterTimeline:         clusterTimeline,
 		LocalTimeline:           localTimeline,
-		dialRPC:                 client.DefaultDialRPC(config.CAFile, config.CertFile, config.KeyFile),
+		dialRPC:                 config.DialRPC,
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
 		localStatus:             emptyNodeStatus(config.Name),
 		metricsListener:         metricsListener,
@@ -442,9 +451,13 @@ func runChecker(ctx context.Context, checker health.Checker, probeCh chan<- heal
 
 	checkCh := make(chan health.Probes, 1)
 	go func() {
+		started := time.Now()
+
 		var probes health.Probes
 		checker.Check(ctxProbe, &probes)
 		checkCh <- probes
+
+		log.Debugf("Checker %q completed in %v", checker.Name(), time.Since(started))
 	}()
 
 	select {
@@ -546,15 +559,22 @@ func (r *agent) collectStatus(ctx context.Context) *pb.SystemStatus {
 
 	log.Debugf("Started collecting statuses from members %v.", members)
 
-	ctxNode, cancelNode := context.WithTimeout(ctx, nodeStatusTimeout)
-	defer cancelNode()
-
 	statusCh := make(chan *statusResponse, len(members))
 	for _, member := range members {
 		if r.Name == member.Name {
-			go r.getLocalStatus(ctxNode, statusCh)
+			go func() {
+				ctxNode, cancelNode := context.WithTimeout(ctx, nodeStatusTimeoutLocal)
+				defer cancelNode()
+
+				r.getLocalStatus(ctxNode, statusCh)
+			}()
 		} else {
-			go r.getStatusFrom(ctxNode, member, statusCh)
+			go func(member *pb.MemberStatus) {
+				ctxNode, cancelNode := context.WithTimeout(ctx, nodeStatusTimeoutRemote)
+				defer cancelNode()
+
+				r.getStatusFrom(ctxNode, member, statusCh)
+			}(member)
 		}
 	}
 
@@ -579,6 +599,8 @@ L:
 	}
 
 	setSystemStatus(systemStatus, members)
+
+	go r.clientCache.CloseMissingMembers(members)
 
 	return systemStatus
 }
@@ -661,7 +683,6 @@ func (r *agent) notifyMaster(ctx context.Context, member *pb.MemberStatus, event
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	defer client.Close()
 
 	resp, err := client.LastSeen(ctx, &pb.LastSeenRequest{Name: r.Name})
 	if err != nil {
@@ -687,7 +708,6 @@ func (r *agent) getStatusFrom(ctx context.Context, member *pb.MemberStatus, resp
 	if err != nil {
 		resp.err = trace.Wrap(err)
 	} else {
-		defer client.Close()
 		var status *pb.NodeStatus
 		status, err = client.LocalStatus(ctx)
 		if err != nil {

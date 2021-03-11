@@ -184,8 +184,7 @@ func (r *checker) verifyLatency(summaries map[string]*dto.Summary, node string, 
 	}
 }
 
-// latencyAtQuantile returns the latency at the specified quantile. Latency
-// is returned in milliseconds.
+// latencyAtQuantile returns the latency at the specified quantile.
 // Returns NotFound if latency is not available at the specified quantile.
 func latencyAtQuantile(summary *dto.Summary, quantile float64) (latency time.Duration, err error) {
 	for _, q := range summary.GetQuantile() {
