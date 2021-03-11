@@ -16,6 +16,7 @@ limitations under the License.
 package nethealth
 
 import (
+	"context"
 	"net"
 	"testing"
 
@@ -114,12 +115,12 @@ func TestResyncPeerList(t *testing.T) {
 
 	for _, tt := range cases {
 		for _, node := range tt.add {
-			_, err := server.client.CoreV1().Nodes().Create(node)
+			_, err := server.client.CoreV1().Nodes().Create(context.TODO(), node, metav1.CreateOptions{})
 			assert.NoError(t, err, tt.description)
 		}
 
 		for _, node := range tt.rm {
-			err := server.client.CoreV1().Nodes().Delete(node, nil)
+			err := server.client.CoreV1().Nodes().Delete(context.TODO(), node, metav1.DeleteOptions{})
 			assert.NoError(t, err, tt.description)
 		}
 
@@ -300,7 +301,7 @@ func TestResyncPods(t *testing.T) {
 	}
 
 	for _, node := range nodes {
-		_, err := server.client.CoreV1().Nodes().Create(node)
+		_, err := server.client.CoreV1().Nodes().Create(context.TODO(), node, metav1.CreateOptions{})
 		assert.NoError(t, err, node.Name)
 	}
 	err := server.resyncPeerList()
@@ -308,12 +309,12 @@ func TestResyncPods(t *testing.T) {
 
 	for _, tt := range cases {
 		for _, pod := range tt.add {
-			_, err := server.client.CoreV1().Pods(ns).Create(pod)
+			_, err := server.client.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{})
 			assert.NoError(t, err, tt.description)
 		}
 
 		for _, node := range tt.rm {
-			err := server.client.CoreV1().Pods(ns).Delete(node, nil)
+			err := server.client.CoreV1().Pods(ns).Delete(context.TODO(), node, metav1.DeleteOptions{})
 			assert.NoError(t, err, tt.description)
 		}
 

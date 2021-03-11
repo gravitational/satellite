@@ -20,6 +20,7 @@ limitations under the License.
 package nethealth
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -405,7 +406,7 @@ func (s *Server) loopServiceDiscovery() {
 
 // resyncPeerList contacts the kubernetes API to sync the list of kubernetes nodes
 func (s *Server) resyncPeerList() error {
-	nodes, err := s.client.CoreV1().Nodes().List(metav1.ListOptions{})
+	nodes, err := s.client.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -448,7 +449,7 @@ func (s *Server) resyncPeerList() error {
 
 // resyncNethealthPods contacts the kubernetes API to sync the list of pods running the nethealth daemon
 func (s *Server) resyncNethealthPods() error {
-	list, err := s.client.CoreV1().Pods(s.config.Namespace).List(metav1.ListOptions{
+	list, err := s.client.CoreV1().Pods(s.config.Namespace).List(context.TODO(), metav1.ListOptions{
 		LabelSelector: s.selector.String(),
 	})
 	if err != nil {

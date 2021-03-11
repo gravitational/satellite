@@ -17,6 +17,8 @@ limitations under the License.
 package collector
 
 import (
+	"context"
+
 	"github.com/gravitational/satellite/monitoring"
 	"github.com/gravitational/trace"
 	"github.com/prometheus/client_golang/prometheus"
@@ -54,7 +56,7 @@ func (k *KubernetesCollector) Collect(ch chan<- prometheus.Metric) error {
 		LabelSelector: labels.Everything().String(),
 		FieldSelector: fields.Everything().String(),
 	}
-	nodes, err := k.client.CoreV1().Nodes().List(listOptions)
+	nodes, err := k.client.CoreV1().Nodes().List(context.TODO(), listOptions)
 	if err != nil {
 		return trace.Wrap(err, "failed to query nodes: %v", err)
 	}
