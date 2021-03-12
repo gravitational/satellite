@@ -39,5 +39,5 @@ RUN cd /tmp && unzip /tmp/${TARBALL} -d ${PROTOC_PATH} && rm /tmp/${TARBALL}
 
 # These binaries enable use of gogoprotobuf extensions
 # https://github.com/gogo/protobuf/blob/master/extensions.md
-RUN go get -u github.com/gogo/protobuf/proto@${GRPC_GOGO_PROTO_TAG}
-RUN go get -u github.com/gogo/protobuf/protoc-gen-gofast@${GRPC_GOGO_PROTO_TAG}
+RUN go get github.com/gogo/protobuf/proto@${GRPC_GOGO_PROTO_TAG}
+RUN go install github.com/gogo/protobuf/protoc-gen-gofast@${GRPC_GOGO_PROTO_TAG}
