@@ -44,9 +44,8 @@ var (
 	// buildVersion allows override of the version string from env variable
 	buildVersion = env("BUILD_VERSION", "")
 
-	grpcProtocVersion = env("GRPC_PROTOC_VER", "3.7.1")      // version of protoc
-	grpcGogoProtoTag  = env("GRPC_GOGO_PROTO_TAG", "v1.2.1") // gogo version tag
-	grpcGatewayTag    = env("GRPC_GATEWAY_TAG", "v1.8.5")    // grpc gateway version tag
+	grpcProtocVersion = env("GRPC_PROTOC_VER", "3.14.0")     // version of protoc
+	grpcGogoProtoTag  = env("GRPC_GOGO_PROTO_TAG", "v1.3.1") // gogo version tag
 )
 
 type Build mg.Namespace
@@ -215,7 +214,6 @@ func (Codegen) Buildbox() error {
 		"--tag", fmt.Sprint("satellite-grpc-buildbox:", version()),
 		"--build-arg", fmt.Sprint("GRPC_PROTOC_VER=", grpcProtocVersion),
 		"--build-arg", fmt.Sprint("GRPC_GOGO_PROTO_TAG=", grpcGogoProtoTag),
-		"--build-arg", fmt.Sprint("GRPC_GATEWAY_TAG=", grpcGatewayTag),
 		"-f", "build.assets/grpc/Dockerfile",
 		".",
 	))
