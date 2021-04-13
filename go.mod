@@ -10,8 +10,8 @@ require (
 	github.com/coreos/go-systemd/v22 v22.1.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dustin/go-humanize v0.0.0-20171111073723-bb3d318650d4
-	github.com/gogo/protobuf v1.2.2-0.20190723190241-65acae22fc9d
-	github.com/golang/protobuf v1.3.2
+	github.com/gogo/protobuf v1.3.1
+	github.com/golang/protobuf v1.4.2
 	github.com/googleapis/gnostic v0.2.0 // indirect
 	github.com/gravitational/configure v0.0.0-20161002181724-4e0f2df8846e
 	github.com/gravitational/log v0.0.0-20200127200505-fdffa14162b0 // indirect

@@ -12,26 +12,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.10-stretch
+# Documentation on getting started with protobuf:
+# https://github.com/gogo/protobuf#getting-started
+
+# Requires 1.9+
+FROM golang:1.16-buster
 
 ARG GRPC_PROTOC_VER
-ARG GRPC_GOGO_PROTO_TAG
-ARG GRPC_GATEWAY_TAG
 ARG PLATFORM=linux-x86_64
+ARG TARBALL=protoc-${GRPC_PROTOC_VER}-${PLATFORM}.zip
+ARG PROTOC_PATH=/usr/local
+ARG PROTOC_INCLUDE=${PROTOC_PATH}/include
 
-ENV TARBALL protoc-${GRPC_PROTOC_VER}-${PLATFORM}.zip
-ENV GOGOPROTO_ROOT ${GOPATH}/src/github.com/gogo/protobuf
+ARG GRPC_GOGO_PROTO_TAG
+ARG GOGO_PROTO_INCLUDE=${GOPATH}/pkg/mod/github.com/gogo/protobuf@${GRPC_GOGO_PROTO_TAG}/gogoproto
+
+ENV PROTO_INCLUDE "${PROTOC_INCLUDE}":"${GOGO_PROTO_INCLUDE}"
 
 RUN apt-get update && apt-get install unzip
 
-RUN curl -L -o /tmp/${TARBALL} https://github.com/google/protobuf/releases/download/v${GRPC_PROTOC_VER}/${TARBALL}
-RUN cd /tmp && unzip /tmp/protoc-${GRPC_PROTOC_VER}-linux-x86_64.zip -d /usr/local && rm /tmp/${TARBALL}
+# Install and extract standard protocol buffer implementation from
+# https://github.com/protocolbuffers/protobuf
+# Standard .proto files will be extracted under ${PROTOC_PATH}/include.
+RUN curl -L -o /tmp/${TARBALL} https://github.com/protocolbuffers/protobuf/releases/download/v${GRPC_PROTOC_VER}/${TARBALL}
+RUN cd /tmp && unzip /tmp/${TARBALL} -d ${PROTOC_PATH} && rm /tmp/${TARBALL}
 
-RUN go get -u github.com/gogo/protobuf/proto github.com/gogo/protobuf/protoc-gen-gogo github.com/gogo/protobuf/gogoproto golang.org/x/tools/cmd/goimports github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
-RUN cd ${GOPATH}/src/github.com/gogo/protobuf && git reset --hard ${GRPC_GOGO_PROTO_TAG} && make install
-RUN cd ${GOPATH}/src/github.com/grpc-ecosystem/grpc-gateway && git reset --hard ${GRPC_GATEWAY_TAG} && go install ./protoc-gen-grpc-gateway
-
-ENV PATH $PATH:/gopath/bin
-
-ENV PROTO_INCLUDE "/usr/local/include":"${GOPATH}/src":"${GOPATH}/src/github.com/gogo/protobuf/protobuf":"${GOPATH}/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis":"${GOPATH}/src/github.com/grpc-ecosystem/grpc-gateway/third_party/googleapis":"${GOGOPROTO_ROOT}:${GOGOPROTO_ROOT}/protobuf":"${GOGOPROTO_ROOT}/gogoproto"
-
+# These binaries enable use of gogoprotobuf extensions
+# https://github.com/gogo/protobuf/blob/master/extensions.md
+RUN go get github.com/gogo/protobuf/proto@${GRPC_GOGO_PROTO_TAG}
+RUN go install github.com/gogo/protobuf/protoc-gen-gofast@${GRPC_GOGO_PROTO_TAG}
