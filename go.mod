@@ -12,7 +12,6 @@ require (
 	github.com/dustin/go-humanize v0.0.0-20171111073723-bb3d318650d4
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.4.2
-	github.com/googleapis/gnostic v0.2.0 // indirect
 	github.com/gravitational/configure v0.0.0-20161002181724-4e0f2df8846e
 	github.com/gravitational/log v0.0.0-20200127200505-fdffa14162b0 // indirect
 	github.com/gravitational/roundtrip v1.0.0
@@ -30,26 +29,24 @@ require (
 	github.com/influxdata/influxdb v1.5.1
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/jonboulle/clockwork v0.1.1-0.20190114141812-62fb9bc030d1
-	github.com/kr/pretty v0.2.0 // indirect
 	github.com/kylelemons/godebug v0.0.0-20170820004349-d65d576e9348
 	github.com/magefile/mage v1.9.0
 	github.com/mattn/go-sqlite3 v1.13.0
 	github.com/miekg/dns v1.1.26
 	github.com/mitchellh/go-ps v1.0.0
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.1.0
 	github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4
 	github.com/prometheus/common v0.6.0
 	github.com/prometheus/procfs v0.0.5
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.6.1
-	golang.org/x/net v0.0.0-20200625001655-4c5254603344
-	golang.org/x/sync v0.0.0-20190423024810-112230192c58
-	golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae
-	google.golang.org/grpc v1.23.0
+	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
+	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
+	golang.org/x/sys v0.0.0-20201112073958-5cba982894dd
+	google.golang.org/grpc v1.27.0
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15
-	k8s.io/api v0.17.6
-	k8s.io/apimachinery v0.17.6
-	k8s.io/client-go v0.17.6
+	k8s.io/api v0.19.8
+	k8s.io/apimachinery v0.19.8
+	k8s.io/client-go v0.19.8
 )
