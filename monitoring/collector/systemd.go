@@ -27,7 +27,6 @@ import (
 var (
 	listOfServices = serviceMap(
 		"flanneld.service",
-		"serf.service",
 		"planet-agent.service",
 		"coredns.service",
 		"registry.service",

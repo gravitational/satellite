@@ -3,7 +3,7 @@
 The provided Vagrantfile and Ansible playbooks can be used to initialize a
 local satellite cluster and quickly test changes in development environment.
 The default configuration will setup a three node cluster 
-(k8s-master, node-1, node-2). Kubernetes, Serf, and Satellite will be installed
+(k8s-master, node-1, node-2). Kubernetes, and Satellite will be installed
 on each node.
 
 ## Dependencies
@@ -22,8 +22,6 @@ on each node.
     -   **satellite.yaml** installs satellite on each node as a service.
 
     -   **scripts.yaml** adds a few helpful scripts to run client commands.
-
-    -   **serf.yaml** installs and starts serf on each node.
 
     -   **update-satellite.yaml** updates the satellite binary on each node and 
         restarts the service.

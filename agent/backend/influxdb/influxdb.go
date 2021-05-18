@@ -109,7 +109,7 @@ func connect(config *Config) (client influx.Client, err error) {
 // Following schema is used for encoding:
 //
 // Nodes:
-//  tags: {"name": "worker", serf_tags}
+//  tags: {"name": "worker"}
 //  fields: {"addr": "192.168.172.1", "status": "running"}
 //
 // Probes:

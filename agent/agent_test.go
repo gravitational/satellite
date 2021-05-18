@@ -97,16 +97,14 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 			membership: newMockClusterMembership(),
 			agentConfigs: []testAgentConfig{
 				{
-					node:         "node-1",
-					role:         RoleNode,
-					memberStatus: MemberAlive,
-					checkers:     []health.Checker{healthyTest},
+					node:     "node-1",
+					role:     RoleNode,
+					checkers: []health.Checker{healthyTest},
 				},
 				{
-					node:         "node-2",
-					role:         RoleNode,
-					memberStatus: MemberAlive,
-					checkers:     []health.Checker{healthyTest},
+					node:     "node-2",
+					role:     RoleNode,
+					checkers: []health.Checker{healthyTest},
 				},
 			},
 		},
@@ -135,16 +133,14 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 			membership: newMockClusterMembership(),
 			agentConfigs: []testAgentConfig{
 				{
-					node:         "master-1",
-					role:         RoleMaster,
-					memberStatus: MemberAlive,
-					checkers:     []health.Checker{healthyTest},
+					node:     "master-1",
+					role:     RoleMaster,
+					checkers: []health.Checker{healthyTest},
 				},
 				{
-					node:         "node-1",
-					role:         RoleNode,
-					memberStatus: MemberAlive,
-					checkers:     []health.Checker{failedTest},
+					node:     "node-1",
+					role:     RoleNode,
+					checkers: []health.Checker{failedTest},
 				},
 			},
 		},
@@ -173,16 +169,14 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 			membership: newMockClusterMembership(),
 			agentConfigs: []testAgentConfig{
 				{
-					node:         "master-1",
-					role:         RoleMaster,
-					memberStatus: MemberAlive,
-					checkers:     []health.Checker{healthyTest},
+					node:     "master-1",
+					role:     RoleMaster,
+					checkers: []health.Checker{healthyTest},
 				},
 				{
-					node:         "node-1",
-					role:         RoleNode,
-					memberStatus: MemberAlive,
-					checkers:     []health.Checker{healthyTest},
+					node:     "node-1",
+					role:     RoleNode,
+					checkers: []health.Checker{healthyTest},
 				},
 			},
 		},
@@ -446,12 +440,11 @@ func (r *AgentSuite) TestProvidesTimeline(c *C) {
 
 // testAgentConfig specifies config values for testAgent.
 type testAgentConfig struct {
-	node         string
-	role         Role
-	memberStatus MemberStatus
-	checkers     []health.Checker
-	localStatus  *pb.NodeStatus
-	clock        clockwork.Clock
+	node        string
+	role        Role
+	checkers    []health.Checker
+	localStatus *pb.NodeStatus
+	clock       clockwork.Clock
 }
 
 // setDefaults sets default config values if not previously defined.
@@ -468,7 +461,7 @@ func (config *testAgentConfig) setDefaults() {
 }
 
 // newAgent creates a new agent instance.
-func (r *AgentSuite) newAgent(config testAgentConfig, client *mockClusterMembership) (*agent, error) {
+func (r *AgentSuite) newAgent(config testAgentConfig, cluster *mockClusterMembership) (*agent, error) {
 	// timelineCapacity specifies the default timeline capacity for tests.
 	const timelineCapacity = 256
 	// clusterCapacity specifies the max number of nodes in a test cluster.
@@ -477,12 +470,13 @@ func (r *AgentSuite) newAgent(config testAgentConfig, client *mockClusterMembers
 	config.setDefaults()
 
 	agentConfig := Config{
-		Cache:   inmemory.New(),
-		Name:    config.node,
-		Clock:   config.clock,
-		Tags:    tags{"role": string(config.role)},
-		DialRPC: client.dial,
-		Cluster: client,
+		Cache:       inmemory.New(),
+		Name:        config.node,
+		Clock:       config.clock,
+		Tags:        tags{"role": string(config.role)},
+		DialRPC:     cluster.dial,
+		Cluster:     cluster,
+		clientCache: &client.ClientCache{},
 	}
 
 	var lastSeen *ttlmap.TTLMap
@@ -500,7 +494,7 @@ func (r *AgentSuite) newAgent(config testAgentConfig, client *mockClusterMembers
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
 	}
 
-	client.addAgent(agent)
+	cluster.addAgent(agent)
 
 	return agent, nil
 }
@@ -634,18 +628,17 @@ func newMockClient(agent *agent) (client.Client, error) {
 	return &mockClient{agent: agent}, nil
 }
 
-// Status reports the health status of a serf cluster.
+// Status reports the health status of the cluster.
 func (r *mockClient) Status(ctx context.Context) (*pb.SystemStatus, error) {
 	return r.agent.Status()
 }
 
-// LocalStatus reports the health status of the local serf cluster node.
+// LocalStatus reports the health status of the local cluster node.
 func (r *mockClient) LocalStatus(ctx context.Context) (*pb.NodeStatus, error) {
 	return r.agent.LocalStatus(), nil
 }
 
-// LastSeen requests the last seen timestamp for a member specified by
-// their serf name.
+// LastSeen requests the last seen timestamp for the specified member.
 func (r *mockClient) LastSeen(ctx context.Context, req *pb.LastSeenRequest) (*pb.LastSeenResponse, error) {
 	timestamp, err := r.agent.LastSeen(req.GetName())
 	if err != nil {

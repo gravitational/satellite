@@ -33,8 +33,6 @@ type config struct {
 	role agent.Role
 	// rpcAddrs is the list of listening addresses on RPC agents
 	rpcAddrs []string
-	// serfRPCAddr is the Serf RPC endpoint address
-	serfRPCAddr string
 	// kubeconfigPath is the path to the kubeconfig file
 	kubeconfigPath string
 	// kubeletAddr is the address of the kubelet
@@ -82,7 +80,7 @@ func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeCon
 	}
 
 	latencyChecker, err := latency.NewChecker(&latency.Config{
-		NodeName:      node.GetConfig().NodeName,
+		NodeName:      node.GetConfig().Name,
 		Cluster:       node.GetConfig().Cluster,
 		LatencyClient: nethealth.NewClient(nethealth.DefaultNethealthSocket),
 	})
