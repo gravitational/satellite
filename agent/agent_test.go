@@ -461,7 +461,7 @@ func (config *testAgentConfig) setDefaults() {
 }
 
 // newAgent creates a new agent instance.
-func (r *AgentSuite) newAgent(config testAgentConfig, client *mockClusterMembership) (*agent, error) {
+func (r *AgentSuite) newAgent(config testAgentConfig, cluster *mockClusterMembership) (*agent, error) {
 	// timelineCapacity specifies the default timeline capacity for tests.
 	const timelineCapacity = 256
 	// clusterCapacity specifies the max number of nodes in a test cluster.
@@ -470,12 +470,13 @@ func (r *AgentSuite) newAgent(config testAgentConfig, client *mockClusterMembers
 	config.setDefaults()
 
 	agentConfig := Config{
-		Cache:   inmemory.New(),
-		Name:    config.node,
-		Clock:   config.clock,
-		Tags:    tags{"role": string(config.role)},
-		DialRPC: client.dial,
-		Cluster: client,
+		Cache:       inmemory.New(),
+		Name:        config.node,
+		Clock:       config.clock,
+		Tags:        tags{"role": string(config.role)},
+		DialRPC:     cluster.dial,
+		Cluster:     cluster,
+		clientCache: &client.ClientCache{},
 	}
 
 	var lastSeen *ttlmap.TTLMap
@@ -493,7 +494,7 @@ func (r *AgentSuite) newAgent(config testAgentConfig, client *mockClusterMembers
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
 	}
 
-	client.addAgent(agent)
+	cluster.addAgent(agent)
 
 	return agent, nil
 }
