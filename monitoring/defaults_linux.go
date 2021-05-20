@@ -18,6 +18,22 @@ package monitoring
 
 import "github.com/gravitational/satellite/agent/health"
 
+var (
+	// DefaultProcessesToCheck is the default list of processs to verify that are not running on the host.
+	// This list should be passed to the DefaultProcessChecker function.
+	DefaultProcessesToCheck = []string{
+		"dockerd",
+		"docker-current", // Docker daemon name when installed from RHEL repos.
+		"lxd",
+		"coredns",
+		"kube-apiserver",
+		"kube-scheduler",
+		"kube-controller-manager",
+		"kube-proxy",
+		"kubelet",
+	}
+)
+
 // DefaultPortChecker returns a port range checker with a default set of port ranges
 func DefaultPortChecker() health.Checker {
 	return NewPortChecker(
@@ -49,25 +65,13 @@ func PreInstallPortChecker() health.Checker {
 }
 
 // DefaultProcessChecker returns checker which will ensure no conflicting program is running
-func DefaultProcessChecker() health.Checker {
-	return &ProcessChecker{[]string{
-		"dockerd",
-		"docker-current", // Docker daemon name when installed from RHEL repos.
-		"lxd",
-		"coredns",
-		"kube-apiserver",
-		"kube-scheduler",
-		"kube-controller-manager",
-		"kube-proxy",
-		"kubelet",
-		"planet",
-		"teleport",
-	}}
+func DefaultProcessChecker(processesToCheck []string) health.Checker {
+	return &ProcessChecker{processesToCheck}
 }
 
 // BasicCheckers detects common problems preventing k8s cluster from
 // functioning properly
-func BasicCheckers(checkers ...health.Checker) health.Checker {
+func BasicCheckers(processesToCheck []string, checkers ...health.Checker) health.Checker {
 	c := &compositeChecker{
 		name: "local",
 		checkers: []health.Checker{
@@ -78,7 +82,7 @@ func BasicCheckers(checkers ...health.Checker) health.Checker {
 			NewWormholeWgForwardingChecker(),
 			NewBridgeNetfilterChecker(),
 			NewMayDetachMountsChecker(),
-			DefaultProcessChecker(),
+			DefaultProcessChecker(processesToCheck),
 			DefaultPortChecker(),
 			DefaultBootConfigParams(),
 			NewInotifyChecker(),
@@ -89,8 +93,8 @@ func BasicCheckers(checkers ...health.Checker) health.Checker {
 }
 
 // PreInstallCheckers are designed to run on a node before installing telekube
-func PreInstallCheckers() health.Checker {
-	return BasicCheckers(PreInstallPortChecker())
+func PreInstallCheckers(processesToCheck []string) health.Checker {
+	return BasicCheckers(processesToCheck, PreInstallPortChecker())
 }
 
 // DefaultBootConfigParams returns standard kernel configs required for running kubernetes

@@ -150,22 +150,18 @@ type serviceStatus struct {
 
 var systemStatusCmd = []string{"/bin/systemctl", "is-system-running"}
 
-type loadState string
-
 const (
-	loadStateLoaded   loadState = "loaded"
-	loadStateError              = "error"
-	loadStateMasked             = "masked"
-	loadStateNotFound           = "not-found"
+	loadStateLoaded   = "loaded"
+	loadStateError    = "error"
+	loadStateMasked   = "masked"
+	loadStateNotFound = "not-found"
 )
 
-type activeState string
-
 const (
-	activeStateActive       activeState = "active"
-	activeStateReloading                = "reloading"
-	activeStateInactive                 = "inactive"
-	activeStateFailed                   = "failed"
-	activeStateActivating               = "activating"
-	activeStateDeactivating             = "deactivating"
+	activeStateActive       = "active"
+	activeStateReloading    = "reloading"
+	activeStateInactive     = "inactive"
+	activeStateFailed       = "failed"
+	activeStateActivating   = "activating"
+	activeStateDeactivating = "deactivating"
 )
