@@ -56,10 +56,10 @@ const (
 	// DefaultKubeletHealthzPort specifies the default kubelet healthz endpoint port
 	DefaultKubeletHealthzPort = 10248
 
-	// DefaultKubeSchedulerHealthzPort specifies the default kubelet healthz endpoint port
+	// DefaultKubeSchedulerHealthzPort specifies the default scheduler healthz endpoint port
 	DefaultKubeSchedulerHealthzPort = 10259
 
-	// DefaultKubeControllerManagerHealthzPort specifies the default kubelet healthz endpoint port
+	// DefaultKubeControllerManagerHealthzPort specifies the default controller manager healthz endpoint port
 	DefaultKubeControllerManagerHealthzPort = 10257
 )
 
