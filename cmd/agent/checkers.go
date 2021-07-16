@@ -88,7 +88,7 @@ func addToMaster(node agent.Agent, config *config, kubeConfig monitoring.KubeCon
 		return trace.Wrap(err)
 	}
 
-	node.AddChecker(monitoring.KubeAPIServerHealth(kubeConfig))
+	node.AddChecker(monitoring.KubeComponentsHealth(monitoring.DefaultLocalComponentHealthzConfig))
 	node.AddChecker(monitoring.DockerHealth(config.dockerAddr))
 	node.AddChecker(etcdChecker)
 	node.AddChecker(monitoring.SystemdHealth())
@@ -106,7 +106,7 @@ func addToNode(node agent.Agent, config *config) error {
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	node.AddChecker(monitoring.KubeletHealth(config.kubeletAddr))
+	node.AddChecker(monitoring.KubeletHealth(monitoring.DefaultLocalKubeletHealthzAddr))
 	node.AddChecker(monitoring.DockerHealth(config.dockerAddr))
 	node.AddChecker(etcdChecker)
 	node.AddChecker(monitoring.SystemdHealth())
