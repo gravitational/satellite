@@ -75,7 +75,7 @@ func (r *KubernetesSuite) TestMembers(c *C) {
 	members, err := cluster.Members()
 	c.Assert(err, IsNil, comment)
 
-	sort.Sort(pb.ByName(members))
+	sort.Sort(byName(members))
 	c.Assert(members, test.DeepCompare, expected, comment)
 }
 
@@ -122,3 +122,11 @@ func (r *KubernetesSuite) newNode(name, addr, role string) v1.Node {
 		},
 	}
 }
+
+// byName implements sort.Interface.
+// Enables MemberStatus to be sorted by name.
+type byName []*pb.MemberStatus
+
+func (r byName) Len() int           { return len(r) }
+func (r byName) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
+func (r byName) Less(i, j int) bool { return r[i].NodeName < r[j].NodeName }

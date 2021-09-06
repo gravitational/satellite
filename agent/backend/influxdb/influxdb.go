@@ -116,8 +116,13 @@ func connect(config *Config) (client influx.Client, err error) {
 //  tags: {"checker": "systemd", "node": "worker", "state": "failed"}
 //  fields: {"error": "storage unavailable", "detail": "service", "code": "500"}
 func addNode(batch influx.BatchPoints, status *pb.NodeStatus, timestamp time.Time) error {
+	name := status.MemberStatus.NodeName
+	if name == "" {
+		// backwards compatibility with 7.x
+		name = status.MemberStatus.Name
+	}
 	tags := map[string]string{
-		"name": status.MemberStatus.NodeName,
+		"name": name,
 	}
 	for key, value := range status.MemberStatus.Tags {
 		tags[key] = value

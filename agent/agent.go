@@ -250,7 +250,6 @@ func New(config *Config) (result *agent, err error) {
 		LocalTimeline:           localTimeline,
 		dialRPC:                 config.DialRPC,
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
-		localStatus:             emptyNodeStatus(config.Name),
 		metricsListener:         metricsListener,
 		debugListener:           debugListener,
 		lastSeen:                lastSeen,
@@ -258,6 +257,7 @@ func New(config *Config) (result *agent, err error) {
 		g:                       g,
 		upgradeFrom:             upgradeFrom,
 	}
+	agent.localStatus = agent.emptyNodeStatus()
 
 	agent.rpc, err = newRPCServer(agent, config.CAFile, config.CertFile, config.KeyFile, config.RPCAddrs)
 	if err != nil {
@@ -383,7 +383,7 @@ func (r *agent) runChecks(ctx context.Context) *pb.NodeStatus {
 			go runChecker(ctxChecks, c, probeCh, semaphoreCh)
 		case <-ctx.Done():
 			log.Warnf("Timed out running tests: %v.", ctx.Err())
-			return emptyNodeStatus(r.Name)
+			return r.emptyNodeStatus()
 		}
 	}
 
@@ -537,6 +537,7 @@ func (r *agent) defaultUnknownStatus() *pb.NodeStatus {
 		Name: r.Name,
 		MemberStatus: &pb.MemberStatus{
 			NodeName: r.Name,
+			Name:     r.AgentName,
 		},
 	}
 }
@@ -623,7 +624,7 @@ func (r *agent) collectLocalStatus(ctx context.Context) (status *pb.NodeStatus, 
 	// Keep backwards compatibility with earlier 8.x release
 	status.MemberStatus.Name = status.MemberStatus.NodeName
 	if r.upgradeFrom != nil && r.upgradeFrom.Major == 7 {
-		// Set agent name as used in Gravity 7.x cluster
+		// Advertise agent name as used in Gravity 7.x cluster
 		status.MemberStatus.Name = r.AgentName
 	}
 
