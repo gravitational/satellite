@@ -79,6 +79,7 @@ message MemberStatus {
 message NodeStatus {
   string name = 1;
 
+  // MemberStatus describes the status of the node.
   MemberStatus member_status = 2;
 
   enum Type {
@@ -86,10 +87,26 @@ message NodeStatus {
     Running = 1;
     Degraded = 2;
   }
+  // Status is a short status code of the current node's status.
   Type status = 3;
 
   // Probes lists all the health probes collected during the health check.
   repeated Probe probes = 4;
+
+  // Version specifies the agent version.
+  Version version = 5;
+}
+
+// Version describes the version of the agent
+message Version {
+    // Major specifies the major version component. E.g. 7 for 7.0.34
+    int32 major = 1;
+    // Minor specifies the minor version component. E.g. 0 for 7.0.34
+    int32 minor = 2;
+    // Patch specifies the patch version component. E.g. 34 for 7.0.34
+    int32 patch = 3;
+    // Prerelease specifies the pre-prelease metadata in free form
+    string prerelease = 4;
 }
 
 // Probe represents the outcome of a single check

@@ -6,6 +6,7 @@ require (
 	github.com/aws/aws-sdk-go v1.25.41
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/cloudfoundry/gosigar v1.1.1-0.20180406153506-1375283248c3
+	github.com/coreos/go-semver v0.3.0
 	github.com/coreos/go-systemd/v22 v22.1.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dustin/go-humanize v0.0.0-20171111073723-bb3d318650d4
