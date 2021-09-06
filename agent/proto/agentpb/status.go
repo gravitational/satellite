@@ -27,10 +27,10 @@ func EmptyStatus() *SystemStatus {
 // NewMemberStatus constructs a new MemberStatus.
 func NewMemberStatus(name, addr string, tags map[string]string) *MemberStatus {
 	return &MemberStatus{
-		Name:   name,
-		Addr:   addr,
-		Status: MemberStatus_Alive,
-		Tags:   tags,
+		NodeName: name,
+		Addr:     addr,
+		Status:   MemberStatus_Alive,
+		Tags:     tags,
 	}
 }
 
@@ -183,4 +183,4 @@ type ByName []*MemberStatus
 
 func (r ByName) Len() int           { return len(r) }
 func (r ByName) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
-func (r ByName) Less(i, j int) bool { return r[i].Name < r[j].Name }
+func (r ByName) Less(i, j int) bool { return r[i].NodeName < r[j].NodeName }

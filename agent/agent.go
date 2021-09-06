@@ -45,8 +45,11 @@ import (
 
 // Config defines satellite configuration.
 type Config struct {
-	// Name is the name assigned to this node my Kubernetes.
+	// Name is the name assigned to this node by Kubernetes.
 	Name string
+	// AgentName identifies the agent. This is the agent name
+	// as used in a 7.x Gravity cluster for backwards compatibility.
+	AgentName string
 
 	// RPCAddrs is a list of addresses agent binds to for RPC traffic.
 	//
@@ -533,7 +536,7 @@ func (r *agent) defaultUnknownStatus() *pb.NodeStatus {
 	return &pb.NodeStatus{
 		Name: r.Name,
 		MemberStatus: &pb.MemberStatus{
-			Name: r.Name,
+			NodeName: r.Name,
 		},
 	}
 }
@@ -564,7 +567,7 @@ func (r *agent) collectStatus(ctx context.Context) *pb.SystemStatus {
 
 	statusCh := make(chan *statusResponse, len(members))
 	for _, member := range members {
-		if r.Name == member.Name {
+		if r.Name == member.NodeName {
 			go func() {
 				ctxNode, cancelNode := context.WithTimeout(ctx, nodeStatusTimeoutLocal)
 				defer cancelNode()
@@ -589,7 +592,7 @@ L:
 			nodeStatus := status.NodeStatus
 			if status.err != nil {
 				log.Debugf("Failed to query node %s(%v) status: %v.",
-					status.member.Name, status.member.Addr, status.err)
+					status.member.NodeName, status.member.Addr, status.err)
 				nodeStatus = unknownNodeStatus(status.member)
 			}
 			systemStatus.Nodes = append(systemStatus.Nodes, nodeStatus)
@@ -617,6 +620,12 @@ func (r *agent) collectLocalStatus(ctx context.Context) (status *pb.NodeStatus, 
 
 	status = r.runChecks(ctx)
 	status.MemberStatus = local
+	// Keep backwards compatibility with earlier 8.x release
+	status.MemberStatus.Name = status.MemberStatus.NodeName
+	if r.upgradeFrom != nil && r.upgradeFrom.Major == 7 {
+		// Set agent name as used in Gravity 7.x cluster
+		status.MemberStatus.Name = r.AgentName
+	}
 
 	r.Lock()
 	changes := history.DiffNode(r.Clock, r.localStatus, status)
@@ -673,7 +682,7 @@ func (r *agent) notifyMasters(ctx context.Context) error {
 			continue
 		}
 		if err := r.notifyMaster(ctx, member, events); err != nil {
-			log.WithError(err).Debugf("Failed to notify %s of new timeline events.", member.Name)
+			log.WithError(err).Debugf("Failed to notify %s of new timeline events.", member.NodeName)
 		}
 	}
 

@@ -27,7 +27,7 @@ import (
 // unknownNodeStatus creates an `unknown` node status for a node specified with member.
 func unknownNodeStatus(member *pb.MemberStatus) *pb.NodeStatus {
 	return &pb.NodeStatus{
-		Name:         member.Name,
+		Name:         member.NodeName,
 		Status:       pb.NodeStatus_Unknown,
 		MemberStatus: member,
 	}
@@ -38,7 +38,7 @@ func emptyNodeStatus(name string) *pb.NodeStatus {
 	return &pb.NodeStatus{
 		Name:         name,
 		Status:       pb.NodeStatus_Unknown,
-		MemberStatus: &pb.MemberStatus{Name: name},
+		MemberStatus: &pb.MemberStatus{NodeName: name},
 	}
 }
 

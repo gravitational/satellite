@@ -33,25 +33,25 @@ func (*StatusSuite) TestSetsSystemStatusFromMemberStatuses(c *C) {
 			{
 				Name: "foo",
 				MemberStatus: &pb.MemberStatus{
-					Name:   "foo",
-					Status: pb.MemberStatus_Alive,
-					Tags:   tags{"role": string(RoleNode)},
+					NodeName: "foo",
+					Status:   pb.MemberStatus_Alive,
+					Tags:     tags{"role": string(RoleNode)},
 				},
 			},
 			{
 				Name: "bar",
 				MemberStatus: &pb.MemberStatus{
-					Name:   "bar",
-					Status: pb.MemberStatus_Failed,
-					Tags:   tags{"role": string(RoleMaster)},
+					NodeName: "bar",
+					Status:   pb.MemberStatus_Failed,
+					Tags:     tags{"role": string(RoleMaster)},
 				},
 			},
 		},
 	}
 	actual := status
 	members := []*pb.MemberStatus{
-		{Name: "foo"},
-		{Name: "bar"},
+		{NodeName: "foo"},
+		{NodeName: "bar"},
 	}
 	setSystemStatus(&actual, members)
 
@@ -68,18 +68,18 @@ func (*StatusSuite) TestSetsSystemStatusFromNodeStatuses(c *C) {
 				Name:   "foo",
 				Status: pb.NodeStatus_Running,
 				MemberStatus: &pb.MemberStatus{
-					Name:   "foo",
-					Status: pb.MemberStatus_Alive,
-					Tags:   tags{"role": string(RoleNode)},
+					NodeName: "foo",
+					Status:   pb.MemberStatus_Alive,
+					Tags:     tags{"role": string(RoleNode)},
 				},
 			},
 			{
 				Name:   "bar",
 				Status: pb.NodeStatus_Degraded,
 				MemberStatus: &pb.MemberStatus{
-					Name:   "bar",
-					Status: pb.MemberStatus_Alive,
-					Tags:   tags{"role": string(RoleMaster)},
+					NodeName: "bar",
+					Status:   pb.MemberStatus_Alive,
+					Tags:     tags{"role": string(RoleMaster)},
 				},
 				Probes: []*pb.Probe{
 					{
@@ -95,8 +95,8 @@ func (*StatusSuite) TestSetsSystemStatusFromNodeStatuses(c *C) {
 
 	actual := status
 	members := []*pb.MemberStatus{
-		{Name: "foo"},
-		{Name: "bar"},
+		{NodeName: "foo"},
+		{NodeName: "bar"},
 	}
 	setSystemStatus(&actual, members)
 
@@ -112,17 +112,17 @@ func (*StatusSuite) TestDetectsNoMaster(c *C) {
 			{
 				Name: "foo",
 				MemberStatus: &pb.MemberStatus{
-					Name:   "foo",
-					Status: pb.MemberStatus_Alive,
-					Tags:   tags{"role": string(RoleNode)},
+					NodeName: "foo",
+					Status:   pb.MemberStatus_Alive,
+					Tags:     tags{"role": string(RoleNode)},
 				},
 			},
 			{
 				Name: "bar",
 				MemberStatus: &pb.MemberStatus{
-					Name:   "bar",
-					Status: pb.MemberStatus_Alive,
-					Tags:   tags{"role": string(RoleNode)},
+					NodeName: "bar",
+					Status:   pb.MemberStatus_Alive,
+					Tags:     tags{"role": string(RoleNode)},
 				},
 			},
 		},
@@ -130,8 +130,8 @@ func (*StatusSuite) TestDetectsNoMaster(c *C) {
 
 	actual := status
 	members := []*pb.MemberStatus{
-		{Name: "foo"},
-		{Name: "bar"},
+		{NodeName: "foo"},
+		{NodeName: "bar"},
 	}
 	setSystemStatus(&actual, members)
 
@@ -149,26 +149,26 @@ func (*StatusSuite) TestSetsOkSystemStatus(c *C) {
 				Name:   "foo",
 				Status: pb.NodeStatus_Running,
 				MemberStatus: &pb.MemberStatus{
-					Name:   "foo",
-					Status: pb.MemberStatus_Alive,
-					Tags:   tags{"role": string(RoleNode)},
+					NodeName: "foo",
+					Status:   pb.MemberStatus_Alive,
+					Tags:     tags{"role": string(RoleNode)},
 				},
 			},
 			{
 				Name:   "bar",
 				Status: pb.NodeStatus_Running,
 				MemberStatus: &pb.MemberStatus{
-					Name:   "bar",
-					Status: pb.MemberStatus_Alive,
-					Tags:   tags{"role": string(RoleMaster)},
+					NodeName: "bar",
+					Status:   pb.MemberStatus_Alive,
+					Tags:     tags{"role": string(RoleMaster)},
 				},
 			},
 		},
 	}
 	actual := status
 	members := []*pb.MemberStatus{
-		{Name: "foo"},
-		{Name: "bar"},
+		{NodeName: "foo"},
+		{NodeName: "bar"},
 	}
 	setSystemStatus(&actual, members)
 

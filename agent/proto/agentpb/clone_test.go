@@ -29,19 +29,19 @@ func (_ *ProtoSuite) TestClonesSystemStatus(c *C) {
 		Status:    SystemStatus_Degraded,
 		Timestamp: NewTimeToProto(timestamp),
 		Nodes: []*NodeStatus{
-			&NodeStatus{
+			{
 				Name: "node-1",
 				MemberStatus: &MemberStatus{
-					Name:   "node-1",
-					Addr:   "addr",
-					Status: MemberStatus_Alive,
+					NodeName: "node-1",
+					Addr:     "addr",
+					Status:   MemberStatus_Alive,
 					Tags: map[string]string{
 						"foo": "bar",
 					},
 				},
 				Status: NodeStatus_Running,
 				Probes: []*Probe{
-					&Probe{
+					{
 						Checker: "service-1",
 						Status:  Probe_Running,
 					},
