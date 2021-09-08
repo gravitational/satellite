@@ -93,9 +93,6 @@ type Config struct {
 
 	// Cluster is used to query cluster members.
 	membership.Cluster
-
-	// UpgradeFrom7 optionally indicates that the cluster is being (or has been) upgraded from 7.x.
-	UpgradeFrom7 bool
 }
 
 // CheckAndSetDefaults validates this configuration object.
@@ -389,9 +386,10 @@ func (r *agent) runChecks(ctx context.Context) *pb.NodeStatus {
 	}
 
 	return &pb.NodeStatus{
-		Name:   r.Name,
-		Status: probes.Status(),
-		Probes: probes.GetProbes(),
+		Name:     r.Config.AgentName,
+		NodeName: r.Name,
+		Status:   probes.Status(),
+		Probes:   probes.GetProbes(),
 	}
 }
 
@@ -520,10 +518,10 @@ func (r *agent) updateStatus(ctx context.Context) error {
 
 func (r *agent) defaultUnknownStatus() *pb.NodeStatus {
 	return &pb.NodeStatus{
-		Name: r.Name,
+		Name:     r.AgentName,
+		NodeName: r.Name,
 		MemberStatus: &pb.MemberStatus{
-			NodeName: r.Name,
-			Name:     r.AgentName,
+			Name: r.Name,
 		},
 	}
 }
@@ -554,7 +552,7 @@ func (r *agent) collectStatus(ctx context.Context) *pb.SystemStatus {
 
 	statusCh := make(chan *statusResponse, len(members))
 	for _, member := range members {
-		if r.Name == member.NodeName {
+		if r.Name == member.Name {
 			go func() {
 				ctxNode, cancelNode := context.WithTimeout(ctx, nodeStatusTimeoutLocal)
 				defer cancelNode()
@@ -579,7 +577,7 @@ L:
 			nodeStatus := status.NodeStatus
 			if status.err != nil {
 				log.Debugf("Failed to query node %s(%v) status: %v.",
-					status.member.NodeName, status.member.Addr, status.err)
+					status.member.Name, status.member.Addr, status.err)
 				nodeStatus = unknownNodeStatus(status.member)
 			}
 			systemStatus.Nodes = append(systemStatus.Nodes, nodeStatus)
@@ -607,12 +605,6 @@ func (r *agent) collectLocalStatus(ctx context.Context) (status *pb.NodeStatus, 
 
 	status = r.runChecks(ctx)
 	status.MemberStatus = local
-	// Keep backwards compatibility with earlier 8.x release
-	status.MemberStatus.Name = status.MemberStatus.NodeName
-	if r.Config.UpgradeFrom7 {
-		// Advertise agent name as used in Gravity 7.x cluster
-		status.MemberStatus.Name = r.AgentName
-	}
 
 	r.Lock()
 	changes := history.DiffNode(r.Clock, r.localStatus, status)
@@ -669,7 +661,7 @@ func (r *agent) notifyMasters(ctx context.Context) error {
 			continue
 		}
 		if err := r.notifyMaster(ctx, member, events); err != nil {
-			log.WithError(err).Debugf("Failed to notify %s of new timeline events.", member.NodeName)
+			log.WithError(err).Debugf("Failed to notify %s of new timeline events.", member.Name)
 		}
 	}
 

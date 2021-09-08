@@ -27,7 +27,8 @@ import (
 // unknownNodeStatus creates an `unknown` node status for a node specified with member.
 func unknownNodeStatus(member *pb.MemberStatus) *pb.NodeStatus {
 	return &pb.NodeStatus{
-		Name:         member.NodeName,
+		Name:         member.Name,
+		NodeName:     member.Name,
 		Status:       pb.NodeStatus_Unknown,
 		MemberStatus: member,
 	}
@@ -35,16 +36,12 @@ func unknownNodeStatus(member *pb.MemberStatus) *pb.NodeStatus {
 
 // emptyNodeStatus creates an empty node status.
 func (r *agent) emptyNodeStatus() *pb.NodeStatus {
-	agentName := r.Name
-	if r.Config.UpgradeFrom7 {
-		agentName = r.AgentName
-	}
 	return &pb.NodeStatus{
-		Name:   r.Name,
-		Status: pb.NodeStatus_Unknown,
+		Name:     r.Config.AgentName,
+		NodeName: r.Name,
+		Status:   pb.NodeStatus_Unknown,
 		MemberStatus: &pb.MemberStatus{
-			Name:     agentName,
-			NodeName: r.Name,
+			Name: r.Name,
 		},
 	}
 }

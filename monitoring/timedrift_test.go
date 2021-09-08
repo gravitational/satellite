@@ -179,9 +179,9 @@ func (r mockCluster) dial(_ context.Context, name string) (client.Client, error)
 // memberFromMockClient constructs a new ClusterMember from the provided client.
 func memberFromMockClient(client *mockedTimeAgentClient) *pb.MemberStatus {
 	return &pb.MemberStatus{
-		NodeName: client.name,
-		Addr:     client.name, // mock dial function will use name to dial node
-		Status:   pb.MemberStatus_Alive,
+		Name:   client.name,
+		Addr:   client.name, // mock dial function will use name to dial node
+		Status: pb.MemberStatus_Alive,
 	}
 }
 

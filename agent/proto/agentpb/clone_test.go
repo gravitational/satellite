@@ -32,9 +32,9 @@ func (_ *ProtoSuite) TestClonesSystemStatus(c *C) {
 			{
 				Name: "node-1",
 				MemberStatus: &MemberStatus{
-					NodeName: "node-1",
-					Addr:     "addr",
-					Status:   MemberStatus_Alive,
+					Name:   "node-1",
+					Addr:   "addr",
+					Status: MemberStatus_Alive,
 					Tags: map[string]string{
 						"foo": "bar",
 					},

@@ -78,16 +78,18 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 				Status:    pb.SystemStatus_Degraded,
 				Nodes: []*pb.NodeStatus{
 					{
-						Name:   "node-1",
-						Status: pb.NodeStatus_Running,
-						MemberStatus: &pb.MemberStatus{NodeName: "node-1", Addr: "node-1",
+						Name:     "node-1",
+						NodeName: "node-1",
+						Status:   pb.NodeStatus_Running,
+						MemberStatus: &pb.MemberStatus{Name: "node-1", Addr: "node-1",
 							Tags: tags{"role": string(RoleNode)}, Status: pb.MemberStatus_Alive},
 						Probes: []*pb.Probe{healthyProbe},
 					},
 					{
-						Name:   "node-2",
-						Status: pb.NodeStatus_Running,
-						MemberStatus: &pb.MemberStatus{NodeName: "node-2", Addr: "node-2",
+						Name:     "node-2",
+						NodeName: "node-2",
+						Status:   pb.NodeStatus_Running,
+						MemberStatus: &pb.MemberStatus{Name: "node-2", Addr: "node-2",
 							Tags: tags{"role": string(RoleNode)}, Status: pb.MemberStatus_Alive},
 						Probes: []*pb.Probe{healthyProbe},
 					},
@@ -115,16 +117,18 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 				Status:    pb.SystemStatus_Degraded,
 				Nodes: []*pb.NodeStatus{
 					{
-						Name:   "master-1",
-						Status: pb.NodeStatus_Running,
-						MemberStatus: &pb.MemberStatus{NodeName: "master-1", Addr: "master-1",
+						Name:     "master-1",
+						NodeName: "master-1",
+						Status:   pb.NodeStatus_Running,
+						MemberStatus: &pb.MemberStatus{Name: "master-1", Addr: "master-1",
 							Tags: tags{"role": string(RoleMaster)}, Status: pb.MemberStatus_Alive},
 						Probes: []*pb.Probe{healthyProbe},
 					},
 					{
-						Name:   "node-1",
-						Status: pb.NodeStatus_Degraded,
-						MemberStatus: &pb.MemberStatus{NodeName: "node-1", Addr: "node-1",
+						Name:     "node-1",
+						NodeName: "node-1",
+						Status:   pb.NodeStatus_Degraded,
+						MemberStatus: &pb.MemberStatus{Name: "node-1", Addr: "node-1",
 							Tags: tags{"role": string(RoleNode)}, Status: pb.MemberStatus_Alive},
 						Probes: []*pb.Probe{failedProbe},
 					},
@@ -151,16 +155,18 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 				Status:    pb.SystemStatus_Running,
 				Nodes: []*pb.NodeStatus{
 					{
-						Name:   "master-1",
-						Status: pb.NodeStatus_Running,
-						MemberStatus: &pb.MemberStatus{NodeName: "master-1", Addr: "master-1",
+						Name:     "master-1",
+						NodeName: "master-1",
+						Status:   pb.NodeStatus_Running,
+						MemberStatus: &pb.MemberStatus{Name: "master-1", Addr: "master-1",
 							Tags: tags{"role": string(RoleMaster)}, Status: pb.MemberStatus_Alive},
 						Probes: []*pb.Probe{healthyProbe},
 					},
 					{
-						Name:   "node-1",
-						Status: pb.NodeStatus_Running,
-						MemberStatus: &pb.MemberStatus{NodeName: "node-1", Addr: "node-1",
+						Name:     "node-1",
+						NodeName: "node-1",
+						Status:   pb.NodeStatus_Running,
+						MemberStatus: &pb.MemberStatus{Name: "node-1", Addr: "node-1",
 							Tags: tags{"role": string(RoleNode)}, Status: pb.MemberStatus_Alive},
 						Probes: []*pb.Probe{healthyProbe},
 					},
@@ -472,6 +478,7 @@ func (r *AgentSuite) newAgent(config testAgentConfig, cluster *mockClusterMember
 	agentConfig := Config{
 		Cache:       inmemory.New(),
 		Name:        config.node,
+		AgentName:   config.node,
 		Clock:       config.clock,
 		Tags:        tags{"role": string(config.role)},
 		DialRPC:     cluster.dial,
@@ -692,4 +699,15 @@ func (r *mockClient) Profile(context.Context, *debugpb.ProfileRequest) (debugpb.
 // Close closes the RPC client connection.
 func (r *mockClient) Close() error {
 	return nil
+}
+
+func emptyNodeStatus(name string) *pb.NodeStatus {
+	return &pb.NodeStatus{
+		Name:     name,
+		NodeName: name,
+		Status:   pb.NodeStatus_Unknown,
+		MemberStatus: &pb.MemberStatus{
+			Name: name,
+		},
+	}
 }
