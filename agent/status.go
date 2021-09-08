@@ -35,15 +35,15 @@ func unknownNodeStatus(member *pb.MemberStatus) *pb.NodeStatus {
 
 // emptyNodeStatus creates an empty node status.
 func (r *agent) emptyNodeStatus() *pb.NodeStatus {
-	altName := r.Name
-	if r.upgradeFrom != nil && r.upgradeFrom.Major == 7 {
-		altName = r.AgentName
+	agentName := r.Name
+	if r.Config.UpgradeFrom7 {
+		agentName = r.AgentName
 	}
 	return &pb.NodeStatus{
 		Name:   r.Name,
 		Status: pb.NodeStatus_Unknown,
 		MemberStatus: &pb.MemberStatus{
-			Name:     altName,
+			Name:     agentName,
 			NodeName: r.Name,
 		},
 	}

@@ -36,7 +36,6 @@ import (
 	"github.com/gravitational/satellite/lib/rpc/client"
 	"github.com/gravitational/satellite/utils"
 
-	"github.com/coreos/go-semver/semver"
 	"github.com/gravitational/trace"
 	"github.com/gravitational/ttlmap/v2"
 	"github.com/jonboulle/clockwork"
@@ -95,8 +94,8 @@ type Config struct {
 	// Cluster is used to query cluster members.
 	membership.Cluster
 
-	// UpgradeFrom optionally specifies the version of the existing cluster during upgrades.
-	UpgradeFrom string
+	// UpgradeFrom7 optionally indicates that the cluster is being (or has been) upgraded from 7.x.
+	UpgradeFrom7 bool
 }
 
 // CheckAndSetDefaults validates this configuration object.
@@ -186,24 +185,12 @@ type agent struct {
 	cancel context.CancelFunc
 	// g manages the internal agent's processes
 	g ctxgroup.Group
-
-	// upgradeFrom optionally specifies the version of the existing cluster
-	// during upgrades
-	upgradeFrom *semver.Version
 }
 
 // New creates an instance of an agent based on configuration options given in config.
 func New(config *Config) (result *agent, err error) {
 	if err := config.CheckAndSetDefaults(); err != nil {
 		return nil, trace.Wrap(err)
-	}
-
-	var upgradeFrom *semver.Version
-	if config.UpgradeFrom != "" {
-		upgradeFrom, err = semver.NewVersion(config.UpgradeFrom)
-		if err != nil {
-			return nil, trace.Wrap(err)
-		}
 	}
 
 	metricsListener, err := net.Listen("tcp", config.MetricsAddr)
@@ -255,7 +242,6 @@ func New(config *Config) (result *agent, err error) {
 		lastSeen:                lastSeen,
 		cancel:                  cancel,
 		g:                       g,
-		upgradeFrom:             upgradeFrom,
 	}
 	agent.localStatus = agent.emptyNodeStatus()
 
@@ -623,7 +609,7 @@ func (r *agent) collectLocalStatus(ctx context.Context) (status *pb.NodeStatus, 
 	status.MemberStatus = local
 	// Keep backwards compatibility with earlier 8.x release
 	status.MemberStatus.Name = status.MemberStatus.NodeName
-	if r.upgradeFrom != nil && r.upgradeFrom.Major == 7 {
+	if r.Config.UpgradeFrom7 {
 		// Advertise agent name as used in Gravity 7.x cluster
 		status.MemberStatus.Name = r.AgentName
 	}
