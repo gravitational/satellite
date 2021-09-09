@@ -27,7 +27,10 @@ import (
 // unknownNodeStatus creates an `unknown` node status for a node specified with member.
 func unknownNodeStatus(member *pb.MemberStatus) *pb.NodeStatus {
 	return &pb.NodeStatus{
+		//nolint:godox
+		// TODO: remove in 10
 		Name:         member.Name,
+		NodeName:     member.NodeName,
 		Status:       pb.NodeStatus_Unknown,
 		MemberStatus: member,
 	}
@@ -36,9 +39,17 @@ func unknownNodeStatus(member *pb.MemberStatus) *pb.NodeStatus {
 // emptyNodeStatus creates an empty node status.
 func emptyNodeStatus(name string) *pb.NodeStatus {
 	return &pb.NodeStatus{
-		Name:         name,
-		Status:       pb.NodeStatus_Unknown,
-		MemberStatus: &pb.MemberStatus{Name: name},
+		//nolint:godox
+		// TODO: remove in 10
+		Name:     name,
+		NodeName: name,
+		Status:   pb.NodeStatus_Unknown,
+		MemberStatus: &pb.MemberStatus{
+			//nolint:godox
+			// TODO: remove in 10
+			Name:     name,
+			NodeName: name,
+		},
 	}
 }
 
@@ -57,7 +68,7 @@ func setSystemStatus(status *pb.SystemStatus, members []*pb.MemberStatus) {
 
 	missing := make(memberMap)
 	for _, member := range members {
-		missing[member.Name] = struct{}{}
+		missing[member.NodeName] = struct{}{}
 	}
 
 	status.Status = pb.SystemStatus_Running
@@ -71,7 +82,8 @@ func setSystemStatus(status *pb.SystemStatus, members []*pb.MemberStatus) {
 		if node.MemberStatus.Status == pb.MemberStatus_Failed {
 			status.Status = pb.SystemStatus_Degraded
 		}
-		delete(missing, node.Name)
+
+		delete(missing, node.NodeName)
 	}
 	if !foundMaster {
 		status.Status = pb.SystemStatus_Degraded

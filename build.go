@@ -193,8 +193,12 @@ func (Test) Lint() error {
 		fmt.Sprintf("--volume=%v:/go/src/github.com/gravitational/satellite", srcDir()),
 		`--env="GOCACHE=/go/src/github.com/gravitational/satellite/build/cache/go"`,
 		fmt.Sprint("satellite-build:", version()),
-		"golangci-lint", "run", "--new", "--deadline=30m", "--enable-all",
-		"--disable=gochecknoglobals", "--disable=gochecknoinits", "--disable=gomodguard",
+		"golangci-lint", "run", "--new",
+		"--deadline=30m",
+		"--enable-all",
+		"--disable=gochecknoglobals",
+		"--disable=gochecknoinits",
+		"--disable=gomodguard",
 	))
 }
 

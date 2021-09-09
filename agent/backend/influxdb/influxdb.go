@@ -137,7 +137,7 @@ func addNode(batch influx.BatchPoints, status *pb.NodeStatus, timestamp time.Tim
 		probeStatus, _ := probe.Status.MarshalText()
 		tags = map[string]string{
 			"checker": probe.Checker,
-			"node":    status.Name,
+			"node":    status.NodeName,
 			"status":  string(probeStatus),
 		}
 		fields = map[string]interface{}{
