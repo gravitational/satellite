@@ -110,6 +110,9 @@ func (r *Config) CheckAndSetDefaults() error {
 		errors = append(errors, trace.BadParameter("certificate key must be provided"))
 	}
 	if r.Name == "" {
+		errors = append(errors, trace.BadParameter("agent node name cannot be empty"))
+	}
+	if r.AgentName == "" {
 		errors = append(errors, trace.BadParameter("agent name cannot be empty"))
 	}
 	if r.Cluster == nil {
@@ -381,7 +384,7 @@ func (r *agent) runChecks(ctx context.Context) *pb.NodeStatus {
 			return &pb.NodeStatus{
 				//nolint:godox
 				// TODO: remove in 10
-				Name:     r.Name,
+				Name:     r.Config.AgentName,
 				NodeName: r.Name,
 				Status:   pb.NodeStatus_Degraded,
 				Probes:   probes.GetProbes(),
@@ -392,7 +395,7 @@ func (r *agent) runChecks(ctx context.Context) *pb.NodeStatus {
 	return &pb.NodeStatus{
 		//nolint:godox
 		// TODO: remove in 10
-		Name:     r.Name,
+		Name:     r.Config.AgentName,
 		NodeName: r.Name,
 		Status:   probes.Status(),
 		Probes:   probes.GetProbes(),
@@ -526,12 +529,12 @@ func (r *agent) defaultUnknownStatus() *pb.NodeStatus {
 	return &pb.NodeStatus{
 		//nolint:godox
 		// TODO: remove in 10
-		Name:     r.Name,
+		Name:     r.Config.AgentName,
 		NodeName: r.Name,
 		MemberStatus: &pb.MemberStatus{
 			//nolint:godox
 			// TODO: remove in 10
-			Name:     r.Name,
+			Name:     r.Config.AgentName,
 			NodeName: r.Name,
 		},
 	}
@@ -672,7 +675,7 @@ func (r *agent) notifyMasters(ctx context.Context) error {
 			continue
 		}
 		if err := r.notifyMaster(ctx, member, events); err != nil {
-			log.WithError(err).Debugf("Failed to notify %s of new timeline events.", member.Name)
+			log.WithError(err).Debugf("Failed to notify %s of new timeline events.", member.NodeName)
 		}
 	}
 

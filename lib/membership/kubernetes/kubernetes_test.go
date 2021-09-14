@@ -129,4 +129,4 @@ type byName []*pb.MemberStatus
 
 func (r byName) Len() int           { return len(r) }
 func (r byName) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
-func (r byName) Less(i, j int) bool { return r[i].Name < r[j].Name }
+func (r byName) Less(i, j int) bool { return r[i].NodeName < r[j].NodeName }

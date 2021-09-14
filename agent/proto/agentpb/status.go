@@ -27,6 +27,8 @@ func EmptyStatus() *SystemStatus {
 // NewMemberStatus constructs a new MemberStatus.
 func NewMemberStatus(name, addr string, tags map[string]string) *MemberStatus {
 	return &MemberStatus{
+		//nolint:godox
+		// TODO: remove in 10
 		Name:     name,
 		NodeName: name,
 		Addr:     addr,
