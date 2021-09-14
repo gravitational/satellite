@@ -70,6 +70,7 @@ message MemberStatus {
     Failed = 4;
   }
   // Name identifies this agent to the cluster.
+  // Obsolete: use NodeName instead
   string name = 1;
   // Addr specifies the agent RPC endpoint address.
   string addr = 2;
@@ -79,7 +80,8 @@ message MemberStatus {
   Type status = 3;
   // Tags represents arbitrary metadata as key=value pairs in free form.
   map<string, string> tags = 4;
-
+  // NodeName identifies this agent to the cluster.
+  string node_name = 5;
 }
 
 // NodeStatus represents a result of a health check for a single node.

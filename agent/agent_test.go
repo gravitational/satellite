@@ -19,6 +19,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -77,22 +78,8 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 				Timestamp: pb.NewTimeToProto(r.clock.Now()),
 				Status:    pb.SystemStatus_Degraded,
 				Nodes: []*pb.NodeStatus{
-					{
-						Name:     "node-1",
-						NodeName: "node-1",
-						Status:   pb.NodeStatus_Running,
-						MemberStatus: &pb.MemberStatus{Name: "node-1", Addr: "node-1",
-							Tags: tags{"role": string(RoleNode)}, Status: pb.MemberStatus_Alive},
-						Probes: []*pb.Probe{healthyProbe},
-					},
-					{
-						Name:     "node-2",
-						NodeName: "node-2",
-						Status:   pb.NodeStatus_Running,
-						MemberStatus: &pb.MemberStatus{Name: "node-2", Addr: "node-2",
-							Tags: tags{"role": string(RoleNode)}, Status: pb.MemberStatus_Alive},
-						Probes: []*pb.Probe{healthyProbe},
-					},
+					newNode("node-1").build(),
+					newNode("node-2").build(),
 				},
 				Summary: errNoMaster.Error(),
 			},
@@ -116,22 +103,8 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 				Timestamp: pb.NewTimeToProto(r.clock.Now()),
 				Status:    pb.SystemStatus_Degraded,
 				Nodes: []*pb.NodeStatus{
-					{
-						Name:     "master-1",
-						NodeName: "master-1",
-						Status:   pb.NodeStatus_Running,
-						MemberStatus: &pb.MemberStatus{Name: "master-1", Addr: "master-1",
-							Tags: tags{"role": string(RoleMaster)}, Status: pb.MemberStatus_Alive},
-						Probes: []*pb.Probe{healthyProbe},
-					},
-					{
-						Name:     "node-1",
-						NodeName: "node-1",
-						Status:   pb.NodeStatus_Degraded,
-						MemberStatus: &pb.MemberStatus{Name: "node-1", Addr: "node-1",
-							Tags: tags{"role": string(RoleNode)}, Status: pb.MemberStatus_Alive},
-						Probes: []*pb.Probe{failedProbe},
-					},
+					newMaster("master-1").build(),
+					newNode("node-1").degraded().build(),
 				},
 			},
 			membership: newMockClusterMembership(),
@@ -154,22 +127,8 @@ func (r *AgentSuite) TestAgentProvidesStatus(c *C) {
 				Timestamp: pb.NewTimeToProto(r.clock.Now()),
 				Status:    pb.SystemStatus_Running,
 				Nodes: []*pb.NodeStatus{
-					{
-						Name:     "master-1",
-						NodeName: "master-1",
-						Status:   pb.NodeStatus_Running,
-						MemberStatus: &pb.MemberStatus{Name: "master-1", Addr: "master-1",
-							Tags: tags{"role": string(RoleMaster)}, Status: pb.MemberStatus_Alive},
-						Probes: []*pb.Probe{healthyProbe},
-					},
-					{
-						Name:     "node-1",
-						NodeName: "node-1",
-						Status:   pb.NodeStatus_Running,
-						MemberStatus: &pb.MemberStatus{Name: "node-1", Addr: "node-1",
-							Tags: tags{"role": string(RoleNode)}, Status: pb.MemberStatus_Alive},
-						Probes: []*pb.Probe{healthyProbe},
-					},
+					newMaster("master-1").build(),
+					newNode("node-1").build(),
 				},
 			},
 			membership: newMockClusterMembership(),
@@ -459,7 +418,7 @@ func (config *testAgentConfig) setDefaults() {
 		config.clock = clockwork.NewFakeClock()
 	}
 	if config.localStatus == nil {
-		config.localStatus = emptyNodeStatus(config.node)
+		config.localStatus = emptyNodeStatus(config.node, config.node)
 	}
 	if config.role == "" {
 		config.role = RoleNode
@@ -575,7 +534,7 @@ type byName []*pb.NodeStatus
 
 func (r byName) Len() int           { return len(r) }
 func (r byName) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
-func (r byName) Less(i, j int) bool { return r[i].Name < r[j].Name }
+func (r byName) Less(i, j int) bool { return r[i].NodeName < r[j].NodeName }
 
 // implements membership.Cluster
 type mockClusterMembership struct {
@@ -701,13 +660,58 @@ func (r *mockClient) Close() error {
 	return nil
 }
 
-func emptyNodeStatus(name string) *pb.NodeStatus {
-	return &pb.NodeStatus{
-		Name:     name,
-		NodeName: name,
-		Status:   pb.NodeStatus_Unknown,
-		MemberStatus: &pb.MemberStatus{
-			Name: name,
+func newMaster(name string) *nodeStatus {
+	return newNodeStatus(name, tags{"role": string(RoleMaster)})
+}
+
+func newNode(name string) *nodeStatus {
+	return newNodeStatus(name, tags{"role": string(RoleNode)})
+}
+
+func newNodeStatus(name string, tags tags) *nodeStatus {
+	return &nodeStatus{
+		NodeStatus: pb.NodeStatus{
+			//nolint:godox
+			// TODO: remove in 10
+			Name:     name,
+			NodeName: name,
+			Status:   pb.NodeStatus_Running,
+			MemberStatus: &pb.MemberStatus{
+				//nolint:godox
+				// TODO: remove in 10
+				Name:     name,
+				NodeName: name,
+				Addr:     name,
+				Status:   pb.MemberStatus_Alive,
+				Tags:     tags,
+			},
+			Probes: []*pb.Probe{healthyProbe},
 		},
 	}
+}
+
+func (r *nodeStatus) degraded(probes ...*pb.Probe) *nodeStatus {
+	if len(probes) == 0 {
+		probes = []*pb.Probe{failedProbe}
+	}
+
+	r.Status = pb.NodeStatus_Degraded
+	r.Probes = probes
+
+	return r
+}
+
+func (r *nodeStatus) memberFailed() *nodeStatus {
+	r.MemberStatus.Status = pb.MemberStatus_Failed
+	r.Probes = nil
+
+	return r
+}
+
+func (r *nodeStatus) build() *pb.NodeStatus {
+	return &r.NodeStatus
+}
+
+type nodeStatus struct {
+	pb.NodeStatus
 }

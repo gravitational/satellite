@@ -185,7 +185,8 @@ type agent struct {
 }
 
 // New creates an instance of an agent based on configuration options given in config.
-func New(config *Config) (result *agent, err error) {
+//nolint:funlen
+func New(config *Config) (*agent, error) {
 	if err := config.CheckAndSetDefaults(); err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -234,13 +235,13 @@ func New(config *Config) (result *agent, err error) {
 		LocalTimeline:           localTimeline,
 		dialRPC:                 config.DialRPC,
 		statusQueryReplyTimeout: statusQueryReplyTimeout,
+		localStatus:             emptyNodeStatus(config.Name, config.AgentName),
 		metricsListener:         metricsListener,
 		debugListener:           debugListener,
 		lastSeen:                lastSeen,
 		cancel:                  cancel,
 		g:                       g,
 	}
-	agent.localStatus = agent.emptyNodeStatus()
 
 	agent.rpc, err = newRPCServer(agent, config.CAFile, config.CertFile, config.KeyFile, config.RPCAddrs)
 	if err != nil {
@@ -366,7 +367,7 @@ func (r *agent) runChecks(ctx context.Context) *pb.NodeStatus {
 			go runChecker(ctxChecks, c, probeCh, semaphoreCh)
 		case <-ctx.Done():
 			log.Warnf("Timed out running tests: %v.", ctx.Err())
-			return r.emptyNodeStatus()
+			return emptyNodeStatus(r.Name, r.Config.AgentName)
 		}
 	}
 
@@ -378,15 +379,20 @@ func (r *agent) runChecks(ctx context.Context) *pb.NodeStatus {
 		case <-ctx.Done():
 			log.Warnf("Timed out collecting test results: %v.", ctx.Err())
 			return &pb.NodeStatus{
-				Name:   r.Name,
-				Status: pb.NodeStatus_Degraded,
-				Probes: probes.GetProbes(),
+				//nolint:godox
+				// TODO: remove in 10
+				Name:     r.Name,
+				NodeName: r.Name,
+				Status:   pb.NodeStatus_Degraded,
+				Probes:   probes.GetProbes(),
 			}
 		}
 	}
 
 	return &pb.NodeStatus{
-		Name:     r.Config.AgentName,
+		//nolint:godox
+		// TODO: remove in 10
+		Name:     r.Name,
 		NodeName: r.Name,
 		Status:   probes.Status(),
 		Probes:   probes.GetProbes(),
@@ -518,10 +524,15 @@ func (r *agent) updateStatus(ctx context.Context) error {
 
 func (r *agent) defaultUnknownStatus() *pb.NodeStatus {
 	return &pb.NodeStatus{
-		Name:     r.AgentName,
+		//nolint:godox
+		// TODO: remove in 10
+		Name:     r.Name,
 		NodeName: r.Name,
 		MemberStatus: &pb.MemberStatus{
-			Name: r.Name,
+			//nolint:godox
+			// TODO: remove in 10
+			Name:     r.Name,
+			NodeName: r.Name,
 		},
 	}
 }
@@ -552,7 +563,7 @@ func (r *agent) collectStatus(ctx context.Context) *pb.SystemStatus {
 
 	statusCh := make(chan *statusResponse, len(members))
 	for _, member := range members {
-		if r.Name == member.Name {
+		if r.Name == member.NodeName {
 			go func() {
 				ctxNode, cancelNode := context.WithTimeout(ctx, nodeStatusTimeoutLocal)
 				defer cancelNode()
@@ -577,7 +588,7 @@ L:
 			nodeStatus := status.NodeStatus
 			if status.err != nil {
 				log.Debugf("Failed to query node %s(%v) status: %v.",
-					status.member.Name, status.member.Addr, status.err)
+					status.member.NodeName, status.member.Addr, status.err)
 				nodeStatus = unknownNodeStatus(status.member)
 			}
 			systemStatus.Nodes = append(systemStatus.Nodes, nodeStatus)

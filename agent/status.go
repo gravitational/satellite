@@ -27,21 +27,28 @@ import (
 // unknownNodeStatus creates an `unknown` node status for a node specified with member.
 func unknownNodeStatus(member *pb.MemberStatus) *pb.NodeStatus {
 	return &pb.NodeStatus{
+		//nolint:godox
+		// TODO: remove in 10
 		Name:         member.Name,
-		NodeName:     member.Name,
+		NodeName:     member.NodeName,
 		Status:       pb.NodeStatus_Unknown,
 		MemberStatus: member,
 	}
 }
 
 // emptyNodeStatus creates an empty node status.
-func (r *agent) emptyNodeStatus() *pb.NodeStatus {
+func emptyNodeStatus(nodeName, agentName string) *pb.NodeStatus {
 	return &pb.NodeStatus{
-		Name:     r.Config.AgentName,
-		NodeName: r.Name,
+		//nolint:godox
+		// TODO: remove in 10
+		Name:     agentName,
+		NodeName: nodeName,
 		Status:   pb.NodeStatus_Unknown,
 		MemberStatus: &pb.MemberStatus{
-			Name: r.Name,
+			//nolint:godox
+			// TODO: remove in 10
+			Name:     agentName,
+			NodeName: nodeName,
 		},
 	}
 }

@@ -27,10 +27,11 @@ func EmptyStatus() *SystemStatus {
 // NewMemberStatus constructs a new MemberStatus.
 func NewMemberStatus(name, addr string, tags map[string]string) *MemberStatus {
 	return &MemberStatus{
-		Name:   name,
-		Addr:   addr,
-		Status: MemberStatus_Alive,
-		Tags:   tags,
+		Name:     name,
+		NodeName: name,
+		Addr:     addr,
+		Status:   MemberStatus_Alive,
+		Tags:     tags,
 	}
 }
 
