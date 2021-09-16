@@ -44,7 +44,7 @@ import (
 
 // Config defines satellite configuration.
 type Config struct {
-	// Name is the name assigned to this node my Kubernetes.
+	// Name is the name assigned to this node by Kubernetes.
 	Name string
 
 	// RPCAddrs is a list of addresses agent binds to for RPC traffic.
@@ -182,6 +182,7 @@ type agent struct {
 }
 
 // New creates an instance of an agent based on configuration options given in config.
+//nolint:funlen
 func New(config *Config) (*agent, error) {
 	if err := config.CheckAndSetDefaults(); err != nil {
 		return nil, trace.Wrap(err)
@@ -668,7 +669,7 @@ func (r *agent) notifyMasters(ctx context.Context) error {
 			continue
 		}
 		if err := r.notifyMaster(ctx, member, events); err != nil {
-			log.WithError(err).Debugf("Failed to notify %s of new timeline events.", member.Name)
+			log.WithError(err).Debugf("Failed to notify %s of new timeline events.", member.NodeName)
 		}
 	}
 
