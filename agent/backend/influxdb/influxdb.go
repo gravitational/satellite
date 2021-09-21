@@ -117,7 +117,10 @@ func connect(config *Config) (client influx.Client, err error) {
 //  fields: {"error": "storage unavailable", "detail": "service", "code": "500"}
 func addNode(batch influx.BatchPoints, status *pb.NodeStatus, timestamp time.Time) error {
 	tags := map[string]string{
-		"name": status.MemberStatus.Name,
+		//nolint:godox
+		// TODO: remove in 10
+		"name":      status.MemberStatus.Name,
+		"node_name": status.MemberStatus.NodeName,
 	}
 	for key, value := range status.MemberStatus.Tags {
 		tags[key] = value

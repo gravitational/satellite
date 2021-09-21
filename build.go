@@ -176,7 +176,7 @@ func (Test) Unit() error {
 	fmt.Println("\n=====> Running Satellite Unit Tests...\n")
 	return trace.Wrap(sh.RunV(
 		"docker", "run", "--rm",
-		fmt.Sprintf("--volume=%v:/go/src/github.com/gravitational/satellite", srcDir()),
+		hostVolume(),
 		`--env="GOCACHE=/go/src/github.com/gravitational/satellite/build/cache/go"`,
 		`-w=/go/src/github.com/gravitational/satellite/`,
 		fmt.Sprint("satellite-build:", version()),
@@ -190,7 +190,7 @@ func (Test) Lint() error {
 	fmt.Println("\n=====> Linting Satellite...\n")
 	return trace.Wrap(sh.RunV(
 		"docker", "run", "--rm",
-		fmt.Sprintf("--volume=%v:/go/src/github.com/gravitational/satellite", srcDir()),
+		hostVolume(),
 		`--env="GOCACHE=/go/src/github.com/gravitational/satellite/build/cache/go"`,
 		fmt.Sprint("satellite-build:", version()),
 		"golangci-lint", "run", "--new", "--deadline=30m", "--enable-all",
@@ -225,7 +225,7 @@ func (Codegen) Grpc() error {
 	fmt.Println("\n=====> Running GRPC Codegen inside docker...\n")
 	return trace.Wrap(sh.RunV(
 		"docker", "run",
-		fmt.Sprintf("--volume=%v:/go/src/github.com/gravitational/satellite:delegated", srcDir()),
+		hostVolume("delegated"),
 		fmt.Sprint("satellite-grpc-buildbox:", version()),
 		"sh", "-c",
 		"cd /go/src/github.com/gravitational/satellite/ && go run mage.go internal:grpcAgent internal:grpcDebug",
@@ -276,6 +276,14 @@ func Clean() error {
 	buildDir := filepath.Join(srcDir(), "build")
 	fmt.Println("\n=====> Cleaning: ", buildDir)
 	return trace.ConvertSystemError(os.RemoveAll(buildDir))
+}
+
+func hostVolume(opts ...string) string {
+	wd, _ := os.Getwd()
+	if len(opts) == 0 {
+		return fmt.Sprintf("--volume=%v:/go/src/github.com/gravitational/satellite", wd)
+	}
+	return fmt.Sprintf("--volume=%v:/go/src/github.com/gravitational/satellite:%v", wd, opts[0])
 }
 
 func srcDir() string {

@@ -23,37 +23,38 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-type StatusSuite struct{}
+type StatusSuite struct {
+	members []*pb.MemberStatus
+}
 
 var _ = Suite(&StatusSuite{})
 
-func (*StatusSuite) TestSetsSystemStatusFromMemberStatuses(c *C) {
+func (r *StatusSuite) SetUpSuite(*C) {
+	r.members = []*pb.MemberStatus{
+		{
+			//nolint:godox
+			// TODO: remove in 10
+			Name:     "foo",
+			NodeName: "foo",
+		},
+		{
+			//nolint:godox
+			// TODO: remove in 10
+			Name:     "bar",
+			NodeName: "bar",
+		},
+	}
+}
+
+func (r *StatusSuite) TestSetsSystemStatusFromMemberStatuses(c *C) {
 	status := pb.SystemStatus{
 		Nodes: []*pb.NodeStatus{
-			{
-				Name: "foo",
-				MemberStatus: &pb.MemberStatus{
-					Name:   "foo",
-					Status: pb.MemberStatus_Alive,
-					Tags:   tags{"role": string(RoleNode)},
-				},
-			},
-			{
-				Name: "bar",
-				MemberStatus: &pb.MemberStatus{
-					Name:   "bar",
-					Status: pb.MemberStatus_Failed,
-					Tags:   tags{"role": string(RoleMaster)},
-				},
-			},
+			newNode("foo").build(),
+			newMaster("bar").memberFailed().build(),
 		},
 	}
 	actual := status
-	members := []*pb.MemberStatus{
-		{Name: "foo"},
-		{Name: "bar"},
-	}
-	setSystemStatus(&actual, members)
+	setSystemStatus(&actual, r.members)
 
 	expected := status
 	expected.Status = pb.SystemStatus_Degraded
@@ -61,44 +62,21 @@ func (*StatusSuite) TestSetsSystemStatusFromMemberStatuses(c *C) {
 	c.Assert(actual, test.DeepCompare, expected, Commentf("Expected degraded system status."))
 }
 
-func (*StatusSuite) TestSetsSystemStatusFromNodeStatuses(c *C) {
+func (r *StatusSuite) TestSetsSystemStatusFromNodeStatuses(c *C) {
 	status := pb.SystemStatus{
 		Nodes: []*pb.NodeStatus{
-			{
-				Name:   "foo",
-				Status: pb.NodeStatus_Running,
-				MemberStatus: &pb.MemberStatus{
-					Name:   "foo",
-					Status: pb.MemberStatus_Alive,
-					Tags:   tags{"role": string(RoleNode)},
-				},
-			},
-			{
-				Name:   "bar",
-				Status: pb.NodeStatus_Degraded,
-				MemberStatus: &pb.MemberStatus{
-					Name:   "bar",
-					Status: pb.MemberStatus_Alive,
-					Tags:   tags{"role": string(RoleMaster)},
-				},
-				Probes: []*pb.Probe{
-					{
-						Checker:  "qux",
-						Status:   pb.Probe_Failed,
-						Severity: pb.Probe_Critical,
-						Error:    "not available",
-					},
-				},
-			},
+			newNode("foo").build(),
+			newMaster("bar").degraded(&pb.Probe{
+				Checker:  "qux",
+				Status:   pb.Probe_Failed,
+				Severity: pb.Probe_Critical,
+				Error:    "not available",
+			}).build(),
 		},
 	}
 
 	actual := status
-	members := []*pb.MemberStatus{
-		{Name: "foo"},
-		{Name: "bar"},
-	}
-	setSystemStatus(&actual, members)
+	setSystemStatus(&actual, r.members)
 
 	expected := status
 	expected.Status = pb.SystemStatus_Degraded
@@ -106,34 +84,16 @@ func (*StatusSuite) TestSetsSystemStatusFromNodeStatuses(c *C) {
 	c.Assert(actual, test.DeepCompare, expected, Commentf("Expected degraded system status."))
 }
 
-func (*StatusSuite) TestDetectsNoMaster(c *C) {
+func (r *StatusSuite) TestDetectsNoMaster(c *C) {
 	status := pb.SystemStatus{
 		Nodes: []*pb.NodeStatus{
-			{
-				Name: "foo",
-				MemberStatus: &pb.MemberStatus{
-					Name:   "foo",
-					Status: pb.MemberStatus_Alive,
-					Tags:   tags{"role": string(RoleNode)},
-				},
-			},
-			{
-				Name: "bar",
-				MemberStatus: &pb.MemberStatus{
-					Name:   "bar",
-					Status: pb.MemberStatus_Alive,
-					Tags:   tags{"role": string(RoleNode)},
-				},
-			},
+			newNode("foo").build(),
+			newNode("bar").build(),
 		},
 	}
 
 	actual := status
-	members := []*pb.MemberStatus{
-		{Name: "foo"},
-		{Name: "bar"},
-	}
-	setSystemStatus(&actual, members)
+	setSystemStatus(&actual, r.members)
 
 	expected := status
 	expected.Status = pb.SystemStatus_Degraded
@@ -142,35 +102,15 @@ func (*StatusSuite) TestDetectsNoMaster(c *C) {
 	c.Assert(actual, test.DeepCompare, expected, Commentf("Expected degraded system status."))
 }
 
-func (*StatusSuite) TestSetsOkSystemStatus(c *C) {
+func (r *StatusSuite) TestSetsOkSystemStatus(c *C) {
 	status := pb.SystemStatus{
 		Nodes: []*pb.NodeStatus{
-			{
-				Name:   "foo",
-				Status: pb.NodeStatus_Running,
-				MemberStatus: &pb.MemberStatus{
-					Name:   "foo",
-					Status: pb.MemberStatus_Alive,
-					Tags:   tags{"role": string(RoleNode)},
-				},
-			},
-			{
-				Name:   "bar",
-				Status: pb.NodeStatus_Running,
-				MemberStatus: &pb.MemberStatus{
-					Name:   "bar",
-					Status: pb.MemberStatus_Alive,
-					Tags:   tags{"role": string(RoleMaster)},
-				},
-			},
+			newNode("foo").build(),
+			newMaster("bar").build(),
 		},
 	}
 	actual := status
-	members := []*pb.MemberStatus{
-		{Name: "foo"},
-		{Name: "bar"},
-	}
-	setSystemStatus(&actual, members)
+	setSystemStatus(&actual, r.members)
 
 	expected := status
 	expected.Status = pb.SystemStatus_Running
