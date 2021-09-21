@@ -68,7 +68,12 @@ func setSystemStatus(status *pb.SystemStatus, members []*pb.MemberStatus) {
 
 	missing := make(memberMap)
 	for _, member := range members {
-		missing[member.NodeName] = struct{}{}
+		// Instead of indexing by name, use the 'publicip' as the common
+		// denominator to support 7.x clusters and 9.x clusters prior to this change,
+		//nolint:godox
+		// TODO: remove in 10 / match nodes on NodeName instead
+		addr := member.Tags[publicIPTag]
+		missing[addr] = struct{}{}
 	}
 
 	status.Status = pb.SystemStatus_Running
@@ -82,8 +87,9 @@ func setSystemStatus(status *pb.SystemStatus, members []*pb.MemberStatus) {
 		if node.MemberStatus.Status == pb.MemberStatus_Failed {
 			status.Status = pb.SystemStatus_Degraded
 		}
-
-		delete(missing, node.NodeName)
+		//nolint:godox
+		// TODO: remove in 10 / match nodes on NodeName instead
+		delete(missing, node.MemberStatus.Tags[publicIPTag])
 	}
 	if !foundMaster {
 		status.Status = pb.SystemStatus_Degraded
@@ -145,4 +151,7 @@ type memberMap map[string]struct{}
 
 var errNoMaster = errors.New("master node unavailable")
 
-const msgNoStatus = "no status received from nodes (%v)"
+const (
+	msgNoStatus = "no status received from nodes (%v)"
+	publicIPTag = "publicip"
+)

@@ -140,8 +140,11 @@ func addNode(batch influx.BatchPoints, status *pb.NodeStatus, timestamp time.Tim
 		probeStatus, _ := probe.Status.MarshalText()
 		tags = map[string]string{
 			"checker": probe.Checker,
-			"node":    status.NodeName,
-			"status":  string(probeStatus),
+			//nolint:godox
+			// TODO: remove in 10
+			"node":      status.Name,
+			"node_name": status.NodeName,
+			"status":    string(probeStatus),
 		}
 		fields = map[string]interface{}{
 			"error": probe.Error,
