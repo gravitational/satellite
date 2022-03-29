@@ -55,7 +55,7 @@ github.com/evanphx/json-patch
 github.com/go-logr/logr
 # github.com/godbus/dbus/v5 v5.0.3
 github.com/godbus/dbus/v5
-# github.com/gogo/protobuf v1.3.1
+# github.com/gogo/protobuf v1.3.2
 github.com/gogo/protobuf/gogoproto
 github.com/gogo/protobuf/proto
 github.com/gogo/protobuf/protoc-gen-gogo/descriptor
@@ -179,7 +179,7 @@ golang.org/x/net/trace
 # golang.org/x/oauth2 v0.0.0-20191202225959-858c2ad4c8b6
 golang.org/x/oauth2
 golang.org/x/oauth2/internal
-# golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
+# golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 golang.org/x/sync/errgroup
 # golang.org/x/sys v0.0.0-20201112073958-5cba982894dd
 golang.org/x/sys/internal/unsafeheader

@@ -9,7 +9,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.1.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dustin/go-humanize v0.0.0-20171111073723-bb3d318650d4
-	github.com/gogo/protobuf v1.3.1
+	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.4.2
 	github.com/gravitational/configure v0.0.0-20161002181724-4e0f2df8846e
 	github.com/gravitational/log v0.0.0-20200127200505-fdffa14162b0 // indirect
@@ -33,7 +33,7 @@ require (
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.6.1
 	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
-	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
+	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	golang.org/x/sys v0.0.0-20201112073958-5cba982894dd
 	google.golang.org/grpc v1.27.0
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
