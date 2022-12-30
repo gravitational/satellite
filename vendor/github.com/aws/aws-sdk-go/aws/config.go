@@ -43,7 +43,7 @@ type Config struct {
 
 	// An optional endpoint URL (hostname only or fully qualified URI)
 	// that overrides the default generated endpoint for a client. Set this
-	// to `""` to use the default generated endpoint.
+	// to `nil` to use the default generated endpoint.
 	//
 	// Note: You must still provide a `Region` value when specifying an
 	// endpoint for a client.
@@ -161,6 +161,17 @@ type Config struct {
 	// on GetObject API calls.
 	S3DisableContentMD5Validation *bool
 
+	// Set this to `true` to have the S3 service client to use the region specified
+	// in the ARN, when an ARN is provided as an argument to a bucket parameter.
+	S3UseARNRegion *bool
+
+	// Set this to `true` to enable the SDK to unmarshal API response header maps to
+	// normalized lower case map keys.
+	//
+	// For example S3's X-Amz-Meta prefixed header will be unmarshaled to lower case
+	// Metadata member's map keys. The value of the header in the map is unaffected.
+	LowerCaseHeaderMaps *bool
+
 	// Set this to `true` to disable the EC2Metadata client from overriding the
 	// default http.Client's Timeout. This is helpful if you do not want the
 	// EC2Metadata client to create a new http.Client. This options is only
@@ -227,6 +238,7 @@ type Config struct {
 
 	// EnableEndpointDiscovery will allow for endpoint discovery on operations that
 	// have the definition in its model. By default, endpoint discovery is off.
+	// To use EndpointDiscovery, Endpoint should be unset or set to an empty string.
 	//
 	// Example:
 	//    sess := session.Must(session.NewSession(&aws.Config{
@@ -385,6 +397,13 @@ func (c *Config) WithS3DisableContentMD5Validation(enable bool) *Config {
 
 }
 
+// WithS3UseARNRegion sets a config S3UseARNRegion value and
+// returning a Config pointer for chaining
+func (c *Config) WithS3UseARNRegion(enable bool) *Config {
+	c.S3UseARNRegion = &enable
+	return c
+}
+
 // WithUseDualStack sets a config UseDualStack value returning a Config
 // pointer for chaining.
 func (c *Config) WithUseDualStack(enable bool) *Config {
@@ -511,6 +530,10 @@ func mergeInConfig(dst *Config, other *Config) {
 
 	if other.S3DisableContentMD5Validation != nil {
 		dst.S3DisableContentMD5Validation = other.S3DisableContentMD5Validation
+	}
+
+	if other.S3UseARNRegion != nil {
+		dst.S3UseARNRegion = other.S3UseARNRegion
 	}
 
 	if other.UseDualStack != nil {

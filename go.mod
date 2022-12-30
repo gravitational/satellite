@@ -3,7 +3,7 @@ module github.com/gravitational/satellite
 go 1.13
 
 require (
-	github.com/aws/aws-sdk-go v1.25.41
+	github.com/aws/aws-sdk-go v1.33.0
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/cloudfoundry/gosigar v1.1.1-0.20180406153506-1375283248c3
 	github.com/coreos/go-systemd/v22 v22.1.0
