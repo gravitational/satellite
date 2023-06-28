@@ -1,5 +1,11 @@
 # Satellite
 
+> **Warning**
+> Satellite was archived 2023-07-01.
+>
+> Please see the [Gravity](https://github.com/gravitational/gravity) README.md for more information.
+
+
 Satellite is an agent collecting health information in a [Kubernetes](https://github.com/kubernetes/kubernetes) cluster.
 It is both a library and an application. As a library, satellite can be used as a basis for a custom monitoring solution.
 
@@ -131,11 +137,6 @@ $ satellite agent --tags=role:master \
 	--influxdb-database=monitoring \
 	--influxdb-url=http://localhost:8086
 ```
-
-## Developing & Contributing
-
-We follow a [Code of Conduct](./CODE_OF_CONDUCT.md). We also have [contributing guidelines](./CONTRIBUTING.md)
-with information about filing bugs and submitting patches.
 
 ### Building from source
 
